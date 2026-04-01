@@ -1,22 +1,124 @@
 # Agentic Document Platform
 
-A **Template-aware, privacy-governed, agentic document processing platform** designed to transform unstructured documents such as resumes, CVs, and consultant profiles into structured, template-driven outputs.
+> **Agent-callable, workflow-governed document processing platform with bounded autonomy and template intelligence**
+
+A **template-aware, privacy-governed, agent-callable document processing platform** designed to transform unstructured documents such as resumes, CVs, and consultant profiles into structured, template-driven outputs.
 
 ---
 
 ## Overview
 
-This platform is built as a **workflow-centric, cloud-agnostic system**. It avoids free-roaming autonomous agents in favor of **bounded agentic workflows** (powered by LangGraph) where reasoning is used safely for extraction cleanup, template mapping, summarization, and privacy-aware PII handling.
+This platform is a **workflow-centric, cloud-agnostic, agent-callable system**.
+
+It combines:
+- **Deterministic orchestration pipelines** for reliability and governance
+- **Bounded agentic reasoning** for handling ambiguity and transformation tasks
+- **A2A and MCP interoperability**, allowing external agents and tools to invoke the platform as a specialized document-processing agent
+
+Rather than free-roaming autonomy, the system uses **controlled, policy-governed agentic workflows** (powered by LangGraph), ensuring predictable, auditable, and high-quality outputs.
 
 ---
 
 ## Key Features
 
-- **Workflow First** — Predictable orchestration pipelines, not autonomous agents.
+- **Workflow First** — Deterministic orchestration pipelines that are auditable, reproducible, and governance-ready.
 - **Cloud-Agnostic Core** — Core business logic remains portable. Cloud-specific services (AWS Textract, Azure Document Intelligence, GCP Document AI) are isolated behind adapters.
 - **Privacy by Policy** — PII handled through strict, deterministic rules, not ad-hoc LLM masking.
 - **Template Intelligence** — Templates are governed assets dictating schemas and deterministic rendering.
-- **A2A and MCP Support** — Built-in discoverability for agent-to-agent communication and Model Context Protocol integrations for cloud-native tool calling.
+- **Bounded Agentic Reasoning** — LangGraph-powered reasoning applied selectively for ambiguity resolution, template selection, and content refinement — within strict policy boundaries.
+- **Agent Interoperability** — Exposed via A2A and MCP, allowing external agents and tools to delegate document-processing tasks to this platform as a composable AI building block.
+
+---
+
+## Agent Model
+
+This platform follows a **hybrid agent architecture** — externally agentic, internally governed.
+
+### External Agent Interface (A2A / MCP)
+
+The platform is exposed as a **callable agent/service** to the outside world:
+
+- External agents can submit documents, request transformations, and retrieve structured outputs
+- **A2A** enables request delegation and structured response exchange within multi-agent workflows
+- **MCP** enables tool-based interaction, context exchange, and standardized resource access
+
+### Internal Execution Model
+
+Internally, all execution is **workflow-driven**, not open-ended:
+
+- Each request flows through a **deterministic, schema-validated pipeline**
+- Agentic reasoning is applied **only at specific bounded stages**, such as:
+  - Template selection under ambiguity
+  - Section normalization and content refinement
+  - Summary generation
+  - Quality validation retries
+
+### Core Principle
+
+> **Externally agentic, internally governed.**
+
+The platform behaves as a **specialized document-processing agent** to the outside world, while maintaining strict control, validation, and policy enforcement internally.
+
+---
+
+## Execution Model
+
+Each request follows a structured execution graph:
+
+| Step | Stage | Notes |
+|---|---|---|
+| 1 | **Ingestion** | Cloud-routed document intake |
+| 2 | **Document Parsing** | Pluggable adapter (Docling / Textract / Document AI) |
+| 3 | **Canonical Mapping** | Normalized intermediate representation |
+| 4 | **Template Selection** | _(agent-assisted)_ Governed recommendation |
+| 5 | **Transformation & Summarization** | _(agent-assisted)_ Bounded LLM reasoning |
+| 6 | **Validation & Policy Enforcement** | Schema gates, PII rules, compliance checks |
+| 7 | **Rendering** | Deterministic template-driven output |
+| 8 | **Storage & Trace Logging** | Auditable output and processing trace |
+
+### Bounded Agent Usage
+
+Agentic reasoning is applied only in steps 4 and 5, and only within these control mechanisms:
+
+- **Schema validation gates** — outputs are rejected if they violate the template schema
+- **Confidence thresholds** — low-confidence outputs trigger deterministic fallbacks
+- **Retry limits** — agentic steps are bounded; failures surface as structured errors, not silent loops
+- **Policy enforcement** — PII rules, formatting constraints, and compliance policies are applied post-reasoning
+
+This ensures **predictability + flexibility** without uncontrolled autonomy.
+
+---
+
+## A2A and MCP Integration
+
+The platform supports **Agent-to-Agent (A2A)** and **Model Context Protocol (MCP)** integration as first-class capabilities.
+
+### A2A Capabilities
+
+External agents can invoke this platform as a **specialized document-processing agent**:
+
+- Request delegation — submit a document and receive a structured result
+- Structured response exchange — schema-validated, typed outputs
+- Multi-agent workflow participation — operate as a node in a larger agent graph
+
+### MCP Capabilities
+
+The platform exposes a standardized MCP surface:
+
+| MCP Primitive | What is exposed |
+|---|---|
+| **Tools** | Document processing, transformation, validation, template rendering |
+| **Resources** | Template registry, schema definitions, policy rules |
+| **Context** | Processing state, document metadata, trace identifiers |
+
+### Use Cases
+
+- Resume processing agent embedded in a hiring workflow orchestrator
+- Enterprise automation pipelines invoking document transformation on demand
+- Multi-agent systems composing document + CRM + analytics flows
+- LLM tool-use: an LLM calls the platform as a tool via MCP to process and structure a document
+
+This enables the platform to act as a **composable AI building block** in larger agent ecosystems — not just a standalone service.
 
 ---
 
@@ -248,10 +350,27 @@ backend/
 
 ## Design Philosophy
 
-This platform enforces three non-negotiable principles:
+This platform enforces four non-negotiable principles:
 
 1. **Cloud abstraction** — No cloud SDK leaks into core business logic.
 2. **Adapter isolation** — Each cloud provider lives behind a single swappable interface.
 3. **Workflow determinism** — Agentic reasoning is bounded; outputs are always schema-validated.
+4. **Controlled autonomy** — Agentic reasoning is applied only where beneficial, within strict policy and validation boundaries. The system never delegates control it cannot recover.
 
 Your environments should reflect your architecture. That is why this project uses **Poetry extras + isolated envs** rather than a single monolithic environment.
+
+---
+
+## Positioning Summary
+
+| Dimension | This Platform |
+|---|---|
+| Execution style | Workflow-governed, deterministic pipelines |
+| Agentic model | Bounded autonomy at specific workflow stages |
+| External interface | Agent-callable via A2A and MCP |
+| Cloud model | Cloud-agnostic core, pluggable adapters |
+| Privacy model | Deterministic policy enforcement, no ad-hoc LLM masking |
+| Reproducibility | Schema-validated, auditable, traceable outputs |
+
+> Most agentic platforms choose between **full autonomy** (flexible, unpredictable) or **rigid pipelines** (safe, inflexible).  
+> This platform chooses both — deterministic where correctness matters, agentic where intelligence adds value.
