@@ -11,6 +11,7 @@ A **template-aware, privacy-governed, agent-callable document processing platfor
 This platform is a **workflow-centric, cloud-agnostic, agent-callable system**.
 
 It combines:
+
 - **Deterministic orchestration pipelines** for reliability and governance
 - **Bounded agentic reasoning** for handling ambiguity and transformation tasks
 - **A2A and MCP interoperability**, allowing external agents and tools to invoke the platform as a specialized document-processing agent
@@ -65,16 +66,16 @@ The platform behaves as a **specialized document-processing agent** to the outsi
 
 Each request follows a structured execution graph:
 
-| Step | Stage | Notes |
-|---|---|---|
-| 1 | **Ingestion** | Cloud-routed document intake |
-| 2 | **Document Parsing** | Pluggable adapter (Docling / Textract / Document AI) |
-| 3 | **Canonical Mapping** | Normalized intermediate representation |
-| 4 | **Template Selection** | _(agent-assisted)_ Governed recommendation |
-| 5 | **Transformation & Summarization** | _(agent-assisted)_ Bounded LLM reasoning |
-| 6 | **Validation & Policy Enforcement** | Schema gates, PII rules, compliance checks |
-| 7 | **Rendering** | Deterministic template-driven output |
-| 8 | **Storage & Trace Logging** | Auditable output and processing trace |
+| Step | Stage                               | Notes                                                |
+| ---- | ----------------------------------- | ---------------------------------------------------- |
+| 1    | **Ingestion**                       | Cloud-routed document intake                         |
+| 2    | **Document Parsing**                | Pluggable adapter (Docling / Textract / Document AI) |
+| 3    | **Canonical Mapping**               | Normalized intermediate representation               |
+| 4    | **Template Selection**              | _(agent-assisted)_ Governed recommendation           |
+| 5    | **Transformation & Summarization**  | _(agent-assisted)_ Bounded LLM reasoning             |
+| 6    | **Validation & Policy Enforcement** | Schema gates, PII rules, compliance checks           |
+| 7    | **Rendering**                       | Deterministic template-driven output                 |
+| 8    | **Storage & Trace Logging**         | Auditable output and processing trace                |
 
 ### Bounded Agent Usage
 
@@ -105,11 +106,11 @@ External agents can invoke this platform as a **specialized document-processing 
 
 The platform exposes a standardized MCP surface:
 
-| MCP Primitive | What is exposed |
-|---|---|
-| **Tools** | Document processing, transformation, validation, template rendering |
-| **Resources** | Template registry, schema definitions, policy rules |
-| **Context** | Processing state, document metadata, trace identifiers |
+| MCP Primitive | What is exposed                                                     |
+| ------------- | ------------------------------------------------------------------- |
+| **Tools**     | Document processing, transformation, validation, template rendering |
+| **Resources** | Template registry, schema definitions, policy rules                 |
+| **Context**   | Processing state, document metadata, trace identifiers              |
 
 ### Use Cases
 
@@ -128,12 +129,12 @@ This project follows a **layered environment model** that separates system/runti
 
 ### Environment Layer Overview
 
-| Layer | Tool | Responsibility |
-|---|---|---|
-| OS / CUDA / Python runtime | **Conda** | System-level deps, GPU libs, Python version pinning |
-| App dependencies (core) | **Poetry** | FastAPI, LangGraph, Pydantic — minimal and portable |
-| Cloud adapters | **Poetry extras** | AWS, Azure, GCP, IBM SDKs — isolated per cloud target |
-| Environment isolation | **Separate Poetry envs** | One env per cloud profile to prevent SDK conflicts |
+| Layer                      | Tool                     | Responsibility                                        |
+| -------------------------- | ------------------------ | ----------------------------------------------------- |
+| OS / CUDA / Python runtime | **Conda**                | System-level deps, GPU libs, Python version pinning   |
+| App dependencies (core)    | **Poetry**               | FastAPI, LangGraph, Pydantic — minimal and portable   |
+| Cloud adapters             | **Poetry extras**        | AWS, Azure, GCP, IBM SDKs — isolated per cloud target |
+| Environment isolation      | **Separate Poetry envs** | One env per cloud profile to prevent SDK conflicts    |
 
 > **Why not one big environment?**
 > AWS, Azure, and GCP SDKs have overlapping transitive dependencies that frequently conflict at version boundaries. Separate Poetry environments per cloud profile mirror the adapter-based architecture and prevent cross-cloud pollution.
@@ -155,9 +156,9 @@ This project follows a **layered environment model** that separates system/runti
 Use Conda **only** for the system/runtime layer (Python version, CUDA, native libs), then let Poetry manage all application dependencies inside that environment.
 
 ```bash
-# Create and activate Conda env for the runtime layer
-conda create -n adp-platform python=3.11
-conda activate adp-platform
+# Create and activate the architect runtime
+conda create -n cv-architect python=3.11 -y
+conda activate cv-architect
 
 # Tell Poetry NOT to create its own venv (use the active Conda env)
 poetry config virtualenvs.create false
@@ -190,26 +191,31 @@ poetry install
 Each cloud adapter is an **isolated extra**. Install only the adapter matching your deployment target.
 
 #### Core only (no cloud SDK)
+
 ```bash
 poetry install
 ```
 
 #### AWS
+
 ```bash
 poetry install --extras "cloud-aws-native"
 ```
 
 #### Azure
+
 ```bash
 poetry install --extras "cloud-azure-native"
 ```
 
 #### GCP
+
 ```bash
 poetry install --extras "cloud-gcp-native"
 ```
 
 #### Local runtime emulation (with LocalStack / Azurite)
+
 ```bash
 poetry install --extras "runtime-local-aws"
 poetry install --extras "runtime-local-azure"
@@ -217,6 +223,7 @@ poetry install --extras "runtime-local-gcp"
 ```
 
 #### Parser engines (pluggable extraction backends)
+
 ```bash
 poetry install --extras "parser-docling"    # Docling (default)
 poetry install --extras "parser-tika"       # Apache Tika (fallback)
@@ -224,11 +231,13 @@ poetry install --extras "parser-unstructured"  # Unstructured.io
 ```
 
 #### Dev/Test environment
+
 ```bash
 poetry install --extras "dev-local"
 ```
 
 > **Tip:** You can combine extras in a single install:
+>
 > ```bash
 > poetry install --extras "cloud-aws-native parser-docling dev-local"
 > ```
@@ -252,10 +261,10 @@ poetry env info
 Recommended naming convention when managing multiple envs externally:
 
 ```
-adp-core
-adp-aws
-adp-azure
-adp-gcp
+cv-architect-core
+cv-architect-aws
+cv-architect-azure
+cv-architect-gcp
 ```
 
 This gives **true isolation**: AWS SDK conflicts do not infect the Azure environment and vice versa — matching the adapter isolation already enforced at the code level.
@@ -263,6 +272,8 @@ This gives **true isolation**: AWS SDK conflicts do not infect the Azure environ
 ---
 
 ### 6. Running Locally
+
+> **Verify your runtime before starting:** Your shell prompt should be prefixed with `(cv-architect)`. If it is not, run `conda activate cv-architect` before proceeding.
 
 Run the platform natively using Uvicorn:
 
@@ -296,13 +307,13 @@ DOCUMENT_PARSER_BACKEND=textract
 
 The extras-based environment model enables a **parallel CI/CD matrix** that validates each cloud adapter independently:
 
-| Pipeline | Extras Installed | Validates |
-|---|---|---|
-| `build-core` | _(none)_ | Core logic, routing, schemas |
-| `build-aws` | `cloud-aws-native` | AWS Textract adapter |
+| Pipeline      | Extras Installed     | Validates                           |
+| ------------- | -------------------- | ----------------------------------- |
+| `build-core`  | _(none)_             | Core logic, routing, schemas        |
+| `build-aws`   | `cloud-aws-native`   | AWS Textract adapter                |
 | `build-azure` | `cloud-azure-native` | Azure Document Intelligence adapter |
-| `build-gcp` | `cloud-gcp-native` | GCP Document AI adapter |
-| `build-local` | `runtime-local-aws` | LocalStack emulation tests |
+| `build-gcp`   | `cloud-gcp-native`   | GCP Document AI adapter             |
+| `build-local` | `runtime-local-aws`  | LocalStack emulation tests          |
 
 > This gives **true cloud-agnostic validation**: a broken AWS SDK version does not block an Azure or GCP deploy.
 
@@ -363,14 +374,14 @@ Your environments should reflect your architecture. That is why this project use
 
 ## Positioning Summary
 
-| Dimension | This Platform |
-|---|---|
-| Execution style | Workflow-governed, deterministic pipelines |
-| Agentic model | Bounded autonomy at specific workflow stages |
-| External interface | Agent-callable via A2A and MCP |
-| Cloud model | Cloud-agnostic core, pluggable adapters |
-| Privacy model | Deterministic policy enforcement, no ad-hoc LLM masking |
-| Reproducibility | Schema-validated, auditable, traceable outputs |
+| Dimension          | This Platform                                           |
+| ------------------ | ------------------------------------------------------- |
+| Execution style    | Workflow-governed, deterministic pipelines              |
+| Agentic model      | Bounded autonomy at specific workflow stages            |
+| External interface | Agent-callable via A2A and MCP                          |
+| Cloud model        | Cloud-agnostic core, pluggable adapters                 |
+| Privacy model      | Deterministic policy enforcement, no ad-hoc LLM masking |
+| Reproducibility    | Schema-validated, auditable, traceable outputs          |
 
 > Most agentic platforms choose between **full autonomy** (flexible, unpredictable) or **rigid pipelines** (safe, inflexible).  
 > This platform chooses both — deterministic where correctness matters, agentic where intelligence adds value.

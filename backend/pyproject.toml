@@ -16,6 +16,10 @@ dependencies = [
     "langchain-core (>=1.2.23,<2.0.0)"
 ]
 
+# ADD THIS SECTION HERE
+[tool.poetry]
+package-mode = false
+
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
