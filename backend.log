@@ -1,0 +1,15 @@
+INFO:     Started server process [112693]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     127.0.0.1:47366 - "GET /v1/runtime/lookups/industries HTTP/1.1" 200 OK
+INFO:     127.0.0.1:47374 - "GET /v1/runtime/lookups/templates HTTP/1.1" 200 OK
+INFO:     127.0.0.1:47374 - "GET /v1/runtime/lookups/templates?industry=it HTTP/1.1" 200 OK
+INFO:     127.0.0.1:47374 - "POST /v1/runtime/documents/submit HTTP/1.1" 200 OK
+Executing Template Resolution Node...
+Error during template resolution: An error occurred while requesting URL('http://localhost:11434/api/generate'). Ensure Ollama is running.
+Executing Transform Node...
+Error during transformation: An error occurred while requesting URL('http://localhost:11434/api/generate'). Ensure Ollama is running.
+INFO:     127.0.0.1:47374 - "GET /v1/runtime/jobs/ed976611-50b1-4e04-8989-1c98eedc8430 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:47374 - "GET /v1/runtime/jobs/ed976611-50b1-4e04-8989-1c98eedc8430/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:47366 - "GET /v1/runtime/jobs/ed976611-50b1-4e04-8989-1c98eedc8430/output HTTP/1.1" 200 OK

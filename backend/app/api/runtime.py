@@ -9,14 +9,54 @@ router = APIRouter()
 # In-memory store for session states (for mock purposes)
 SESSIONS = {}
 
+from fastapi import UploadFile, File, Form
+from typing import Optional, List
+
+@router.get("/lookups/industries")
+async def get_industries():
+    """
+    Returns available industries for form selection.
+    """
+    return {
+        "industries": [
+            {"id": "it", "name": "Information Technology"},
+            {"id": "finance", "name": "Finance & Accounting"},
+            {"id": "healthcare", "name": "Healthcare"}
+        ]
+    }
+
+@router.get("/lookups/templates")
+async def get_templates(industry: Optional[str] = None):
+    """
+    Returns available templates, optionally filtered by industry.
+    """
+    all_templates = [
+        {"id": "tech-standard", "name": "Tech Standard", "industry": "it"},
+        {"id": "tech-executive", "name": "Tech Executive", "industry": "it"},
+        {"id": "finance-basic", "name": "Finance Basic", "industry": "finance"},
+        {"id": "medical-pro", "name": "Medical Professional", "industry": "healthcare"},
+        {"id": "general", "name": "General Clean", "industry": "general"}
+    ]
+
+    if industry:
+        templates = [t for t in all_templates if t["industry"] == industry or t["industry"] == "general"]
+    else:
+        templates = all_templates
+
+    return {"templates": templates}
+
 @router.post("/documents/submit")
 async def submit_document(
     background_tasks: BackgroundTasks,
+    file: UploadFile = File(None),
+    industry: Optional[str] = Form(None),
+    template_id: Optional[str] = Form(None),
+    candidate_name: Optional[str] = Form(None),
     llm_runtime: LlmRuntimeAdapter = Depends(llm_runtime_dependency),
     doc_parser: DocumentParserAdapter = Depends(document_parser_dependency)
 ):
     """
-    Accepts multipart upload or base64 payload.
+    Accepts multipart upload.
     Returns session_id, status, and initial metadata.
     """
     session_id = str(uuid.uuid4())
@@ -54,7 +94,19 @@ async def submit_document(
     # Run the workflow graph in the background
     background_tasks.add_task(process_document, session_id, llm_runtime, doc_parser)
 
-    return {"message": "Document submitted", "session_id": session_id}
+    # Note: using session_id as job_id here
+    return {
+        "message": "Document submitted",
+        "session_id": session_id,
+        "job_id": session_id
+    }
+
+@router.get("/jobs/{id}")
+async def get_job_status(id: str):
+    """
+    Alias for document status using standard job routing.
+    """
+    return await get_session_status(id)
 
 @router.get("/documents/{id}/status")
 async def get_session_status(id: str):
@@ -83,7 +135,24 @@ async def download_output(id: str):
     """
     Download final output.
     """
-    return {"message": "Download endpoint not fully implemented"}
+    return {"message": "Download endpoint not fully implemented", "url": f"http://example.com/download/{id}.pdf"}
+
+@router.get("/jobs/{id}/output")
+async def get_job_output(id: str):
+    return await download_output(id)
+
+@router.get("/jobs/{id}/summary")
+async def get_job_summary(id: str):
+    """
+    Returns summary of the processed CV.
+    """
+    session = SESSIONS.get(id, {})
+    # For mock purposes
+    if session.get("status") == "completed":
+        return {
+            "summary": "This candidate shows strong experience in their field with over 5 years of progressive responsibility. Key skills align well with the selected template and industry standards. PII has been successfully redacted."
+        }
+    return {"summary": "Summary not available yet."}
 
 @router.post("/documents/{id}/feedback")
 async def submit_feedback(id: str):
@@ -91,3 +160,7 @@ async def submit_feedback(id: str):
     Submit feedback on generated document.
     """
     return {"message": "Feedback received"}
+
+@router.post("/jobs/{id}/feedback")
+async def submit_job_feedback(id: str):
+    return await submit_feedback(id)

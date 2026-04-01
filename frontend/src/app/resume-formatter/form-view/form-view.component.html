@@ -1,73 +1,103 @@
 <div class="form-view-container">
-  <!-- Left Side: Form Area -->
+  <!-- Top/Left Side: Form Area -->
   <div class="form-panel">
     <div class="form-header">
       <h2>CV Upload & Details</h2>
       <p>Please provide the candidate's original CV and basic details.</p>
     </div>
 
-    <form class="cv-form">
+    <form class="cv-form" [formGroup]="form">
       <mat-form-field appearance="outline" class="full-width">
         <mat-label>Candidate Name</mat-label>
-        <input matInput placeholder="John Doe">
+        <input matInput placeholder="John Doe" formControlName="candidateName">
       </mat-form-field>
 
       <mat-form-field appearance="outline" class="full-width">
-        <mat-label>Target Role / Industry</mat-label>
-        <input matInput placeholder="Software Engineer">
+        <mat-label>Target Industry</mat-label>
+        <mat-select formControlName="industry">
+          <mat-option *ngFor="let ind of docService.industries()" [value]="ind.id">
+            {{ind.name}}
+          </mat-option>
+        </mat-select>
       </mat-form-field>
 
-      <div class="upload-area">
+      <mat-form-field appearance="outline" class="full-width">
+        <mat-label>Template</mat-label>
+        <mat-select formControlName="templateId">
+          <mat-option *ngFor="let tpl of docService.templates()" [value]="tpl.id">
+            {{tpl.name}}
+          </mat-option>
+        </mat-select>
+      </mat-form-field>
+
+      <div class="upload-area" (click)="triggerFileInput()">
         <mat-icon class="upload-icon">cloud_upload</mat-icon>
-        <p>Drag and drop original CV (PDF)</p>
-        <button mat-stroked-button color="primary">Browse Files</button>
+        <p *ngIf="!selectedFile">Click to browse or drag and drop original CV (PDF)</p>
+        <p *ngIf="selectedFile" class="file-name">Selected: {{ selectedFile.name }}</p>
+        <input type="file" #fileInput hidden (change)="onFileSelected($event)" accept="application/pdf">
+        <button type="button" mat-stroked-button color="primary" (click)="triggerFileInput(); $event.stopPropagation()">Browse Files</button>
       </div>
 
       <div class="action-buttons">
-        <button mat-raised-button color="primary">Process CV</button>
-        <button mat-button>Reset</button>
+        <button type="button" mat-raised-button color="primary" [disabled]="form.invalid || !selectedFile || docService.status() === 'uploading' || docService.status() === 'processing'" (click)="processCV()">Process CV</button>
+        <button type="button" mat-button (click)="resetForm()">Reset</button>
       </div>
     </form>
   </div>
 
-  <!-- Right Side: Assistant Chat -->
-  <div class="chat-panel">
-    <div class="chat-header">
-      <h3>Formatting Assistant</h3>
+  <!-- Right/Bottom Side: Results Panel -->
+  <div class="results-panel">
+
+    <div *ngIf="docService.status() === 'idle'" class="idle-state">
+      <mat-icon class="large-icon">description</mat-icon>
+      <p>Fill out the form and upload a CV to see the summary and formatted output here.</p>
     </div>
 
-    <div class="chat-messages">
-      <!-- Agent Message -->
-      <div class="message-group agent">
-        <div class="message-label">Assistant</div>
-        <div class="message-bubble agent-bubble">
-          Hi! I'm here to help process the CV. Upload a document on the left, and I'll extract the details, summarize the experience, and redact any PII for you to review.
-        </div>
-      </div>
-
-      <!-- User Placeholder -->
-      <div class="message-group user">
-        <div class="message-label">You</div>
-        <div class="message-bubble user-bubble">
-          Can you highlight leadership roles?
-        </div>
-      </div>
-
-       <div class="message-group agent">
-        <div class="message-label">Assistant</div>
-        <div class="message-bubble agent-bubble">
-          Sure, once the CV is uploaded, I'll emphasize leadership experience in the CV summary section.
-        </div>
-      </div>
+    <div *ngIf="docService.status() === 'uploading' || docService.status() === 'processing'" class="processing-state">
+      <mat-spinner diameter="48"></mat-spinner>
+      <p *ngIf="docService.status() === 'uploading'">Uploading document...</p>
+      <p *ngIf="docService.status() === 'processing'">Processing document with selected template...</p>
     </div>
 
-    <div class="chat-input-area">
-      <mat-form-field appearance="outline" class="full-width">
-        <input matInput placeholder="Type a message to the assistant...">
-        <button mat-icon-button matSuffix color="primary">
-          <mat-icon>send</mat-icon>
-        </button>
-      </mat-form-field>
+    <div *ngIf="docService.status() === 'completed'" class="completed-state">
+      <mat-card class="result-card">
+        <mat-card-header>
+          <mat-card-title>Review the formatted CVs (PDF) with redacted PII information</mat-card-title>
+        </mat-card-header>
+        <mat-card-content>
+          <p>Your CV has been successfully formatted.</p>
+          <a *ngIf="docService.outputUrl()" mat-raised-button color="primary" [href]="docService.outputUrl()" target="_blank">Download Formatted CV</a>
+        </mat-card-content>
+      </mat-card>
+
+      <mat-card class="result-card mt-3">
+        <mat-card-header>
+          <mat-card-title>CV Summary</mat-card-title>
+        </mat-card-header>
+        <mat-card-content>
+          <p *ngIf="docService.summary()">{{ docService.summary() }}</p>
+          <p *ngIf="!docService.summary()"><em>Loading summary...</em></p>
+        </mat-card-content>
+      </mat-card>
+
+      <mat-card class="result-card mt-3">
+        <mat-card-header>
+          <mat-card-title>Feedback</mat-card-title>
+        </mat-card-header>
+        <mat-card-content>
+          <mat-form-field appearance="outline" class="full-width">
+            <mat-label>Provide feedback on the extracted output...</mat-label>
+            <textarea matInput rows="3" [value]="feedbackText" (input)="updateFeedback($event)"></textarea>
+          </mat-form-field>
+          <button mat-raised-button color="accent" (click)="submitFeedback()">Submit Feedback</button>
+        </mat-card-content>
+      </mat-card>
     </div>
+
+    <div *ngIf="docService.status() === 'error'" class="error-state">
+      <mat-icon color="warn" class="large-icon">error</mat-icon>
+      <p>An error occurred during processing. Please try again.</p>
+    </div>
+
   </div>
 </div>
