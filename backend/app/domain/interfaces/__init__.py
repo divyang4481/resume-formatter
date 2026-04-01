@@ -126,3 +126,14 @@ class LLMProvider(ABC):
     def generate_structured(self, prompt: str, schema: Any, **kwargs: Any) -> Any:
         """Generates structured output constrained to a schema."""
         pass
+
+class EventBus(ABC):
+    @abstractmethod
+    def publish(self, topic: str, event: Any) -> None:
+        """Publishes an event to a specific topic."""
+        pass
+
+    @abstractmethod
+    def audit(self, action: str, details: Dict[str, Any]) -> None:
+        """Records an action for auditing purposes."""
+        pass
