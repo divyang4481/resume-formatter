@@ -1,0 +1,46 @@
+# {{ resume.contact.name }}
+
+{% if resume.contact.email or resume.contact.phone or resume.contact.linkedin or resume.contact.github -%}
+{{ [resume.contact.email, resume.contact.phone, resume.contact.linkedin, resume.contact.github] | select | join(' | ') }}
+{% endif %}
+{% if resume.summary %}
+## Summary
+
+{{ resume.summary }}
+{% endif %}
+{% if resume.experience %}
+## Experience
+
+{% for exp in resume.experience -%}
+**{{ exp.title }}**{% if exp.company %} — *{{ exp.company }}*{% endif %}{% if exp.start_date %} | {{ exp.start_date }}{% if exp.end_date %} – {{ exp.end_date }}{% endif %}{% endif %}
+{% if exp.description %}
+{{ exp.description }}
+{% endif %}
+{% endfor %}
+{% endif %}
+{% if resume.education %}
+## Education
+
+{% for edu in resume.education -%}
+**{{ edu.degree }}**{% if edu.institution %} — *{{ edu.institution }}*{% endif %}{% if edu.graduation_date %} | {{ edu.graduation_date }}{% endif %}
+{% if edu.field %}*{{ edu.field }}*{% endif %}
+
+{% endfor %}
+{% endif %}
+{% if resume.skills %}
+## Skills
+
+{{ resume.skills | map(attribute='name') | join(', ') }}
+{% endif %}
+{% if resume.certifications %}
+## Certifications
+
+{% for cert in resume.certifications -%}
+- {{ cert.name }}{% if cert.issuer %} – {{ cert.issuer }}{% endif %}
+{% endfor %}
+{% endif %}
+{% if resume.languages %}
+## Languages
+
+{{ resume.languages | join(', ') }}
+{% endif %}

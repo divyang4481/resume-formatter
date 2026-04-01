@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>{{ resume.contact.name }}</title>
+<style>
+  body { font-family: Georgia, 'Times New Roman', serif; max-width: 800px; margin: 40px auto; color: #111; line-height: 1.5; }
+  h1 { font-size: 1.8em; text-align: center; border-bottom: 1px solid #111; padding-bottom: 6px; }
+  .contact-line { text-align: center; font-size: 0.9em; color: #333; margin-bottom: 1.2em; }
+  h2 { font-size: 1.1em; margin-top: 1.4em; text-decoration: underline; }
+  .entry { margin-bottom: 0.8em; }
+  .entry-header { display: flex; justify-content: space-between; font-weight: bold; }
+  .dates { font-weight: normal; font-style: italic; font-size: 0.9em; }
+  .entry-sub { margin: 0.2em 0; }
+  ul { margin: 0.3em 0; padding-left: 1.4em; }
+  a { color: inherit; }
+</style>
+</head>
+<body>
+  <h1>{{ resume.contact.name }}</h1>
+  <p class="contact-line">
+    {% if resume.contact.email %}{{ resume.contact.email }}{% endif %}
+    {% if resume.contact.phone %} &bull; {{ resume.contact.phone }}{% endif %}
+    {% if resume.contact.linkedin %} &bull; {{ resume.contact.linkedin }}{% endif %}
+    {% if resume.contact.github %} &bull; {{ resume.contact.github }}{% endif %}
+  </p>
+
+  {% if resume.summary %}
+  <h2>Professional Summary</h2>
+  <p>{{ resume.summary }}</p>
+  {% endif %}
+
+  {% if resume.experience %}
+  <h2>Work Experience</h2>
+  {% for exp in resume.experience %}
+  <div class="entry">
+    <div class="entry-header">
+      <span>{{ exp.title }}{% if exp.company %}, {{ exp.company }}{% endif %}</span>
+      <span class="dates">{{ exp.start_date or '' }}{% if exp.end_date %} – {{ exp.end_date }}{% endif %}</span>
+    </div>
+    {% if exp.description %}<p class="entry-sub">{{ exp.description }}</p>{% endif %}
+  </div>
+  {% endfor %}
+  {% endif %}
+
+  {% if resume.education %}
+  <h2>Education</h2>
+  {% for edu in resume.education %}
+  <div class="entry">
+    <div class="entry-header">
+      <span>{{ edu.degree }}{% if edu.institution %}, {{ edu.institution }}{% endif %}</span>
+      <span class="dates">{{ edu.graduation_date or '' }}</span>
+    </div>
+    {% if edu.field %}<p class="entry-sub">{{ edu.field }}</p>{% endif %}
+  </div>
+  {% endfor %}
+  {% endif %}
+
+  {% if resume.skills %}
+  <h2>Skills</h2>
+  <p>{{ resume.skills | map(attribute='name') | join(', ') }}</p>
+  {% endif %}
+
+  {% if resume.certifications %}
+  <h2>Certifications</h2>
+  <ul>{% for cert in resume.certifications %}<li>{{ cert.name }}{% if cert.issuer %} – {{ cert.issuer }}{% endif %}</li>{% endfor %}</ul>
+  {% endif %}
+
+  {% if resume.languages %}
+  <h2>Languages</h2>
+  <p>{{ resume.languages | join(', ') }}</p>
+  {% endif %}
+</body>
+</html>

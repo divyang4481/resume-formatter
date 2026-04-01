@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>{{ resume.contact.name }} – Resume</title>
+<style>
+  body { font-family: 'Segoe UI', Arial, sans-serif; max-width: 860px; margin: 40px auto; color: #222; }
+  h1 { font-size: 2em; margin-bottom: 0.1em; color: #1a73e8; }
+  .subtitle { color: #555; font-size: 1em; margin-bottom: 1em; }
+  h2 { font-size: 1.15em; border-bottom: 2px solid #1a73e8; padding-bottom: 4px;
+       margin-top: 1.5em; text-transform: uppercase; letter-spacing: 1px; color: #1a73e8; }
+  .entry { margin-bottom: 1em; }
+  .entry-header { display: flex; justify-content: space-between; }
+  .entry-title { font-weight: bold; }
+  .entry-sub { color: #555; font-size: 0.92em; }
+  .dates { color: #888; font-size: 0.9em; white-space: nowrap; }
+  .skills-list { display: flex; flex-wrap: wrap; gap: 0.4em; }
+  .skill-tag { background: #e8f0fe; color: #1a73e8; padding: 3px 10px;
+               border-radius: 12px; font-size: 0.88em; }
+  ul { padding-left: 1.2em; margin: 0.3em 0; }
+  li { margin-bottom: 0.2em; }
+  a { color: #1a73e8; text-decoration: none; }
+</style>
+</head>
+<body>
+  <h1>{{ resume.contact.name }}</h1>
+  <div class="subtitle">
+    {% if resume.contact.email %}<a href="mailto:{{ resume.contact.email }}">{{ resume.contact.email }}</a>{% endif %}
+    {% if resume.contact.phone %} &nbsp;|&nbsp; {{ resume.contact.phone }}{% endif %}
+    {% if resume.contact.linkedin %} &nbsp;|&nbsp; <a href="{{ resume.contact.linkedin }}">LinkedIn</a>{% endif %}
+    {% if resume.contact.github %} &nbsp;|&nbsp; <a href="{{ resume.contact.github }}">GitHub</a>{% endif %}
+  </div>
+
+  {% if resume.summary %}
+  <h2>Summary</h2>
+  <p>{{ resume.summary }}</p>
+  {% endif %}
+
+  {% if resume.experience %}
+  <h2>Experience</h2>
+  {% for exp in resume.experience %}
+  <div class="entry">
+    <div class="entry-header">
+      <span class="entry-title">{{ exp.title }}{% if exp.company %} &mdash; {{ exp.company }}{% endif %}</span>
+      <span class="dates">{{ exp.start_date or '' }}{% if exp.end_date %} – {{ exp.end_date }}{% endif %}</span>
+    </div>
+    {% if exp.description %}<p class="entry-sub">{{ exp.description }}</p>{% endif %}
+  </div>
+  {% endfor %}
+  {% endif %}
+
+  {% if resume.education %}
+  <h2>Education</h2>
+  {% for edu in resume.education %}
+  <div class="entry">
+    <div class="entry-header">
+      <span class="entry-title">{{ edu.degree }}{% if edu.institution %} – {{ edu.institution }}{% endif %}</span>
+      <span class="dates">{{ edu.graduation_date or '' }}</span>
+    </div>
+    {% if edu.field %}<p class="entry-sub">{{ edu.field }}</p>{% endif %}
+  </div>
+  {% endfor %}
+  {% endif %}
+
+  {% if resume.skills %}
+  <h2>Skills</h2>
+  <div class="skills-list">
+    {% for skill in resume.skills %}<span class="skill-tag">{{ skill.name }}</span>{% endfor %}
+  </div>
+  {% endif %}
+
+  {% if resume.certifications %}
+  <h2>Certifications</h2>
+  <ul>
+    {% for cert in resume.certifications %}
+    <li>{{ cert.name }}{% if cert.issuer %} &ndash; {{ cert.issuer }}{% endif %}{% if cert.date %} ({{ cert.date }}){% endif %}</li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+
+  {% if resume.languages %}
+  <h2>Languages</h2>
+  <p>{{ resume.languages | join(', ') }}</p>
+  {% endif %}
+</body>
+</html>
