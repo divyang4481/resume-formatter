@@ -2,9 +2,29 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "Start Full Stack",
-      "dependsOn": ["Start Backend (FastAPI)", "Start Frontend (Angular)"],
-      "dependsOrder": "parallel"
+      "label": "Start Frontend (Angular)",
+      "type": "npm",
+      "script": "start",
+      "options": {
+        "cwd": "${workspaceFolder}/frontend"
+      },
+      "isBackground": true,
+      "problemMatcher": {
+        "owner": "custom",
+        "pattern": {
+          "regexp": "^$"
+        },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "Generating browser application bundles|Building...",
+          "endsPattern": "Application bundle generation complete|Compiled successfully"
+        }
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "new",
+        "group": "fullstack"
+      }
     },
     {
       "label": "Start Backend (FastAPI)",
@@ -14,7 +34,17 @@
         "cwd": "${workspaceFolder}/backend"
       },
       "isBackground": true,
-      "problemMatcher": [],
+      "problemMatcher": {
+        "owner": "custom",
+        "pattern": {
+          "regexp": "^$"
+        },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "Will watch for changes in these directories:|Started server process",
+          "endsPattern": "Uvicorn running on|Application startup complete"
+        }
+      },
       "presentation": {
         "reveal": "always",
         "panel": "new",
@@ -22,19 +52,9 @@
       }
     },
     {
-      "label": "Start Frontend (Angular)",
-      "type": "npm",
-      "script": "start",
-      "options": {
-        "cwd": "${workspaceFolder}/frontend"
-      },
-      "isBackground": true,
-      "problemMatcher": [],
-      "presentation": {
-        "reveal": "always",
-        "panel": "new",
-        "group": "fullstack"
-      }
+      "label": "Start Full Stack",
+      "dependsOn": ["Start Backend (FastAPI)", "Start Frontend (Angular)"],
+      "dependsOrder": "parallel"
     }
   ]
 }
