@@ -73,6 +73,20 @@ def get_llm_runtime() -> LlmRuntimeAdapter:
         )
 
 
+from fastapi import Header, HTTPException, status
+
+def mock_is_admin(x_admin_token: Optional[str] = Header(None, description="Mock admin token for RBAC")) -> bool:
+    """
+    Mock dependency to simulate RBAC for admin endpoints.
+    Requires a valid X-Admin-Token header.
+    """
+    if x_admin_token != "admin-secret-token":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Forbidden: Admin access required"
+        )
+    return True
+
 # Fast API dependency injection wrappers
 def document_parser_dependency() -> DocumentParserAdapter:
     return get_document_parser()
