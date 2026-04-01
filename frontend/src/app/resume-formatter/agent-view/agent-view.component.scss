@@ -150,11 +150,14 @@
       }
     }
 
-    .options-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 12px;
+    .actions-container {
       margin-top: 16px;
+    }
+
+    .options-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
 
       button {
         display: flex;
