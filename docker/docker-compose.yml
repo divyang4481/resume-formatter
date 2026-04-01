@@ -1,0 +1,20 @@
+version: '3.8'
+
+services:
+  agentic-platform:
+    build:
+      context: ../
+      dockerfile: docker/Dockerfile
+      # Use build args to install local parsers like tika during local testing
+      args:
+        - EXTRA_DEPENDENCIES=local
+    ports:
+      - "8000:8000"
+    environment:
+      - CLOUD=local
+      - DOCUMENT_PARSER_BACKEND=local_parser
+    volumes:
+      - ../app:/app/app
+      - ../config:/app/config
+      - ../templates:/app/templates
+      - ../policies:/app/policies

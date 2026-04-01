@@ -1,0 +1,7 @@
+cloud: "aws"
+document_parser_backend: "aws_textract"
+document_parser_fallback: "tika"
+ocr_backend: "aws_textract"
+docx_parser_backend: "local"
+enable_multi_backend_routing: true
+log_level: "INFO"
