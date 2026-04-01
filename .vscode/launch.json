@@ -2,7 +2,29 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Launch Frontend (Chrome)",
+      "name": "Backend: Debug (FastAPI)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "uvicorn",
+      "args": [
+        "app.main:app",
+        "--host", "0.0.0.0",
+        "--port", "8000"
+      ],
+      "cwd": "${workspaceFolder}/backend",
+      "console": "integratedTerminal",
+      "justMyCode": true
+    },
+    {
+      "name": "Frontend: Debug (Chrome)",
+      "type": "chrome",
+      "request": "launch",
+      "url": "http://localhost:4200",
+      "webRoot": "${workspaceFolder}/frontend",
+      "preLaunchTask": "Start Frontend (Angular)"
+    },
+    {
+      "name": "Frontend: Attach (Chrome)",
       "type": "chrome",
       "request": "launch",
       "url": "http://localhost:4200",
@@ -11,8 +33,18 @@
   ],
   "compounds": [
     {
-      "name": "Launch Full Stack",
-      "configurations": ["Launch Frontend (Chrome)"],
+      "name": "Full Stack: Debug",
+      "configurations": [
+        "Backend: Debug (FastAPI)",
+        "Frontend: Attach (Chrome)"
+      ],
+      "preLaunchTask": "Start Frontend (Angular)"
+    },
+    {
+      "name": "Full Stack: Run",
+      "configurations": [
+        "Frontend: Attach (Chrome)"
+      ],
       "preLaunchTask": "Start Full Stack"
     }
   ]
