@@ -1,0 +1,25 @@
+<div class="resume-formatter-container">
+  <mat-toolbar color="primary">
+    <span>Hays Resume Formatter</span>
+    <span class="spacer"></span>
+
+    <nav mat-tab-nav-bar [tabPanel]="tabPanel">
+      <a mat-tab-link
+         routerLink="agentview"
+         routerLinkActive #rlaAgent="routerLinkActive"
+         [active]="rlaAgent.isActive">
+        Agent View
+      </a>
+      <a mat-tab-link
+         routerLink="formview"
+         routerLinkActive #rlaForm="routerLinkActive"
+         [active]="rlaForm.isActive">
+        Form View
+      </a>
+    </nav>
+  </mat-toolbar>
+
+  <mat-tab-nav-panel #tabPanel class="content">
+    <router-outlet></router-outlet>
+  </mat-tab-nav-panel>
+</div>

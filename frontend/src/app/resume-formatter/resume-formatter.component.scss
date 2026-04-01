@@ -1,0 +1,24 @@
+.resume-formatter-container {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background-color: #f4f5f7;
+
+  .spacer {
+    flex: 1 1 auto;
+  }
+
+  mat-toolbar {
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    z-index: 2;
+    background-color: #fff;
+    color: #00305e; // Hays inspired blue
+  }
+
+  .content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 2rem;
+    box-sizing: border-box;
+  }
+}
