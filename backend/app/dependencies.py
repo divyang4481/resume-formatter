@@ -93,3 +93,25 @@ def document_parser_dependency() -> DocumentParserAdapter:
 
 def llm_runtime_dependency() -> LlmRuntimeAdapter:
     return get_llm_runtime()
+
+
+from app.domain.interfaces import StorageProvider, JobRepository
+from app.adapters.storage.local_storage import LocalStorageProvider
+
+def get_storage_provider() -> StorageProvider:
+    # Factory to get storage provider. Defaulting to local storage for now.
+    return LocalStorageProvider(base_path=settings.data_dir if hasattr(settings, 'data_dir') else "./data")
+
+def storage_provider_dependency() -> StorageProvider:
+    return get_storage_provider()
+
+
+from app.adapters.impls.local.job_repository import InMemoryJobRepository
+
+_job_repo_instance = InMemoryJobRepository()
+
+def get_job_repository() -> JobRepository:
+    return _job_repo_instance
+
+def job_repository_dependency() -> JobRepository:
+    return get_job_repository()
