@@ -4,12 +4,18 @@ import { provideHttpClient } from '@angular/common/http';
 
 import { routes } from './app.routes';
 import { provideAnimationsAsync } from '@angular/platform-browser/animations/async';
+import { AGENT_BACKEND_CLIENT } from './services/agent-client/agent-backend-client';
+import { MockAgentBackendClient } from './services/agent-client/mock-agent-backend-client';
 
 export const appConfig: ApplicationConfig = {
   providers: [
     provideZoneChangeDetection({ eventCoalescing: true }),
     provideRouter(routes),
     provideAnimationsAsync(),
-    provideHttpClient()
+    provideHttpClient(),
+    {
+      provide: AGENT_BACKEND_CLIENT,
+      useClass: MockAgentBackendClient
+    }
   ]
 };
