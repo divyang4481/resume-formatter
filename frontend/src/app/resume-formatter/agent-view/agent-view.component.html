@@ -1,4 +1,4 @@
-<div class="agent-view-container">
+<div class="agent-view-container" *ngIf="session">
   <!-- Left Side: Stepper -->
   <div class="stepper-panel">
     <div class="stepper-header">
@@ -6,46 +6,46 @@
       <p>AI agent • 5 steps</p>
     </div>
 
-    <mat-stepper orientation="vertical" [linear]="true" #stepper>
-      <mat-step state="done">
+    <mat-stepper orientation="vertical" [linear]="true" [selectedIndex]="getStepIndex(session.currentStep)" #stepper>
+      <mat-step [state]="getStepIndex(session.currentStep) > 0 ? 'done' : 'number'">
         <ng-template matStepLabel>
-          <div class="step-label">
+          <div class="step-label" [class.active]="session.currentStep === 'upload_resume'">
             <strong>Upload resume</strong>
             <span>PDF, DOCX, text</span>
           </div>
         </ng-template>
       </mat-step>
 
-      <mat-step state="done">
+      <mat-step [state]="getStepIndex(session.currentStep) > 1 ? 'done' : 'number'">
         <ng-template matStepLabel>
-          <div class="step-label">
+          <div class="step-label" [class.active]="session.currentStep === 'detect_industry'">
             <strong>Detect industry</strong>
             <span>AI-guessed + confirmed</span>
           </div>
         </ng-template>
       </mat-step>
 
-      <mat-step>
+      <mat-step [state]="getStepIndex(session.currentStep) > 2 ? 'done' : 'number'">
         <ng-template matStepLabel>
-          <div class="step-label active">
+          <div class="step-label" [class.active]="session.currentStep === 'choose_template'">
             <strong>Choose template</strong>
             <span>Industry-specific</span>
           </div>
         </ng-template>
       </mat-step>
 
-      <mat-step>
+      <mat-step [state]="getStepIndex(session.currentStep) > 3 ? 'done' : 'number'">
         <ng-template matStepLabel>
-          <div class="step-label">
+          <div class="step-label" [class.active]="session.currentStep === 'pii_review'">
             <strong>PII review</strong>
             <span>Mask / redact fields</span>
           </div>
         </ng-template>
       </mat-step>
 
-      <mat-step>
+      <mat-step [state]="getStepIndex(session.currentStep) > 4 ? 'done' : 'number'">
         <ng-template matStepLabel>
-          <div class="step-label">
+          <div class="step-label" [class.active]="session.currentStep === 'export'">
             <strong>Export</strong>
             <span>PDF / DOCX / JSON</span>
           </div>
@@ -64,51 +64,65 @@
   <!-- Right Side: Chat -->
   <div class="chat-panel">
     <div class="chat-header">
-      <h3>Choose template</h3>
-      <span class="step-badge">Step 3 of 5</span>
+      <h3 *ngIf="session.currentStep === 'upload_resume'">Upload Resume</h3>
+      <h3 *ngIf="session.currentStep === 'detect_industry'">Detecting Industry</h3>
+      <h3 *ngIf="session.currentStep === 'choose_template'">Choose Template</h3>
+      <h3 *ngIf="session.currentStep === 'pii_review'">PII Review</h3>
+      <h3 *ngIf="session.currentStep === 'export'">Export</h3>
+      <span class="step-badge">Step {{ getStepIndex(session.currentStep) + 1 }} of 5</span>
     </div>
 
     <div class="chat-messages">
-      <!-- Agent Message -->
-      <div class="message-group agent">
-        <div class="message-label">Agent</div>
-        <div class="message-bubble agent-bubble">
-          I parsed your resume and detected your industry as <strong>Software Engineering / Tech</strong>. Does that look right?
-        </div>
-      </div>
-
-      <!-- User Message -->
-      <div class="message-group user">
-        <div class="message-label">You</div>
-        <div class="message-bubble user-bubble">
-          Yes, that's correct.
-        </div>
-      </div>
-
-      <!-- Agent Message with Options -->
-      <div class="message-group agent">
-        <div class="message-label">Agent</div>
-        <div class="message-bubble agent-bubble">
-          Great! Here are 4 templates optimised for <strong>Software Engineering</strong> roles. I'd recommend <em>Clean Technical</em> for senior IC / staff roles, or <em>Modern Dev</em> for startups. Which would you like?
-
-          <div class="options-grid">
-            <button mat-stroked-button color="primary" class="selected-option">
-              <mat-icon>circle</mat-icon>
-              Clean technical
-            </button>
-            <button mat-stroked-button>
-              <mat-icon>circle</mat-icon>
-              Modern dev
-            </button>
-            <button mat-stroked-button>
-              <mat-icon>circle</mat-icon>
-              Executive
-            </button>
-            <button mat-stroked-button>
-              <mat-icon>circle</mat-icon>
-              ATS optimised
-            </button>
+      <ng-container *ngFor="let msg of session.messages">
+        <!-- Agent Message -->
+        <div *ngIf="msg.role === 'assistant'" class="message-group agent">
+          <div class="message-label">Agent</div>
+          <div class="message-bubble agent-bubble">
+            <span [innerHTML]="msg.content"></span>
           </div>
+        </div>
+
+        <!-- User Message -->
+        <div *ngIf="msg.role === 'user'" class="message-group user">
+          <div class="message-label">You</div>
+          <div class="message-bubble user-bubble">
+            <span [innerHTML]="msg.content"></span>
+          </div>
+        </div>
+      </ng-container>
+
+      <div class="actions-container" *ngIf="session.pendingActions && session.pendingActions.length > 0 && !loading">
+        <div class="message-group agent">
+          <div class="options-grid">
+            <ng-container *ngFor="let action of session.pendingActions">
+              <button *ngIf="action.type === 'upload_document'" mat-stroked-button color="primary" (click)="triggerUpload()">
+                <mat-icon>upload_file</mat-icon>
+                {{ action.label }}
+              </button>
+
+              <button *ngIf="action.type === 'select_template'" mat-stroked-button color="primary" (click)="answerQuestion('Clean technical')">
+                <mat-icon>description</mat-icon>
+                Clean Technical
+              </button>
+              <button *ngIf="action.type === 'select_template'" mat-stroked-button (click)="answerQuestion('Modern dev')">
+                <mat-icon>description</mat-icon>
+                Modern Dev
+              </button>
+
+              <button *ngIf="action.type === 'confirm_pii_policy'" mat-stroked-button color="primary" (click)="answerQuestion('Confirmed')">
+                <mat-icon>check_circle</mat-icon>
+                {{ action.label }}
+              </button>
+            </ng-container>
+          </div>
+        </div>
+      </div>
+
+      <!-- Loading Indicator -->
+      <div *ngIf="loading" class="message-group agent">
+        <div class="message-label">Agent</div>
+        <div class="message-bubble agent-bubble loading">
+          <span>Typing...</span>
         </div>
       </div>
     </div>
