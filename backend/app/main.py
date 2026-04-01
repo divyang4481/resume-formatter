@@ -11,12 +11,21 @@ def create_app() -> FastAPI:
     Bootstraps the FastAPI application.
     Integrates all API routes and core configurations.
     """
+    from fastapi.middleware.cors import CORSMiddleware
     app = FastAPI(
         title=settings.project_name,
         description="A Template-aware, privacy-governed, agentic document processing platform",
         version="1.0.0",
         docs_url="/docs",
         redoc_url="/redoc"
+    )
+
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["http://localhost:4200"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
     )
 
     app.include_router(runtime_router, prefix="/v1/runtime", tags=["Runtime"])

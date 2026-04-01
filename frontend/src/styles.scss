@@ -1,1 +1,15 @@
 /* You can add global styles to this file, and also import other style files */
+
+html, body { height: 100%; }
+body { margin: 0; font-family: Roboto, "Helvetica Neue", sans-serif; }
+
+/* Custom Hays-inspired color palette variables */
+:root {
+  --hays-primary-blue: #00305e;
+  --hays-secondary-blue: #0056b3;
+  --hays-light-blue: #e6f0fa;
+  --hays-text-dark: #333333;
+  --hays-text-light: #666666;
+  --hays-bg-light: #f4f5f7;
+  --hays-border: #eaeaea;
+}

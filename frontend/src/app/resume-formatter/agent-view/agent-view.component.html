@@ -1,0 +1,116 @@
+<div class="agent-view-container">
+  <!-- Left Side: Stepper -->
+  <div class="stepper-panel">
+    <div class="stepper-header">
+      <h2>Resume formatter</h2>
+      <p>AI agent • 5 steps</p>
+    </div>
+
+    <mat-stepper orientation="vertical" [linear]="true" #stepper>
+      <mat-step state="done">
+        <ng-template matStepLabel>
+          <div class="step-label">
+            <strong>Upload resume</strong>
+            <span>PDF, DOCX, text</span>
+          </div>
+        </ng-template>
+      </mat-step>
+
+      <mat-step state="done">
+        <ng-template matStepLabel>
+          <div class="step-label">
+            <strong>Detect industry</strong>
+            <span>AI-guessed + confirmed</span>
+          </div>
+        </ng-template>
+      </mat-step>
+
+      <mat-step>
+        <ng-template matStepLabel>
+          <div class="step-label active">
+            <strong>Choose template</strong>
+            <span>Industry-specific</span>
+          </div>
+        </ng-template>
+      </mat-step>
+
+      <mat-step>
+        <ng-template matStepLabel>
+          <div class="step-label">
+            <strong>PII review</strong>
+            <span>Mask / redact fields</span>
+          </div>
+        </ng-template>
+      </mat-step>
+
+      <mat-step>
+        <ng-template matStepLabel>
+          <div class="step-label">
+            <strong>Export</strong>
+            <span>PDF / DOCX / JSON</span>
+          </div>
+        </ng-template>
+      </mat-step>
+
+      <ng-template matStepperIcon="edit">
+        <mat-icon>check</mat-icon>
+      </ng-template>
+      <ng-template matStepperIcon="done">
+        <mat-icon>check</mat-icon>
+      </ng-template>
+    </mat-stepper>
+  </div>
+
+  <!-- Right Side: Chat -->
+  <div class="chat-panel">
+    <div class="chat-header">
+      <h3>Choose template</h3>
+      <span class="step-badge">Step 3 of 5</span>
+    </div>
+
+    <div class="chat-messages">
+      <!-- Agent Message -->
+      <div class="message-group agent">
+        <div class="message-label">Agent</div>
+        <div class="message-bubble agent-bubble">
+          I parsed your resume and detected your industry as <strong>Software Engineering / Tech</strong>. Does that look right?
+        </div>
+      </div>
+
+      <!-- User Message -->
+      <div class="message-group user">
+        <div class="message-label">You</div>
+        <div class="message-bubble user-bubble">
+          Yes, that's correct.
+        </div>
+      </div>
+
+      <!-- Agent Message with Options -->
+      <div class="message-group agent">
+        <div class="message-label">Agent</div>
+        <div class="message-bubble agent-bubble">
+          Great! Here are 4 templates optimised for <strong>Software Engineering</strong> roles. I'd recommend <em>Clean Technical</em> for senior IC / staff roles, or <em>Modern Dev</em> for startups. Which would you like?
+
+          <div class="options-grid">
+            <button mat-stroked-button color="primary" class="selected-option">
+              <mat-icon>circle</mat-icon>
+              Clean technical
+            </button>
+            <button mat-stroked-button>
+              <mat-icon>circle</mat-icon>
+              Modern dev
+            </button>
+            <button mat-stroked-button>
+              <mat-icon>circle</mat-icon>
+              Executive
+            </button>
+            <button mat-stroked-button>
+              <mat-icon>circle</mat-icon>
+              ATS optimised
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

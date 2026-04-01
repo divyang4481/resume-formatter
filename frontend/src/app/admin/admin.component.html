@@ -1,0 +1,15 @@
+<div class="admin-container">
+  <h1>Admin Dashboard</h1>
+  <p>Placeholder for administrative features and Role-Based Access Control (RBAC).</p>
+
+  <mat-card>
+    <mat-card-header>
+      <mat-card-title>System Status</mat-card-title>
+    </mat-card-header>
+    <mat-card-content>
+      <p>Backend API connection status:</p>
+      <pre *ngIf="healthStatus">{{ healthStatus | json }}</pre>
+      <p *ngIf="!healthStatus">Loading backend status...</p>
+    </mat-card-content>
+  </mat-card>
+</div>
