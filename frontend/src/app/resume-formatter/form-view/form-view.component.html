@@ -1,0 +1,73 @@
+<div class="form-view-container">
+  <!-- Left Side: Form Area -->
+  <div class="form-panel">
+    <div class="form-header">
+      <h2>CV Upload & Details</h2>
+      <p>Please provide the candidate's original CV and basic details.</p>
+    </div>
+
+    <form class="cv-form">
+      <mat-form-field appearance="outline" class="full-width">
+        <mat-label>Candidate Name</mat-label>
+        <input matInput placeholder="John Doe">
+      </mat-form-field>
+
+      <mat-form-field appearance="outline" class="full-width">
+        <mat-label>Target Role / Industry</mat-label>
+        <input matInput placeholder="Software Engineer">
+      </mat-form-field>
+
+      <div class="upload-area">
+        <mat-icon class="upload-icon">cloud_upload</mat-icon>
+        <p>Drag and drop original CV (PDF)</p>
+        <button mat-stroked-button color="primary">Browse Files</button>
+      </div>
+
+      <div class="action-buttons">
+        <button mat-raised-button color="primary">Process CV</button>
+        <button mat-button>Reset</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- Right Side: Assistant Chat -->
+  <div class="chat-panel">
+    <div class="chat-header">
+      <h3>Formatting Assistant</h3>
+    </div>
+
+    <div class="chat-messages">
+      <!-- Agent Message -->
+      <div class="message-group agent">
+        <div class="message-label">Assistant</div>
+        <div class="message-bubble agent-bubble">
+          Hi! I'm here to help process the CV. Upload a document on the left, and I'll extract the details, summarize the experience, and redact any PII for you to review.
+        </div>
+      </div>
+
+      <!-- User Placeholder -->
+      <div class="message-group user">
+        <div class="message-label">You</div>
+        <div class="message-bubble user-bubble">
+          Can you highlight leadership roles?
+        </div>
+      </div>
+
+       <div class="message-group agent">
+        <div class="message-label">Assistant</div>
+        <div class="message-bubble agent-bubble">
+          Sure, once the CV is uploaded, I'll emphasize leadership experience in the CV summary section.
+        </div>
+      </div>
+    </div>
+
+    <div class="chat-input-area">
+      <mat-form-field appearance="outline" class="full-width">
+        <input matInput placeholder="Type a message to the assistant...">
+        <button mat-icon-button matSuffix color="primary">
+          <mat-icon>send</mat-icon>
+        </button>
+      </mat-form-field>
+    </div>
+  </div>
+</div>
