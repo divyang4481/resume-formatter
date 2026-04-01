@@ -62,7 +62,7 @@ class Education(BaseModel):
 
 
 class Certification(BaseModel):
-    """A professional certification or licence."""
+    """A professional certification or license."""
 
     name: str = ""
     issuer: Optional[str] = None

@@ -68,14 +68,16 @@ class TestNormalizationAgent:
         assert "555" in result.contact.phone
 
     def test_contact_linkedin(self):
+        import re
         result = self.agent.normalize(SAMPLE_RESUME_TEXT)
         assert result.contact.linkedin is not None
-        assert "linkedin.com" in result.contact.linkedin
+        assert re.match(r"(?:https?://)?(?:www\.)?linkedin\.com/", result.contact.linkedin)
 
     def test_contact_github(self):
+        import re
         result = self.agent.normalize(SAMPLE_RESUME_TEXT)
         assert result.contact.github is not None
-        assert "github.com" in result.contact.github
+        assert re.match(r"(?:https?://)?(?:www\.)?github\.com/", result.contact.github)
 
     def test_summary_extracted(self):
         result = self.agent.normalize(SAMPLE_RESUME_TEXT)
