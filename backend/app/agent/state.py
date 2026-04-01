@@ -23,6 +23,9 @@ class AgentState(TypedDict):
     selected_template_id: Optional[str]
     formatting_rules: Optional[str]
 
+    # LLM Transformation results
+    transformed_document_json: Optional[str]
+
     # Validation
     validation_passed: bool
     validation_errors: Optional[list]

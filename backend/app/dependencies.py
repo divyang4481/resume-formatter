@@ -1,6 +1,6 @@
 from typing import Optional
 from app.config import settings
-from app.adapters.base import DocumentParserAdapter
+from app.adapters.base import DocumentParserAdapter, LlmRuntimeAdapter
 
 def get_document_parser() -> DocumentParserAdapter:
     """
@@ -32,6 +32,50 @@ def get_document_parser() -> DocumentParserAdapter:
         from app.adapters.impls.local.document_parser import LocalParser
         return LocalParser()
 
-# Fast API dependency injection wrapper
+def get_llm_runtime() -> LlmRuntimeAdapter:
+    """
+    Dependency Factory to fetch the configured LLM runtime adapter.
+    Resolves to AWS Bedrock, Azure OpenAI, GCP Vertex AI, or Local Ollama.
+    """
+    backend = settings.llm_backend.lower()
+
+    if backend == "aws_bedrock":
+        from app.adapters.impls.aws.llm_runtime import AwsBedrockLlmRuntime
+        return AwsBedrockLlmRuntime(
+            model_id=settings.llm_model_name,
+            region_name=settings.aws_region
+        )
+    elif backend == "gcp_vertex":
+        from app.adapters.impls.gcp.llm_runtime import GcpVertexLlmRuntime
+        return GcpVertexLlmRuntime(
+            project_id=settings.gcp_project_id,
+            location=settings.gcp_location,
+            model_name=settings.llm_model_name
+        )
+    elif backend == "azure_openai":
+        from app.adapters.impls.azure.llm_runtime import AzureOpenAiLlmRuntime
+        return AzureOpenAiLlmRuntime(
+            endpoint=settings.azure_openai_endpoint,
+            api_key=settings.azure_openai_api_key,
+            deployment_name=settings.azure_openai_deployment_name,
+            api_version=settings.azure_openai_api_version
+        )
+    elif backend == "local_ollama":
+        from app.adapters.impls.local.llm_runtime import LocalOllamaLlmRuntime
+        return LocalOllamaLlmRuntime(
+            model_name=settings.llm_model_name
+        )
+    else:
+        # Fallback to local
+        from app.adapters.impls.local.llm_runtime import LocalOllamaLlmRuntime
+        return LocalOllamaLlmRuntime(
+            model_name="llama3"
+        )
+
+
+# Fast API dependency injection wrappers
 def document_parser_dependency() -> DocumentParserAdapter:
     return get_document_parser()
+
+def llm_runtime_dependency() -> LlmRuntimeAdapter:
+    return get_llm_runtime()
