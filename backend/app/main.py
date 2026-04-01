@@ -28,6 +28,13 @@ def create_app() -> FastAPI:
     async def health_check():
         return {"status": "healthy", "cloud_mode": settings.cloud}
 
+    @app.get("/")
+    async def root():
+        return {
+            "message": "Welcome to Resume Formatter API. Visit /docs for the API documentation.",
+            "status": "active"
+        }
+
     return app
 
 app = create_app()

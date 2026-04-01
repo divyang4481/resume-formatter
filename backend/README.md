@@ -281,6 +281,13 @@ Run the platform natively using Uvicorn:
 poetry run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
+After starting the server, you can access the following helpful URLs:
+
+- **The Root:** [http://localhost:8000/](http://localhost:8000/) *(Returns a welcome API response)*
+- **Swagger UI Docs:** [http://localhost:8000/docs](http://localhost:8000/docs) *(FastAPI auto-generated interactive API documentation)*
+- **ReDoc Docs:** [http://localhost:8000/redoc](http://localhost:8000/redoc) *(Alternative API documentation format)*
+- **Health Check:** [http://localhost:8000/health](http://localhost:8000/health)
+
 Or via Docker Compose:
 
 ```bash
