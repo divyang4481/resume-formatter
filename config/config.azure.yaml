@@ -1,0 +1,7 @@
+cloud: "azure"
+document_parser_backend: "azure_document_intelligence"
+document_parser_fallback: "tika"
+ocr_backend: "azure_document_intelligence"
+docx_parser_backend: "azure_document_intelligence"
+enable_multi_backend_routing: true
+log_level: "INFO"
