@@ -31,6 +31,11 @@ class Settings(BaseSettings):
     azure_openai_deployment_name: str = ""
     azure_openai_api_version: str = "2024-02-15-preview"
 
+    # Storage Settings
+    storage_backend: str = "local" # "local", "s3"
+    local_storage_path: str = "./data"
+    s3_bucket: str = "agentic-document-platform-bucket"
+
     # Example standard settings
     log_level: str = "INFO"
 
