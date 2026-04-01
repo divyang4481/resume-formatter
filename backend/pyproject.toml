@@ -1,0 +1,72 @@
+[project]
+name = "agentic-document-platform"
+version = "0.1.0"
+description = "A Template-aware, privacy-governed, agentic document processing platform"
+authors = [
+    {name = "Jules",email = "jules@example.com"}
+]
+readme = "README.md"
+requires-python = "^3.11"
+dependencies = [
+    "fastapi (>=0.135.2,<0.136.0)",
+    "pydantic (>=2.12.5,<3.0.0)",
+    "pydantic-settings (>=2.13.1,<3.0.0)",
+    "uvicorn (>=0.42.0,<0.43.0)",
+    "langgraph (>=1.1.4,<2.0.0)",
+    "langchain-core (>=1.2.23,<2.0.0)"
+]
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[project.optional-dependencies]
+# 2. Cloud Providers (Native Integrations)
+cloud-aws-native = [
+    "boto3 (>=1.36.0,<2.0.0)"
+]
+cloud-azure-native = [
+    "azure-storage-blob (>=12.20.0,<13.0.0)",
+    "azure-identity (>=1.17.0,<2.0.0)",
+    "azure-ai-documentintelligence (>=1.0.0b1,<2.0.0)"
+]
+cloud-gcp-native = [
+    "google-cloud-storage (>=2.18.0,<3.0.0)",
+    "google-cloud-documentai (>=3.0.0,<4.0.0)"
+]
+
+# 3. Local Runtime Variants (Hybrid Execution)
+runtime-local-aws = [
+    "boto3 (>=1.36.0,<2.0.0)",
+    "localstack-client (>=2.0.0)"
+]
+runtime-local-azure = [
+    "azure-storage-blob (>=12.20.0,<13.0.0)",
+    "azure-identity (>=1.17.0,<2.0.0)"
+]
+runtime-local-gcp = [
+    "google-cloud-storage (>=2.18.0,<3.0.0)"
+]
+
+# 4. Agnostic Layer (Cloud-Neutral Core)
+agnostic = [
+    "httpx (>=0.27.0,<1.0.0)"
+]
+
+# 5. Parser / Extraction Engines (Pluggable)
+parser-docling = [
+    "docling (>=2.0.0,<3.0.0)"
+]
+parser-tika = [
+    "tika (>=2.6.0,<3.0.0)"
+]
+parser-unstructured = [
+    "unstructured (>=0.14.0,<1.0.0)"
+]
+
+# 6. Dev / Testing Layer (Optional)
+dev-local = [
+    "pytest (>=8.0.0,<9.0.0)",
+    "pytest-asyncio (>=0.23.0,<1.0.0)"
+]

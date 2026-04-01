@@ -7,7 +7,7 @@ services:
       dockerfile: docker/Dockerfile
       # Use build args to install local parsers like tika during local testing
       args:
-        - EXTRA_DEPENDENCIES=local
+        - EXTRA_DEPENDENCIES=parser-tika
     ports:
       - "8000:8000"
     environment:
