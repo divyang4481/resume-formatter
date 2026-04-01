@@ -14,6 +14,23 @@ class Settings(BaseSettings):
     docx_parser_backend: str = "local"
     enable_multi_backend_routing: bool = False
 
+    # LLM Settings
+    llm_backend: str = "local_ollama" # "aws_bedrock", "gcp_vertex", "azure_openai", "local_ollama"
+    llm_model_name: str = "llama3" # Default Ollama model. Override with Claude/Gemini/GPT for cloud.
+
+    # AWS Settings
+    aws_region: str = "us-east-1"
+
+    # GCP Settings
+    gcp_project_id: str = ""
+    gcp_location: str = "us-central1"
+
+    # Azure Settings
+    azure_openai_endpoint: str = ""
+    azure_openai_api_key: str = ""
+    azure_openai_deployment_name: str = ""
+    azure_openai_api_version: str = "2024-02-15-preview"
+
     # Example standard settings
     log_level: str = "INFO"
 
