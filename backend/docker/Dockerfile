@@ -26,7 +26,7 @@ WORKDIR /app
 COPY pyproject.toml poetry.lock ./
 
 # Install core dependencies.
-# In CI/CD pipelines targeting specific clouds, you would add `--extras "aws"` or `--extras "azure"` here.
+# In CI/CD pipelines targeting specific clouds, you would add `--extras "cloud-aws-native"` or `--extras "cloud-azure-native"` here.
 ARG EXTRA_DEPENDENCIES=""
 RUN if [ -z "$EXTRA_DEPENDENCIES" ]; then \
       poetry install --no-root --only main; \
