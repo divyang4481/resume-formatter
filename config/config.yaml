@@ -1,0 +1,7 @@
+cloud: "local"
+document_parser_backend: "local_parser"
+document_parser_fallback: "tika"
+ocr_backend: "local"
+docx_parser_backend: "local"
+enable_multi_backend_routing: true
+log_level: "DEBUG"
