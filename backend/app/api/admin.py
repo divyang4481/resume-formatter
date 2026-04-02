@@ -177,15 +177,26 @@ async def list_template_test_runs(
     db = SessionLocal()
     try:
         runs = db.query(TemplateTestRun).filter(TemplateTestRun.template_id == id).order_by(TemplateTestRun.created_at.desc()).all()
-        return {"test_runs": [
-            {
+        import json
+        result = []
+        for r in runs:
+            val_json = {}
+            if r.validation_result_json:
+                try:
+                    val_json = json.loads(r.validation_result_json)
+                except Exception:
+                    pass
+            result.append({
                 "id": r.id,
                 "job_id": r.processing_job_id,
                 "decision": r.decision,
                 "created_at": r.created_at,
-                "reviewed_at": r.reviewed_at
-            } for r in runs
-        ]}
+                "reviewed_at": r.reviewed_at,
+                "sample_resume_asset_id": r.sample_resume_asset_id,
+                "generated_summary": r.generated_summary,
+                "validation_result": val_json
+            })
+        return {"test_runs": result}
     finally:
         db.close()
 
