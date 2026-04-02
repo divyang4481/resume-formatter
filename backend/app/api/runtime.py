@@ -204,7 +204,7 @@ async def get_job_status(
     return RuntimeJobStatusResponse(
         job_id=job.id,
         status=job.status,
-        original_file_ref=job.original_file_ref
+        original_file_ref="unknown" # Simplistic stub since original_file_ref is not on ProcessingJob model directly
     )
 
 @router.post("/documents/{id}/confirm")

@@ -12,3 +12,8 @@ ENV/
 .pytest_cache/
 .coverage
 htmlcov/
+
+# Local data
+.data/
+data/jobs/
+data/*.pdf

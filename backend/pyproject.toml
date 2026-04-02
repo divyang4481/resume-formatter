@@ -14,7 +14,10 @@ dependencies = [
     "uvicorn (>=0.42.0,<0.43.0)",
     "langgraph (>=1.1.4,<2.0.0)",
     "langchain-core (>=1.2.23,<2.0.0)",
-    "python-multipart (>=0.0.22,<0.0.23)"
+    "python-multipart (>=0.0.22,<0.0.23)",
+    "sqlalchemy (>=2.0.48,<3.0.0)",
+    "qdrant-client (>=1.17.1,<2.0.0)",
+    "chromadb (>=1.5.5,<2.0.0)"
 ]
 
 # ADD THIS SECTION HERE
