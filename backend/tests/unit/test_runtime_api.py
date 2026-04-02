@@ -12,7 +12,10 @@ def test_submit_document_valid():
     assert response.status_code == 200
     data = response.json()
     assert "job_id" in data
-    assert data["status"] == "pending"
+    assert "document_id" in data
+    assert data["status"] == "waiting_for_confirmation"
+    assert data["requires_confirmation"] is True
+    assert data["suggested_industry_id"] == "it"
 
 def test_submit_document_invalid_extension():
     file_content = b"dummy content"
@@ -31,4 +34,4 @@ def test_get_job_status():
     assert response.status_code == 200
     data = response.json()
     assert data["job_id"] == job_id
-    assert data["status"] == "pending"
+    assert data["status"] == "waiting_for_confirmation"
