@@ -498,15 +498,51 @@ The system supports several interaction patterns via REST, A2A, and MCP.
 
 ## 14. Storage and Deployment Model
 
-### 14.1 Storage Model
+### 14.1 Local Development Parity Principle
+
+Local deployment must preserve the same stateless runtime semantics as cloud deployment. The difference between local and cloud is only the concrete adapter implementation, not the execution model.
+
+#### Local Runtime Modes
+
+**Docker mode**
+* api
+* worker
+* db
+* queue
+* object storage emulator or mounted storage
+
+**Non-Docker mode**
+* api process
+* worker process
+* sqlite/postgres local instance
+* local storage adapter
+* local queue adapter
+
+#### Non-negotiable runtime rules
+* job creation must persist metadata before returning `job_id`
+* uploaded document must be persisted before workflow starts
+* workflow execution must be resumable from persisted state
+* job status endpoint must read from shared repository
+* output fetch must read from persisted artifact store
+* no request/session affinity assumptions anywhere
+
+**Default local stack**
+* `LocalFileStorageProvider`
+* `SqlAlchemyJobRepository` with SQLite
+* `LocalQueue` backed by SQLite or Redis
+* separate `worker.py` process running the same LangGraph workflow
+
+Local with Docker and local without Docker both behave as stateless distributed-style runtime environments, just with lighter adapters. The only thing that changes by environment is the adapter wiring, not the architectural behavior.
+
+### 14.2 Storage Model
 * **Object Storage:** For raw inputs, template binaries, and rendered artifacts.
 * **Metadata Store:** For job state, audit trails, and template catalog.
 * **Search/Vector Index:** For chunked KB and rule retrieval.
 
-### 14.2 Cloud-Agnostic Deployment Model
+### 14.3 Cloud-Agnostic Deployment Model
 Core business logic remains cloud-agnostic. Provider adapters supply storage, OCR/parser, model, queue, and monitoring integrations. While Azure may serve as the first reference implementation, it does not dictate the architecture.
 
-### 14.3 Suggested Runtime Mapping (Pluggable)
+### 14.4 Suggested Runtime Mapping (Pluggable)
 | Component | Azure Reference | AWS Reference | GCP Reference | Local Emulator |
 | :--- | :--- | :--- | :--- | :--- |
 | Object Store | Azure Blob Storage | S3 | GCS | Local File/Azurite |
