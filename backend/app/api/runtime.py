@@ -64,9 +64,12 @@ def process_document_task(job_id: str, llm: LlmRuntimeAdapter, parser_service: D
     # We will let fastapi run the async function.
     pass
 
+from app.dependencies import get_storage_provider
+
 async def async_process_document_task(job_id: str, llm: LlmRuntimeAdapter, parser_service: DocumentExtractionService, job_repo: JobRepository):
     # Build the graph injecting our adapters
-    graph = build_workflow_graph(llm_runtime=llm, doc_parser=parser_service)
+    storage = get_storage_provider()
+    graph = build_workflow_graph(llm_runtime=llm, doc_parser=parser_service, storage=storage)
 
     job = job_repo.get_job(job_id)
     if not job:
@@ -75,30 +78,39 @@ async def async_process_document_task(job_id: str, llm: LlmRuntimeAdapter, parse
     job_repo.save_job(job)
 
     # Reconstruct intent from job metadata
-    ext_meta = job.extension_metadata or {}
+    ext_meta = getattr(job, 'extension_metadata', {})
+    if not isinstance(ext_meta, dict):
+        ext_meta = {}
+
     intent = ext_meta.get("intent", "candidate_runtime")
     actor_role = ext_meta.get("actor_role", "system")
     filename = ext_meta.get("filename", "mock_file.pdf")
     content_type = ext_meta.get("content_type", "application/pdf")
 
-    # Store information inside state or job to be retrieved by node
-    # Since we don't pass the storage provider to the background task here currently,
-    # the node will handle it, or we can just pass the metadata through the state.
+    # Actually, let's fetch original_file_ref
+    file_ref = getattr(job, 'original_file_ref', "unknown")
+    if file_ref == "unknown":
+        if hasattr(job, 'candidate_resume_id'):
+            file_ref = f"jobs/{job_id}/input/{filename}"
+
+    selected_template_id = getattr(job, 'selected_template_id', getattr(job, 'template_asset_id', None))
 
     # Initial state
     initial_state = {
         "session_id": job_id,
-        "file_path": job.original_file_ref,
+        "file_path": file_ref,
         "file_type": "pdf",
         "extracted_text": None,
         "extraction_confidence": None,
         "canonical_model": None,
         "privacy_transformed_model": None,
-        "selected_template_id": job.template_asset_id if hasattr(job, 'template_asset_id') else getattr(job, 'selected_template_id', None),
+        "selected_template_id": selected_template_id,
         "formatting_rules": None,
         "transformed_document_json": None,
         "validation_passed": False,
         "validation_errors": None,
+        "summary_uri": None,
+        "render_uri": None,
         "requires_human_review": False,
         "status": "ingested",
         # Custom state to pass down
@@ -111,10 +123,20 @@ async def async_process_document_task(job_id: str, llm: LlmRuntimeAdapter, parse
     try:
         # Execute the workflow
         final_state = await graph.ainvoke(initial_state)
+
+        # Persist final state back to job
         job.status = JobStatus.COMPLETED
+        if final_state.get("summary_uri"):
+            job.summary_uri = final_state["summary_uri"]
+        if final_state.get("render_uri"):
+            job.render_uri = final_state["render_uri"]
+
         job_repo.save_job(job)
+
     except Exception as e:
+        print(f"Error executing graph: {e}")
         job.status = JobStatus.FAILED
+        job.error_message = str(e)
         job_repo.save_job(job)
 
 @router.post("/documents/submit", response_model=SubmitDocumentResponse)
@@ -289,30 +311,78 @@ async def stream_events(id: str):
     """
     return {"message": "Streaming endpoint not fully implemented"}
 
+from fastapi.responses import Response
+
 @router.get("/documents/{id}/download")
-async def download_output(id: str):
+async def download_output(
+    id: str,
+    job_repository: JobRepository = Depends(job_repository_dependency),
+    storage_provider: StorageProvider = Depends(storage_provider_dependency)
+):
     """
     Download final output.
     """
-    return {"message": "Download endpoint not fully implemented", "url": f"http://example.com/download/{id}.pdf"}
+    job = job_repository.get_job(id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    render_uri = getattr(job, "render_uri", None)
+    if not render_uri:
+        raise HTTPException(status_code=404, detail="Rendered output not found for this job")
+
+    try:
+        data = storage_provider.get_bytes(render_uri)
+        return Response(content=data, media_type="text/markdown") # For now we return markdown as mock
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve output: {e}")
+
+from fastapi import Request
 
 @router.get("/jobs/{id}/output")
-async def get_job_output(id: str):
-    return await download_output(id)
+async def get_job_output(
+    id: str,
+    request: Request,
+    job_repository: JobRepository = Depends(job_repository_dependency),
+    storage_provider: StorageProvider = Depends(storage_provider_dependency)
+):
+    job = job_repository.get_job(id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    render_uri = getattr(job, "render_uri", None)
+    if not render_uri:
+        return {"message": "Output not available", "url": ""}
+
+    # We return the URL that points back to our own download endpoint
+    # In a real system with S3, this might be a pre-signed URL generated by storage_provider
+    url = str(request.url_for('download_output', id=id))
+    return {"message": "Success", "url": url}
 
 @router.get("/jobs/{id}/summary")
 async def get_job_summary(
     id: str,
-    job_repository: JobRepository = Depends(job_repository_dependency)
+    job_repository: JobRepository = Depends(job_repository_dependency),
+    storage_provider: StorageProvider = Depends(storage_provider_dependency)
 ):
     """
     Returns summary of the processed CV.
     """
     job = job_repository.get_job(id)
-    if job and job.status == JobStatus.COMPLETED:
-        return {
-            "summary": "This candidate shows strong experience in their field with over 5 years of progressive responsibility. Key skills align well with the selected template and industry standards. PII has been successfully redacted."
-        }
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    status_val = job.status.value if hasattr(job.status, 'value') else job.status
+    if status_val == JobStatus.COMPLETED.value or status_val == JobStatus.COMPLETED:
+        summary_uri = getattr(job, "summary_uri", None)
+        if summary_uri:
+            try:
+                data = storage_provider.get_bytes(summary_uri)
+                return {"summary": data.decode("utf-8")}
+            except Exception as e:
+                print(f"Failed to read summary from storage: {e}")
+                return {"summary": "Summary file exists but could not be read."}
+
+        return {"summary": "Summary missing from completed job."}
     return {"summary": "Summary not available yet."}
 
 @router.post("/documents/{id}/feedback")
