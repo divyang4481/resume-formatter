@@ -79,8 +79,12 @@ async def upload_asset(
     )
 
 @router.get("/templates")
-async def pull_templates():
-    return {"templates": []}
+async def pull_templates(
+    template_repository: TemplateRepository = Depends(template_repository_dependency),
+    is_admin: bool = Depends(mock_is_admin)
+):
+    templates = template_repository.list_templates({})
+    return {"templates": [t.model_dump() for t in templates]}
 
 @router.patch("/templates/{id}")
 async def update_template(id: str):
