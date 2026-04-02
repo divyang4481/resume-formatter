@@ -34,7 +34,7 @@ class Settings(BaseSettings):
         "http://localhost:11434/api/generate"  # Default for local Ollama
     )
     gemini_api_key: str = (
-        "AIzaSyDATSpLyeZOoU-7Yb4PicOl7NFTZXApAoY"  # Key for Google Gemini API
+        ""  # Key for Google Gemini API
     )
 
     # AWS Settings

@@ -18,6 +18,8 @@ class SqlAlchemyTemplateRepository(TemplateRepository):
         if not model:
             return None
 
+        from datetime import datetime
+
         return TemplateAsset(
             id=model.id,
             asset_type="template", # Default since we lack it in DB
@@ -27,13 +29,13 @@ class SqlAlchemyTemplateRepository(TemplateRepository):
             industry=model.industry,
             role_family=model.role_family,
             region=model.region,
-            language=model.language,
+            language=model.language or "en",
             original_file_ref=model.storage_uri or "",
             checksum=model.checksum_sha256 or "",
             extraction_artifact_ref=model.extraction_uri,
             created_by=model.created_by,
-            created_at=model.created_at,
-            updated_at=model.updated_at
+            created_at=model.created_at or datetime.utcnow(),
+            updated_at=model.updated_at or datetime.utcnow()
         )
 
     def save_template(self, template_asset: TemplateAsset) -> str:
@@ -62,13 +64,16 @@ class SqlAlchemyTemplateRepository(TemplateRepository):
     def list_templates(self, filters: Dict[str, Any]) -> List[TemplateAsset]:
         query = self.db.query(TemplateAssetModel)
 
+        from sqlalchemy import func
+
         if "status" in filters:
-            query = query.filter(TemplateAssetModel.status == filters["status"].upper())
+            query = query.filter(func.lower(TemplateAssetModel.status) == filters["status"].lower())
         if "industry" in filters:
-            query = query.filter(TemplateAssetModel.industry == filters["industry"])
+            query = query.filter(func.lower(TemplateAssetModel.industry) == filters["industry"].lower())
 
         models = query.all()
         results = []
+        from datetime import datetime
         for model in models:
             results.append(
                 TemplateAsset(
@@ -80,13 +85,13 @@ class SqlAlchemyTemplateRepository(TemplateRepository):
                     industry=model.industry,
                     role_family=model.role_family,
                     region=model.region,
-                    language=model.language,
+                    language=model.language or "en",
                     original_file_ref=model.storage_uri or "",
                     checksum=model.checksum_sha256 or "",
                     extraction_artifact_ref=model.extraction_uri,
                     created_by=model.created_by,
-                    created_at=model.created_at,
-                    updated_at=model.updated_at
+                    created_at=model.created_at or datetime.utcnow(),
+                    updated_at=model.updated_at or datetime.utcnow()
                 )
             )
         return results

@@ -24,7 +24,11 @@ class ConfirmDocumentRequest(BaseModel):
     industry_id: str
     template_id: str
 
+from typing import Any, Dict, List, Optional
+
 class RuntimeJobStatusResponse(BaseModel):
     job_id: str
     status: JobStatus
     original_file_ref: str
+    stage: Optional[str] = None
+    error_message: Optional[str] = None

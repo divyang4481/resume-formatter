@@ -74,6 +74,8 @@
     <!-- Sample Resume Test Tab -->
     <mat-tab label="Sample Resume Test">
       <div class="test-container">
+
+        <!-- Action Form -->
         <mat-card class="test-form-card">
           <mat-card-content>
             <form [formGroup]="testForm" (ngSubmit)="runTest()">
@@ -102,16 +104,65 @@
           </mat-card-content>
         </mat-card>
 
-        <mat-card *ngIf="jobStatus" class="results-card">
+        <!-- Visual Pipeline Overview -->
+        <mat-card *ngIf="jobStatus" class="pipeline-card">
           <mat-card-header>
-            <mat-card-title>Test Status: {{ jobStatus.status | uppercase }}</mat-card-title>
+            <mat-card-title>Pipeline Progress</mat-card-title>
           </mat-card-header>
-          <mat-card-content *ngIf="jobOutputs">
+          <mat-card-content>
+            <div class="pipeline-stepper">
+              <div class="pipeline-stage" *ngFor="let stage of pipelineStages; let isLast = last"
+                   [ngClass]="getStageStatus(stage.id)">
+                <div class="stage-icon">
+                  <mat-icon *ngIf="getStageStatus(stage.id) === 'completed'">check_circle</mat-icon>
+                  <mat-spinner diameter="24" *ngIf="getStageStatus(stage.id) === 'running'"></mat-spinner>
+                  <mat-icon *ngIf="getStageStatus(stage.id) === 'failed'">error</mat-icon>
+                  <mat-icon *ngIf="getStageStatus(stage.id) === 'pending'">{{ stage.icon }}</mat-icon>
+                </div>
+                <div class="stage-label">{{ stage.name }}</div>
+                <div class="stage-connector" *ngIf="!isLast"></div>
+              </div>
+            </div>
+
+            <div *ngIf="jobStatus.error_message" class="error-msg" style="margin-top: 16px;">
+              <mat-icon>error</mat-icon> {{ jobStatus.error_message }}
+            </div>
+          </mat-card-content>
+        </mat-card>
+
+        <!-- Current Test Result -->
+        <mat-card *ngIf="jobOutputs" class="results-card">
+          <mat-card-header>
+            <mat-card-title>Current Test Result: {{ jobStatus.status | uppercase }}</mat-card-title>
+          </mat-card-header>
+          <mat-card-content>
             <h3>Summary Output</h3>
-            <pre>{{ jobOutputs.summary }}</pre>
-            <p *ngIf="jobOutputs.url">
-              <a [href]="jobOutputs.url" target="_blank">Download Rendered Artifact</a>
-            </p>
+            <pre class="summary-box">{{ jobOutputs.summary }}</pre>
+            <div style="margin-top: 16px;">
+              <p *ngIf="jobOutputs.url">
+                <a mat-stroked-button color="primary" [href]="jobOutputs.url" target="_blank">
+                  <mat-icon>open_in_new</mat-icon> Download Rendered Artifact
+                </a>
+              </p>
+            </div>
+
+            <div class="current-run-actions" *ngIf="getCurrentTestRunId() as testRunId">
+               <hr/>
+               <ng-container *ngIf="!getCurrentTestRunDecision()">
+                 <h4>Review Decision</h4>
+                 <div style="display: flex; gap: 8px;">
+                   <button mat-raised-button color="primary" (click)="reviewTestRun(testRunId, 'PASS')">
+                     <mat-icon>check</mat-icon> Mark as PASS
+                   </button>
+                   <button mat-raised-button color="warn" (click)="reviewTestRun(testRunId, 'FAIL')">
+                     <mat-icon>close</mat-icon> Mark as FAIL
+                   </button>
+                 </div>
+               </ng-container>
+               <ng-container *ngIf="getCurrentTestRunDecision()">
+                 <h4>Review Decision: <span [ngClass]="getCurrentTestRunDecision() === 'PASS' ? 'text-primary' : 'text-warn'">{{ getCurrentTestRunDecision() }}</span></h4>
+               </ng-container>
+            </div>
           </mat-card-content>
         </mat-card>
       </div>
@@ -119,15 +170,68 @@
 
     <!-- Test History Tab -->
     <mat-tab label="Test History">
-      <mat-card>
-        <mat-card-content>
-          <div *ngIf="testRuns.length === 0">No test runs found.</div>
-          <div *ngFor="let run of testRuns" class="run-item">
-            <strong>Date:</strong> {{ run.created_at | date }} |
-            <strong>Decision:</strong> {{ run.decision || 'PENDING' }}
-          </div>
-        </mat-card-content>
-      </mat-card>
+      <div class="history-container">
+        <div *ngIf="testRuns.length === 0" class="empty-state">No test runs found.</div>
+
+        <table mat-table [dataSource]="testRuns" *ngIf="testRuns.length > 0" class="mat-elevation-z2" multiTemplateDataRows>
+          <ng-container matColumnDef="created_at">
+            <th mat-header-cell *matHeaderCellDef> Date </th>
+            <td mat-cell *matCellDef="let element"> {{element.created_at | date:'short'}} </td>
+          </ng-container>
+
+          <ng-container matColumnDef="status">
+            <th mat-header-cell *matHeaderCellDef> Status </th>
+            <td mat-cell *matCellDef="let element">
+              <span class="status-indicator">COMPLETED</span>
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="decision">
+            <th mat-header-cell *matHeaderCellDef> Decision </th>
+            <td mat-cell *matCellDef="let element">
+              <mat-chip-set>
+                <mat-chip [color]="element.decision === 'PASS' ? 'primary' : (element.decision === 'FAIL' ? 'warn' : '')" highlighted>
+                  {{element.decision || 'PENDING'}}
+                </mat-chip>
+              </mat-chip-set>
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="warnings">
+            <th mat-header-cell *matHeaderCellDef> Findings </th>
+            <td mat-cell *matCellDef="let element">
+              <span *ngIf="getValidationErrorsCount(element) > 0" class="text-warn">{{ getValidationErrorsCount(element) }} Errors</span>
+              <span *ngIf="getValidationWarningsCount(element) > 0" class="text-accent">{{ getValidationWarningsCount(element) }} Warnings</span>
+              <span *ngIf="getValidationErrorsCount(element) === 0 && getValidationWarningsCount(element) === 0">Clean</span>
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="actions">
+            <th mat-header-cell *matHeaderCellDef> Actions </th>
+            <td mat-cell *matCellDef="let element">
+              <div style="display: flex; gap: 8px;">
+                <button mat-stroked-button color="primary" *ngIf="!element.decision" (click)="reviewTestRun(element.id, 'PASS')">PASS</button>
+                <button mat-stroked-button color="warn" *ngIf="!element.decision" (click)="reviewTestRun(element.id, 'FAIL')">FAIL</button>
+              </div>
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="expandedDetail">
+            <td mat-cell *matCellDef="let element" [attr.colspan]="displayedColumns.length">
+              <div class="example-element-detail" [@detailExpand]="element === expandedElement ? 'expanded' : 'collapsed'">
+                 <div style="padding: 16px;">
+                    <strong>Summary:</strong>
+                    <p>{{ element.generated_summary || 'No summary available' }}</p>
+                 </div>
+              </div>
+            </td>
+          </ng-container>
+
+          <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+          <tr mat-row *matRowDef="let row; columns: displayedColumns;" class="example-element-row" [class.example-expanded-row]="expandedElement === row" (click)="expandedElement = expandedElement === row ? null : row"></tr>
+          <tr mat-row *matRowDef="let row; columns: ['expandedDetail']" class="example-detail-row"></tr>
+        </table>
+      </div>
     </mat-tab>
 
     <!-- Publish Tab -->

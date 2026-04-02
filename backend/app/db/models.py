@@ -63,7 +63,7 @@ class ProcessingJob(Base):
     status = Column(String, nullable=False)
     stage = Column(String, nullable=False)
     summary_uri = Column(String, nullable=True)
-    render_uri = Column(String, nullable=True)
+    render_docx_uri = Column(String, nullable=True)
     error_message = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

@@ -7,7 +7,8 @@ from app.dependencies import (
     llm_runtime_dependency,
     document_extraction_service_dependency,
     message_queue_dependency,
-    template_repository_dependency
+    template_repository_dependency,
+    template_lookup_service_dependency
 )
 from app.domain.interfaces import StorageProvider, JobRepository, DocumentExtractionService, MessageQueue, TemplateRepository
 from app.schemas.job import ProcessingJob
@@ -24,64 +25,27 @@ MAX_FILE_SIZE = 25 * 1024 * 1024  # 25 MB
 
 from typing import Optional, List
 
+from app.services.template_lookup_service import TemplateLookupService
+
 @router.get("/lookups/industries")
 async def get_industries(
-    template_repository: TemplateRepository = Depends(template_repository_dependency)
+    template_lookup_service: TemplateLookupService = Depends(template_lookup_service_dependency)
 ):
     """
     Returns available industries for form selection from published templates.
     """
-    templates = template_repository.list_templates({"status": "ACTIVE"})
-
-    unique_industries = set(t.industry for t in templates if t.industry)
-
-    industries_list = [
-        {"id": ind, "name": ind.replace("_", " ").title()}
-        for ind in unique_industries
-    ]
-
-    # Sort alphabetically by name
-    industries_list.sort(key=lambda x: x["name"])
-
+    industries_list = template_lookup_service.list_active_industries()
     return {"industries": industries_list}
 
 @router.get("/lookups/templates")
 async def get_templates(
     industry: Optional[str] = None,
-    template_repository: TemplateRepository = Depends(template_repository_dependency)
+    template_lookup_service: TemplateLookupService = Depends(template_lookup_service_dependency)
 ):
     """
     Returns available templates from the database, optionally filtered by industry.
     """
-    filters = {"status": "ACTIVE"}
-    if industry:
-        # Note: Depending on logic, we could also include a "general" industry option fallback here
-        # For now, we will strictly filter by requested industry.
-        filters["industry"] = industry
-
-    db_templates = template_repository.list_templates(filters)
-
-    # If a specific industry is requested, we might also want to fetch "general" templates
-    # as the hardcoded logic did. Let's replicate that behavior.
-    if industry and industry.lower() != "general":
-        general_filters = {"status": "ACTIVE", "industry": "general"}
-        general_templates = template_repository.list_templates(general_filters)
-
-        # Add general templates if they aren't already in the list
-        existing_ids = {t.id for t in db_templates}
-        for gt in general_templates:
-            if gt.id not in existing_ids:
-                db_templates.append(gt)
-
-    templates = [
-        {
-            "id": t.id,
-            "name": t.name,
-            "industry": t.industry
-        }
-        for t in db_templates
-    ]
-
+    templates = template_lookup_service.list_active_templates(industry)
     return {"templates": templates}
 
 import asyncio
@@ -139,7 +103,7 @@ async def async_process_document_task(job_id: str, llm: LlmRuntimeAdapter, parse
         "validation_passed": False,
         "validation_errors": None,
         "summary_uri": None,
-        "render_uri": None,
+        "render_docx_uri": None,
         "requires_human_review": False,
         "status": "ingested",
         # Custom state to pass down
@@ -157,8 +121,8 @@ async def async_process_document_task(job_id: str, llm: LlmRuntimeAdapter, parse
         job.status = JobStatus.COMPLETED
         if final_state.get("summary_uri"):
             job.summary_uri = final_state["summary_uri"]
-        if final_state.get("render_uri"):
-            job.render_uri = final_state["render_uri"]
+        if final_state.get("render_docx_uri"):
+            job.render_docx_uri = final_state["render_docx_uri"]
 
         job_repo.save_job(job)
 
@@ -358,7 +322,9 @@ async def get_job_status(
     return RuntimeJobStatusResponse(
         job_id=job.id,
         status=job.status,
-        original_file_ref=getattr(job, "original_file_ref", "unknown")
+        original_file_ref=getattr(job, "original_file_ref", "unknown"),
+        stage=getattr(job, "stage", None),
+        error_message=getattr(job, "error_message", None)
     )
 
 @router.post("/documents/{id}/confirm")
@@ -413,13 +379,17 @@ async def download_output(
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
 
-    render_uri = getattr(job, "render_uri", None)
-    if not render_uri:
+    render_docx_uri = getattr(job, "render_docx_uri", None)
+    if not render_docx_uri:
         raise HTTPException(status_code=404, detail="Rendered output not found for this job")
 
     try:
-        data = storage_provider.get_bytes(render_uri)
-        return Response(content=data, media_type="text/markdown") # For now we return markdown as mock
+        data = storage_provider.get_bytes(render_docx_uri)
+        return Response(
+            content=data,
+            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            headers={"Content-Disposition": f'attachment; filename="formatted_resume_{job.id}.docx"'}
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to retrieve output: {e}")
 
@@ -436,8 +406,8 @@ async def get_job_output(
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
 
-    render_uri = getattr(job, "render_uri", None)
-    if not render_uri:
+    render_docx_uri = getattr(job, "render_docx_uri", None)
+    if not render_docx_uri:
         return {"message": "Output not available", "url": ""}
 
     # We return the URL that points back to our own download endpoint
