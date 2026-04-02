@@ -8,6 +8,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
+import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { ReactiveFormsModule, FormBuilder, FormGroup } from '@angular/forms';
 import { AdminTemplateApiService } from '../../../../services/admin-template-api.service';
 import { AdminTemplateTestingService } from '../../../../services/admin-template-testing.service';
@@ -24,6 +25,7 @@ import { AdminTemplateTestingService } from '../../../../services/admin-template
     MatFormFieldModule,
     MatInputModule,
     MatSlideToggleModule,
+    MatProgressSpinnerModule,
     ReactiveFormsModule
   ],
   templateUrl: './template-detail.component.html',
@@ -43,6 +45,7 @@ export class TemplateDetailComponent implements OnInit {
   currentJobId: string | null = null;
   jobStatus: any = null;
   jobOutputs: any = null;
+  isRunningTest: boolean = false;
 
   constructor(
     private route: ActivatedRoute,
@@ -114,28 +117,41 @@ export class TemplateDetailComponent implements OnInit {
 
   runTest() {
     if (!this.selectedFile) return;
+    this.isRunningTest = true;
 
     const formData = new FormData();
     formData.append('file', this.selectedFile);
     formData.append('industry_id', this.testForm.value.industry_id);
 
-    this.testApi.runTemplateTest(formData, this.templateId).subscribe(res => {
-      this.currentJobId = res.job_id;
-      this.pollJobStatus();
+    this.testApi.runTemplateTest(formData, this.templateId).subscribe({
+      next: (res) => {
+        this.currentJobId = res.job_id;
+        this.pollJobStatus();
+      },
+      error: () => {
+        this.isRunningTest = false;
+      }
     });
   }
 
   pollJobStatus() {
     if (!this.currentJobId) return;
 
-    this.testApi.getJob(this.currentJobId).subscribe(res => {
-      this.jobStatus = res;
-      if (res.status === 'completed') {
-        this.loadJobOutputs();
-      } else if (res.status === 'failed') {
-        // Handle failure
-      } else {
-        setTimeout(() => this.pollJobStatus(), 3000);
+    this.testApi.getJob(this.currentJobId).subscribe({
+      next: (res) => {
+        this.jobStatus = res;
+        if (res.status === 'completed') {
+          this.isRunningTest = false;
+          this.loadJobOutputs();
+        } else if (res.status === 'failed') {
+          this.isRunningTest = false;
+          // Handle failure
+        } else {
+          setTimeout(() => this.pollJobStatus(), 3000);
+        }
+      },
+      error: () => {
+        this.isRunningTest = false;
       }
     });
   }

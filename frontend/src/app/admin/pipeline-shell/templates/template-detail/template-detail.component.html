@@ -89,8 +89,14 @@
               <mat-slide-toggle formControlName="redact_pii">Redact PII</mat-slide-toggle>
               <mat-slide-toggle formControlName="generate_summary">Generate Summary</mat-slide-toggle>
 
-              <div class="actions" style="margin-top: 16px;">
-                <button mat-raised-button color="primary" type="submit" [disabled]="!selectedFile">Run Test</button>
+              <div class="actions" style="margin-top: 16px; display: flex; align-items: center; gap: 8px;">
+                <button mat-raised-button color="primary" type="submit" [disabled]="!selectedFile || isRunningTest">
+                  <span *ngIf="!isRunningTest">Run Test</span>
+                  <span *ngIf="isRunningTest" style="display: flex; align-items: center; gap: 8px;">
+                    <mat-spinner diameter="20"></mat-spinner>
+                    Processing...
+                  </span>
+                </button>
               </div>
             </form>
           </mat-card-content>
