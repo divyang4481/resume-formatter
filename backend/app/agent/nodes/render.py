@@ -20,20 +20,45 @@ def create_render_node(llm_runtime: LlmRuntimeAdapter, storage):
         # Generate a summary
         # If there's no extracted data, fallback gracefully
         resume_data = {}
+        summary_text = "Summary not available because document transformation did not produce valid data."
+
         try:
             if transformed_json_str:
                 resume_data = json.loads(transformed_json_str)
-                name = resume_data.get("personal_info", {}).get("name", "Candidate")
-                if not name:
-                    name = "Candidate"
+
+                # Deterministic Fallback in case LLM fails
                 skills = resume_data.get("skills", [])
                 skills_str = ", ".join(skills[:5]) if skills else "various skills"
-                summary_text = f"**{name}** is a strong candidate with expertise in {skills_str}. This CV has been processed and PII-redacted."
-            else:
-                summary_text = "Summary not available because document transformation did not produce valid data."
+                experience = resume_data.get("experience", [])
+                latest_role = experience[0].get("title", "professional") if experience else "professional"
+                latest_company = experience[0].get("company", "recent companies") if experience else "recent companies"
+
+                fallback_summary = f"A {latest_role} with experience at {latest_company}. Core expertise includes {skills_str}."
+
+                # Try LLM for high-quality summary
+                prompt = f"""
+                Generate a concise recruiter-ready professional summary from the candidate's extracted resume data.
+                Use only supplied facts. Exclude all PII (no names, emails, phones, addresses, or links).
+                Do not invent missing details.
+                Highlight role focus, core skills, domain exposure, responsibilities, and measurable achievements when explicitly supported.
+                Return one paragraph of 90-140 words. Plain text only, no markdown bullets in the summary itself.
+
+                Resume Data:
+                {json.dumps(resume_data, indent=2)}
+                """
+
+                try:
+                    summary_text = llm_runtime.generate(prompt=prompt, temperature=0.3).strip()
+                    if not summary_text:
+                        print("LLM returned empty summary, using fallback.")
+                        summary_text = fallback_summary
+                except Exception as llm_error:
+                    print(f"Failed to generate summary via LLM: {llm_error}")
+                    summary_text = fallback_summary
+
         except Exception as e:
             summary_text = "Summary generation failed."
-            print(f"Failed to generate summary: {e}")
+            print(f"Failed to parse JSON for summary: {e}")
 
         # Save summary
         summary_key = f"jobs/{session_id}/output/summary.md"

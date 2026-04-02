@@ -38,6 +38,10 @@ class ProcessingJob(BaseModel):
     rendered_output_refs: List[str] = Field(default_factory=list)
     validation_result_id: Optional[str] = None
 
+    # Generated Outputs
+    summary_uri: Optional[str] = None
+    render_docx_uri: Optional[str] = None
+
     # Template and Context selection
     selected_template_id: Optional[str] = None
     template_version: Optional[str] = None
