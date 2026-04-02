@@ -17,4 +17,3 @@ htmlcov/
 .data/
 data/jobs/
 data/*.pdf
-backend.log
