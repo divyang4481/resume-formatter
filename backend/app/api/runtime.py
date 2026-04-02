@@ -25,35 +25,62 @@ MAX_FILE_SIZE = 25 * 1024 * 1024  # 25 MB
 from typing import Optional, List
 
 @router.get("/lookups/industries")
-async def get_industries():
+async def get_industries(
+    template_repository: TemplateRepository = Depends(template_repository_dependency)
+):
     """
-    Returns available industries for form selection.
+    Returns available industries for form selection from published templates.
     """
-    return {
-        "industries": [
-            {"id": "it", "name": "Information Technology"},
-            {"id": "finance", "name": "Finance & Accounting"},
-            {"id": "healthcare", "name": "Healthcare"}
-        ]
-    }
+    templates = template_repository.list_templates({"status": "ACTIVE"})
 
-@router.get("/lookups/templates")
-async def get_templates(industry: Optional[str] = None):
-    """
-    Returns available templates, optionally filtered by industry.
-    """
-    all_templates = [
-        {"id": "tech-standard", "name": "Tech Standard", "industry": "it"},
-        {"id": "tech-executive", "name": "Tech Executive", "industry": "it"},
-        {"id": "finance-basic", "name": "Finance Basic", "industry": "finance"},
-        {"id": "medical-pro", "name": "Medical Professional", "industry": "healthcare"},
-        {"id": "general", "name": "General Clean", "industry": "general"}
+    unique_industries = set(t.industry for t in templates if t.industry)
+
+    industries_list = [
+        {"id": ind, "name": ind.replace("_", " ").title()}
+        for ind in unique_industries
     ]
 
+    # Sort alphabetically by name
+    industries_list.sort(key=lambda x: x["name"])
+
+    return {"industries": industries_list}
+
+@router.get("/lookups/templates")
+async def get_templates(
+    industry: Optional[str] = None,
+    template_repository: TemplateRepository = Depends(template_repository_dependency)
+):
+    """
+    Returns available templates from the database, optionally filtered by industry.
+    """
+    filters = {"status": "ACTIVE"}
     if industry:
-        templates = [t for t in all_templates if t["industry"] == industry or t["industry"] == "general"]
-    else:
-        templates = all_templates
+        # Note: Depending on logic, we could also include a "general" industry option fallback here
+        # For now, we will strictly filter by requested industry.
+        filters["industry"] = industry
+
+    db_templates = template_repository.list_templates(filters)
+
+    # If a specific industry is requested, we might also want to fetch "general" templates
+    # as the hardcoded logic did. Let's replicate that behavior.
+    if industry and industry.lower() != "general":
+        general_filters = {"status": "ACTIVE", "industry": "general"}
+        general_templates = template_repository.list_templates(general_filters)
+
+        # Add general templates if they aren't already in the list
+        existing_ids = {t.id for t in db_templates}
+        for gt in general_templates:
+            if gt.id not in existing_ids:
+                db_templates.append(gt)
+
+    templates = [
+        {
+            "id": t.id,
+            "name": t.name,
+            "industry": t.industry
+        }
+        for t in db_templates
+    ]
 
     return {"templates": templates}
 
