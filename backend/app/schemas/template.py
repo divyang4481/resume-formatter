@@ -32,6 +32,11 @@ class TemplateAsset(BaseModel):
     language: str = "en"
     tags: List[str] = Field(default_factory=list)
 
+    # Notes and Guidance
+    notes: Optional[str] = None
+    selection_weight: int = 50
+    is_default_for_industry: bool = False
+
     # Provenance and Storage References
     original_file_ref: str
     checksum: str

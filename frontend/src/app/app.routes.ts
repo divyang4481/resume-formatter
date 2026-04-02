@@ -3,6 +3,7 @@ import { AdminComponent } from './admin/admin.component';
 import { PipelineShellComponent } from './admin/pipeline-shell/pipeline-shell.component';
 import { AssetsComponent } from './admin/pipeline-shell/assets/assets.component';
 import { TemplatesComponent } from './admin/pipeline-shell/templates/templates.component';
+import { TemplateDetailComponent } from './admin/pipeline-shell/templates/template-detail/template-detail.component';
 import { KnowledgeComponent } from './admin/pipeline-shell/knowledge/knowledge.component';
 import { ReviewsComponent } from './admin/pipeline-shell/reviews/reviews.component';
 import { PublishRegistryComponent } from './admin/pipeline-shell/publish-registry/publish-registry.component';
@@ -19,6 +20,7 @@ export const routes: Routes = [
       { path: '', redirectTo: 'assets', pathMatch: 'full' },
       { path: 'assets', component: AssetsComponent },
       { path: 'templates', component: TemplatesComponent },
+      { path: 'templates/:id', component: TemplateDetailComponent },
       { path: 'knowledge', component: KnowledgeComponent },
       { path: 'reviews', component: ReviewsComponent },
       { path: 'publish-registry', component: PublishRegistryComponent }

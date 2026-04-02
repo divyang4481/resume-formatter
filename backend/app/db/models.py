@@ -6,6 +6,10 @@ from datetime import datetime
 Base = declarative_base()
 
 class TemplateAsset(Base):
+    notes = Column(Text, nullable=True)
+    selection_weight = Column(Integer, default=50)
+    is_default_for_industry = Column(Boolean, default=False)
+
     __tablename__ = "template_assets"
 
     id = Column(String, primary_key=True, index=True)
@@ -139,3 +143,21 @@ class AuditEvent(Base):
     actor = Column(String, nullable=False)
     payload_json = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+class TemplateTestRun(Base):
+    __tablename__ = "template_test_runs"
+
+    id = Column(String, primary_key=True, index=True)
+    template_id = Column(String, ForeignKey("template_assets.id"), nullable=False)
+    sample_resume_asset_id = Column(String, nullable=True)
+    processing_job_id = Column(String, nullable=False)
+    decision = Column(String, nullable=True) # PASS, FAIL, None
+    review_notes = Column(Text, nullable=True)
+    generated_summary = Column(Text, nullable=True)
+    output_doc_path = Column(String, nullable=True)
+    output_pdf_path = Column(String, nullable=True)
+    extracted_json_path = Column(String, nullable=True)
+    validation_result_json = Column(Text, nullable=True)
+    created_by = Column(String, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    reviewed_at = Column(DateTime, nullable=True)

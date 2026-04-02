@@ -1,0 +1,149 @@
+<div class="template-detail-container">
+  <div class="header">
+    <button mat-icon-button (click)="loadTemplate()" routerLink="/admin/templates">
+      <mat-icon>arrow_back</mat-icon>
+    </button>
+    <h1>{{ template?.name || 'Template Detail' }}</h1>
+    <span class="status-badge" [ngClass]="template?.status">{{ template?.status | uppercase }}</span>
+  </div>
+
+  <mat-tab-group>
+    <!-- Metadata Tab -->
+    <mat-tab label="Metadata">
+      <mat-card>
+        <mat-card-content>
+          <form [formGroup]="metadataForm" (ngSubmit)="saveMetadata()">
+            <mat-form-field appearance="outline" class="full-width">
+              <mat-label>Name</mat-label>
+              <input matInput formControlName="name">
+            </mat-form-field>
+
+            <div class="row">
+              <mat-form-field appearance="outline">
+                <mat-label>Industry</mat-label>
+                <input matInput formControlName="industry">
+              </mat-form-field>
+
+              <mat-form-field appearance="outline">
+                <mat-label>Role Family</mat-label>
+                <input matInput formControlName="role_family">
+              </mat-form-field>
+            </div>
+
+            <div class="row">
+              <mat-form-field appearance="outline">
+                <mat-label>Language</mat-label>
+                <input matInput formControlName="language">
+              </mat-form-field>
+
+              <mat-form-field appearance="outline">
+                <mat-label>Selection Weight</mat-label>
+                <input matInput type="number" formControlName="selection_weight">
+              </mat-form-field>
+            </div>
+
+            <mat-slide-toggle formControlName="is_default_for_industry">
+              Default for Industry
+            </mat-slide-toggle>
+
+            <div class="actions">
+              <button mat-raised-button color="primary" type="submit">Save Metadata</button>
+            </div>
+          </form>
+        </mat-card-content>
+      </mat-card>
+    </mat-tab>
+
+    <!-- Notes / Guidance Tab -->
+    <mat-tab label="Notes & Guidance">
+      <mat-card>
+        <mat-card-content>
+          <form [formGroup]="notesForm" (ngSubmit)="saveNotes()">
+            <mat-form-field appearance="outline" class="full-width">
+              <mat-label>Template Notes / Guidance</mat-label>
+              <textarea matInput formControlName="notes" rows="6"></textarea>
+            </mat-form-field>
+            <div class="actions">
+              <button mat-raised-button color="primary" type="submit">Save Notes</button>
+            </div>
+          </form>
+        </mat-card-content>
+      </mat-card>
+    </mat-tab>
+
+    <!-- Sample Resume Test Tab -->
+    <mat-tab label="Sample Resume Test">
+      <div class="test-container">
+        <mat-card class="test-form-card">
+          <mat-card-content>
+            <form [formGroup]="testForm" (ngSubmit)="runTest()">
+              <div>
+                <input type="file" (change)="onFileSelected($event)">
+              </div>
+
+              <mat-form-field appearance="outline" class="full-width" style="margin-top: 16px;">
+                <mat-label>Industry (Override)</mat-label>
+                <input matInput formControlName="industry_id">
+              </mat-form-field>
+
+              <mat-slide-toggle formControlName="redact_pii">Redact PII</mat-slide-toggle>
+              <mat-slide-toggle formControlName="generate_summary">Generate Summary</mat-slide-toggle>
+
+              <div class="actions" style="margin-top: 16px;">
+                <button mat-raised-button color="primary" type="submit" [disabled]="!selectedFile">Run Test</button>
+              </div>
+            </form>
+          </mat-card-content>
+        </mat-card>
+
+        <mat-card *ngIf="jobStatus" class="results-card">
+          <mat-card-header>
+            <mat-card-title>Test Status: {{ jobStatus.status | uppercase }}</mat-card-title>
+          </mat-card-header>
+          <mat-card-content *ngIf="jobOutputs">
+            <h3>Summary Output</h3>
+            <pre>{{ jobOutputs.summary }}</pre>
+            <p *ngIf="jobOutputs.url">
+              <a [href]="jobOutputs.url" target="_blank">Download Rendered Artifact</a>
+            </p>
+          </mat-card-content>
+        </mat-card>
+      </div>
+    </mat-tab>
+
+    <!-- Test History Tab -->
+    <mat-tab label="Test History">
+      <mat-card>
+        <mat-card-content>
+          <div *ngIf="testRuns.length === 0">No test runs found.</div>
+          <div *ngFor="let run of testRuns" class="run-item">
+            <strong>Date:</strong> {{ run.created_at | date }} |
+            <strong>Decision:</strong> {{ run.decision || 'PENDING' }}
+          </div>
+        </mat-card-content>
+      </mat-card>
+    </mat-tab>
+
+    <!-- Publish Tab -->
+    <mat-tab label="Publish">
+      <mat-card>
+        <mat-card-header>
+          <mat-card-title>Publishing Status</mat-card-title>
+        </mat-card-header>
+        <mat-card-content>
+          <div *ngIf="publishEligibility?.can_publish" class="success-msg">
+            <mat-icon>check_circle</mat-icon> Template is eligible for publishing.
+          </div>
+          <div *ngIf="!publishEligibility?.can_publish" class="error-msg">
+            <mat-icon>error</mat-icon> Cannot publish: {{ publishEligibility?.reason }}
+          </div>
+
+          <div class="actions" style="margin-top: 24px;">
+            <button mat-raised-button color="primary" [disabled]="!publishEligibility?.can_publish" (click)="publish()">Publish to Active</button>
+            <button mat-button color="warn" (click)="archive()">Archive Template</button>
+          </div>
+        </mat-card-content>
+      </mat-card>
+    </mat-tab>
+  </mat-tab-group>
+</div>
