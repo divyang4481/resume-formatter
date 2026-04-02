@@ -118,6 +118,27 @@ The Template/Knowledge plane acts as the governor. It publishes approved assets 
 10. Render final output (e.g., DOCX).
 11. Store output, confidence scores, and audit trail.
 
+```mermaid
+flowchart TD
+    Client([User / Runtime API]) -->|Upload candidate document| Ingest[Validate and store raw input]
+    Ingest --> Extract[Extract structure and text via DocumentParserAdapter]
+    Extract --> Normalize[Normalize into canonical Candidate Resume Schema]
+    Normalize --> PII[Tag and process PII]
+    
+    TplRegistry[(Template Registry)]
+    
+    PII --> SelectTpl[Select target template]
+    TplRegistry -.->|Available Templates| SelectTpl
+    SelectTpl --> RetrieveRules[Retrieve approved rules and guidance]
+    TplRegistry -.->|Rules & Guidance| RetrieveRules
+    
+    RetrieveRules --> LLM[Run controlled LLM transformation and summarization]
+    LLM --> Validate[Validate output against strict schemas and policies]
+    Validate --> Render[Render final output e.g., DOCX]
+    Render --> Store[Store output, confidence scores, and audit trail]
+    Store --> Response([Return Response])
+```
+
 ### 6.3 Shared Processing Stages
 * Schema validation
 * Provenance tracking
