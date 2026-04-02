@@ -1,2 +1,184 @@
-Creating virtualenv agentic-document-platform-vsmFjuTQ-py3.12 in /home/jules/.cache/pypoetry/virtualenvs
-Command not found: uvicorn
+INFO:     Will watch for changes in these directories: ['/app/backend']
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     Started reloader process [185013] using WatchFiles
+INFO:     Started server process [186008]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     127.0.0.1:45020 - "POST /v1/runtime/documents/submit HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45020 - "GET /v1/runtime/lookups/templates?industry=it HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45020 - "OPTIONS /v1/runtime/documents/01a3cfc3-9e07-4aa5-9e1d-5557ba48d03d/confirm HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45026 - "POST /v1/runtime/documents/01a3cfc3-9e07-4aa5-9e1d-5557ba48d03d/confirm HTTP/1.1" 422 Unprocessable Entity
+INFO:     127.0.0.1:59656 - "POST /v1/runtime/documents/submit HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59656 - "GET /v1/runtime/lookups/templates?industry=it HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59656 - "OPTIONS /v1/runtime/documents/618fcbd0-e962-4846-acfe-be0038090bbc/confirm HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59662 - "POST /v1/runtime/documents/618fcbd0-e962-4846-acfe-be0038090bbc/confirm HTTP/1.1" 422 Unprocessable Entity
+INFO:     127.0.0.1:47176 - "POST /v1/runtime/documents/submit HTTP/1.1" 200 OK
+INFO:     127.0.0.1:47176 - "GET /v1/runtime/lookups/templates?industry=it HTTP/1.1" 200 OK
+INFO:     127.0.0.1:47176 - "OPTIONS /v1/runtime/documents/08a54d99-f477-407e-b919-9395264de992/confirm HTTP/1.1" 200 OK
+INFO:     127.0.0.1:47190 - "POST /v1/runtime/documents/08a54d99-f477-407e-b919-9395264de992/confirm HTTP/1.1" 422 Unprocessable Entity
+INFO:     127.0.0.1:39004 - "POST /v1/runtime/documents/submit HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39004 - "GET /v1/runtime/lookups/templates?industry=it HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39004 - "OPTIONS /v1/runtime/documents/93bdcedb-2336-4f83-b0db-2978fdeb1884/confirm HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39008 - "POST /v1/runtime/documents/93bdcedb-2336-4f83-b0db-2978fdeb1884/confirm HTTP/1.1" 500 Internal Server Error
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "/home/jules/.cache/pypoetry/virtualenvs/agentic-document-platform-vsmFjuTQ-py3.12/lib/python3.12/site-packages/uvicorn/protocols/http/httptools_impl.py", line 416, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.cache/pypoetry/virtualenvs/agentic-document-platform-vsmFjuTQ-py3.12/lib/python3.12/site-packages/uvicorn/middleware/proxy_headers.py", line 60, in __call__
+    return await self.app(scope, receive, send)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.cache/pypoetry/virtualenvs/agentic-document-platform-vsmFjuTQ-py3.12/lib/python3.12/site-packages/fastapi/applications.py", line 1163, in __call__
+    await super().__call__(scope, receive, send)
+  File "/home/jules/.cache/pypoetry/virtualenvs/agentic-document-platform-vsmFjuTQ-py3.12/lib/python3.12/site-packages/starlette/applications.py", line 90, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/home/jules/.cache/pypoetry/virtualenvs/agentic-document-platform-vsmFjuTQ-py3.12/lib/python3.12/site-packages/starlette/middleware/errors.py", line 186, in __call__
+    raise exc
+  File "/home/jules/.cache/pypoetry/virtualenvs/agentic-document-platform-vsmFjuTQ-py3.12/lib/python3.12/site-packages/starlette/middleware/errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "/home/jules/.cache/pypoetry/virtualenvs/agentic-document-platform-vsmFjuTQ-py3.12/lib/python3.12/site-packages/starlette/middleware/cors.py", line 96, in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+  File "/home/jules/.cache/pypoetry/virtualenvs/agentic-document-platform-vsmFjuTQ-py3.12/lib/python3.12/site-packages/starlette/middleware/cors.py", line 154, in simple_response
+    await self.app(scope, receive, send)
+  File "/home/jules/.cache/pypoetry/virtualenvs/agentic-document-platform-vsmFjuTQ-py3.12/lib/python3.12/site-packages/starlette/middleware/exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "/home/jules/.cache/pypoetry/virtualenvs/agentic-document-platform-vsmFjuTQ-py3.12/lib/python3.12/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/home/jules/.cache/pypoetry/virtualenvs/agentic-document-platform-vsmFjuTQ-py3.12/lib/python3.12/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/home/jules/.cache/pypoetry/virtualenvs/agentic-document-platform-vsmFjuTQ-py3.12/lib/python3.12/site-packages/fastapi/middleware/asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "/home/jules/.cache/pypoetry/virtualenvs/agentic-document-platform-vsmFjuTQ-py3.12/lib/python3.12/site-packages/starlette/routing.py", line 660, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/home/jules/.cache/pypoetry/virtualenvs/agentic-document-platform-vsmFjuTQ-py3.12/lib/python3.12/site-packages/starlette/routing.py", line 680, in app
+    await route.handle(scope, receive, send)
+  File "/home/jules/.cache/pypoetry/virtualenvs/agentic-document-platform-vsmFjuTQ-py3.12/lib/python3.12/site-packages/starlette/routing.py", line 276, in handle
+    await self.app(scope, receive, send)
+  File "/home/jules/.cache/pypoetry/virtualenvs/agentic-document-platform-vsmFjuTQ-py3.12/lib/python3.12/site-packages/fastapi/routing.py", line 134, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "/home/jules/.cache/pypoetry/virtualenvs/agentic-document-platform-vsmFjuTQ-py3.12/lib/python3.12/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/home/jules/.cache/pypoetry/virtualenvs/agentic-document-platform-vsmFjuTQ-py3.12/lib/python3.12/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/home/jules/.cache/pypoetry/virtualenvs/agentic-document-platform-vsmFjuTQ-py3.12/lib/python3.12/site-packages/fastapi/routing.py", line 120, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "/home/jules/.cache/pypoetry/virtualenvs/agentic-document-platform-vsmFjuTQ-py3.12/lib/python3.12/site-packages/fastapi/routing.py", line 674, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.cache/pypoetry/virtualenvs/agentic-document-platform-vsmFjuTQ-py3.12/lib/python3.12/site-packages/fastapi/routing.py", line 328, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/backend/app/api/runtime.py", line 230, in confirm_document
+    job.extension_metadata["industry_id"] = request.industry_id
+    ^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'ProcessingJob' object has no attribute 'extension_metadata'
+WARNING:  WatchFiles detected changes in 'app/adapters/repositories/job_repository.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [186008]
+INFO:     Started server process [297749]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'app/api/runtime.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [297749]
+INFO:     Started server process [298421]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     127.0.0.1:60164 - "POST /v1/runtime/documents/submit HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60164 - "GET /v1/runtime/lookups/templates?industry=it HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60164 - "OPTIONS /v1/runtime/documents/1886599f-0f39-4c14-8ba9-7ea27c46aa19/confirm HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60168 - "POST /v1/runtime/documents/1886599f-0f39-4c14-8ba9-7ea27c46aa19/confirm HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60168 - "GET /v1/runtime/jobs/1886599f-0f39-4c14-8ba9-7ea27c46aa19 HTTP/1.1" 200 OK
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "/home/jules/.cache/pypoetry/virtualenvs/agentic-document-platform-vsmFjuTQ-py3.12/lib/python3.12/site-packages/uvicorn/protocols/http/httptools_impl.py", line 416, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.cache/pypoetry/virtualenvs/agentic-document-platform-vsmFjuTQ-py3.12/lib/python3.12/site-packages/uvicorn/middleware/proxy_headers.py", line 60, in __call__
+    return await self.app(scope, receive, send)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.cache/pypoetry/virtualenvs/agentic-document-platform-vsmFjuTQ-py3.12/lib/python3.12/site-packages/fastapi/applications.py", line 1163, in __call__
+    await super().__call__(scope, receive, send)
+  File "/home/jules/.cache/pypoetry/virtualenvs/agentic-document-platform-vsmFjuTQ-py3.12/lib/python3.12/site-packages/starlette/applications.py", line 90, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/home/jules/.cache/pypoetry/virtualenvs/agentic-document-platform-vsmFjuTQ-py3.12/lib/python3.12/site-packages/starlette/middleware/errors.py", line 186, in __call__
+    raise exc
+  File "/home/jules/.cache/pypoetry/virtualenvs/agentic-document-platform-vsmFjuTQ-py3.12/lib/python3.12/site-packages/starlette/middleware/errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "/home/jules/.cache/pypoetry/virtualenvs/agentic-document-platform-vsmFjuTQ-py3.12/lib/python3.12/site-packages/starlette/middleware/cors.py", line 96, in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+  File "/home/jules/.cache/pypoetry/virtualenvs/agentic-document-platform-vsmFjuTQ-py3.12/lib/python3.12/site-packages/starlette/middleware/cors.py", line 154, in simple_response
+    await self.app(scope, receive, send)
+  File "/home/jules/.cache/pypoetry/virtualenvs/agentic-document-platform-vsmFjuTQ-py3.12/lib/python3.12/site-packages/starlette/middleware/exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "/home/jules/.cache/pypoetry/virtualenvs/agentic-document-platform-vsmFjuTQ-py3.12/lib/python3.12/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/home/jules/.cache/pypoetry/virtualenvs/agentic-document-platform-vsmFjuTQ-py3.12/lib/python3.12/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/home/jules/.cache/pypoetry/virtualenvs/agentic-document-platform-vsmFjuTQ-py3.12/lib/python3.12/site-packages/fastapi/middleware/asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "/home/jules/.cache/pypoetry/virtualenvs/agentic-document-platform-vsmFjuTQ-py3.12/lib/python3.12/site-packages/starlette/routing.py", line 660, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/home/jules/.cache/pypoetry/virtualenvs/agentic-document-platform-vsmFjuTQ-py3.12/lib/python3.12/site-packages/starlette/routing.py", line 680, in app
+    await route.handle(scope, receive, send)
+  File "/home/jules/.cache/pypoetry/virtualenvs/agentic-document-platform-vsmFjuTQ-py3.12/lib/python3.12/site-packages/starlette/routing.py", line 276, in handle
+    await self.app(scope, receive, send)
+  File "/home/jules/.cache/pypoetry/virtualenvs/agentic-document-platform-vsmFjuTQ-py3.12/lib/python3.12/site-packages/fastapi/routing.py", line 134, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "/home/jules/.cache/pypoetry/virtualenvs/agentic-document-platform-vsmFjuTQ-py3.12/lib/python3.12/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/home/jules/.cache/pypoetry/virtualenvs/agentic-document-platform-vsmFjuTQ-py3.12/lib/python3.12/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/home/jules/.cache/pypoetry/virtualenvs/agentic-document-platform-vsmFjuTQ-py3.12/lib/python3.12/site-packages/fastapi/routing.py", line 121, in app
+    await response(scope, receive, send)
+  File "/home/jules/.cache/pypoetry/virtualenvs/agentic-document-platform-vsmFjuTQ-py3.12/lib/python3.12/site-packages/starlette/responses.py", line 170, in __call__
+    await self.background()
+  File "/home/jules/.cache/pypoetry/virtualenvs/agentic-document-platform-vsmFjuTQ-py3.12/lib/python3.12/site-packages/starlette/background.py", line 36, in __call__
+    await task()
+  File "/home/jules/.cache/pypoetry/virtualenvs/agentic-document-platform-vsmFjuTQ-py3.12/lib/python3.12/site-packages/starlette/background.py", line 23, in __call__
+    await run_in_threadpool(self.func, *self.args, **self.kwargs)
+  File "/home/jules/.cache/pypoetry/virtualenvs/agentic-document-platform-vsmFjuTQ-py3.12/lib/python3.12/site-packages/starlette/concurrency.py", line 32, in run_in_threadpool
+    return await anyio.to_thread.run_sync(func)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.cache/pypoetry/virtualenvs/agentic-document-platform-vsmFjuTQ-py3.12/lib/python3.12/site-packages/anyio/to_thread.py", line 63, in run_sync
+    return await get_async_backend().run_sync_in_worker_thread(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.cache/pypoetry/virtualenvs/agentic-document-platform-vsmFjuTQ-py3.12/lib/python3.12/site-packages/anyio/_backends/_asyncio.py", line 2518, in run_sync_in_worker_thread
+    return await future
+           ^^^^^^^^^^^^
+  File "/home/jules/.cache/pypoetry/virtualenvs/agentic-document-platform-vsmFjuTQ-py3.12/lib/python3.12/site-packages/anyio/_backends/_asyncio.py", line 1002, in run
+    result = context.run(func, *args)
+             ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/backend/app/api/runtime.py", line 77, in process_document_task
+    "selected_template_id": job.selected_template_id,
+                            ^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'ProcessingJob' object has no attribute 'selected_template_id'
+INFO:     127.0.0.1:60164 - "GET /v1/runtime/jobs/1886599f-0f39-4c14-8ba9-7ea27c46aa19 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60164 - "GET /v1/runtime/jobs/1886599f-0f39-4c14-8ba9-7ea27c46aa19 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60164 - "GET /v1/runtime/jobs/1886599f-0f39-4c14-8ba9-7ea27c46aa19 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60164 - "GET /v1/runtime/jobs/1886599f-0f39-4c14-8ba9-7ea27c46aa19 HTTP/1.1" 200 OK
+WARNING:  WatchFiles detected changes in 'app/api/runtime.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [298421]
+INFO:     Started server process [313765]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     127.0.0.1:56586 - "POST /v1/runtime/documents/submit HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56586 - "GET /v1/runtime/lookups/templates?industry=it HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56586 - "OPTIONS /v1/runtime/documents/53ea25ff-376c-4c87-9674-1fdc5cb1d5ad/confirm HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56596 - "POST /v1/runtime/documents/53ea25ff-376c-4c87-9674-1fdc5cb1d5ad/confirm HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56596 - "GET /v1/runtime/jobs/53ea25ff-376c-4c87-9674-1fdc5cb1d5ad HTTP/1.1" 200 OK
+Executing Template Resolution Node...
+Error during template resolution: An error occurred while requesting URL('http://localhost:11434/api/generate'). Ensure Ollama is running.
+Executing Transform Node...
+Error during transformation: An error occurred while requesting URL('http://localhost:11434/api/generate'). Ensure Ollama is running.
+INFO:     127.0.0.1:56596 - "GET /v1/runtime/jobs/53ea25ff-376c-4c87-9674-1fdc5cb1d5ad HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56596 - "GET /v1/runtime/jobs/53ea25ff-376c-4c87-9674-1fdc5cb1d5ad/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56596 - "GET /v1/runtime/jobs/53ea25ff-376c-4c87-9674-1fdc5cb1d5ad/output HTTP/1.1" 200 OK

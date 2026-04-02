@@ -59,7 +59,7 @@ export class RuntimeApiService {
 
   confirmDocument(documentId: string, industry: string, templateId: string): Observable<any> {
     return this.http.post<any>(`${this.apiUrl}/documents/${documentId}/confirm`, {
-      industry,
+      industry_id: industry,
       template_id: templateId
     });
   }

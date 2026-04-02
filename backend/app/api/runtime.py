@@ -74,7 +74,7 @@ def process_document_task(job_id: str, llm: LlmRuntimeAdapter, parser: DocumentP
         "extraction_confidence": None,
         "canonical_model": None,
         "privacy_transformed_model": None,
-        "selected_template_id": job.selected_template_id,
+        "selected_template_id": job.template_asset_id if hasattr(job, 'template_asset_id') else getattr(job, 'selected_template_id', None),
         "formatting_rules": None,
         "transformed_document_json": None,
         "validation_passed": False,
@@ -223,11 +223,13 @@ async def confirm_document(
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
 
-    if job.status != JobStatus.WAITING_FOR_CONFIRMATION:
+    if job.status not in (JobStatus.WAITING_FOR_CONFIRMATION, JobStatus.WAITING_FOR_CONFIRMATION.value):
         raise HTTPException(status_code=400, detail="Job is not waiting for confirmation")
 
-    job.selected_template_id = request.template_id
-    job.extension_metadata["industry_id"] = request.industry_id
+    if hasattr(job, 'selected_template_id'):
+        job.selected_template_id = request.template_id
+    if hasattr(job, 'extension_metadata'):
+        job.extension_metadata["industry_id"] = request.industry_id
     job.status = JobStatus.CONFIRMED
 
     job_repository.save_job(job)
