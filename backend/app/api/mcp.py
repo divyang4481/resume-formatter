@@ -11,6 +11,18 @@ async def mcp_manifest() -> Dict[str, Any]:
     return {
         "tools": [
             {
+                "name": "submit_document",
+                "description": "Submits a document for processing, optionally with industry and template IDs."
+            },
+            {
+                "name": "confirm_document",
+                "description": "Confirms the industry and template for a submitted document."
+            },
+            {
+                "name": "get_document_status",
+                "description": "Checks the processing status of a document job."
+            },
+            {
                 "name": "format_document",
                 "description": "Applies template to a document."
             },

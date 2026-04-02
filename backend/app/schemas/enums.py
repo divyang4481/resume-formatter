@@ -12,6 +12,9 @@ class AssetStatus(str, Enum):
 
 class JobStatus(str, Enum):
     CREATED = "created"
+    UPLOADED = "uploaded"
+    WAITING_FOR_CONFIRMATION = "waiting_for_confirmation"
+    CONFIRMED = "confirmed"
     PENDING = "pending"
     PROCESSING = "processing"
     COMPLETED = "completed"

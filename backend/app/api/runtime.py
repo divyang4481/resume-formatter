@@ -12,18 +12,96 @@ from app.schemas.job import ProcessingJob
 from app.adapters.base import LlmRuntimeAdapter, DocumentParserAdapter
 from app.agent.graph import build_workflow_graph
 from app.schemas.enums import JobStatus
-from app.schemas.runtime import RuntimeDocumentSubmitResponse, RuntimeJobStatusResponse
+from app.schemas.runtime import SubmitDocumentResponse, RuntimeJobStatusResponse, ConfirmDocumentRequest
 
 router = APIRouter()
 
 ALLOWED_EXTENSIONS = {".pdf", ".docx", ".md", ".txt", ".json", ".yaml", ".yml"}
 MAX_FILE_SIZE = 25 * 1024 * 1024  # 25 MB
 
-@router.post("/documents/submit", response_model=RuntimeDocumentSubmitResponse)
+from fastapi import UploadFile, File, Form
+from typing import Optional, List
+
+@router.get("/lookups/industries")
+async def get_industries():
+    """
+    Returns available industries for form selection.
+    """
+    return {
+        "industries": [
+            {"id": "it", "name": "Information Technology"},
+            {"id": "finance", "name": "Finance & Accounting"},
+            {"id": "healthcare", "name": "Healthcare"}
+        ]
+    }
+
+@router.get("/lookups/templates")
+async def get_templates(industry: Optional[str] = None):
+    """
+    Returns available templates, optionally filtered by industry.
+    """
+    all_templates = [
+        {"id": "tech-standard", "name": "Tech Standard", "industry": "it"},
+        {"id": "tech-executive", "name": "Tech Executive", "industry": "it"},
+        {"id": "finance-basic", "name": "Finance Basic", "industry": "finance"},
+        {"id": "medical-pro", "name": "Medical Professional", "industry": "healthcare"},
+        {"id": "general", "name": "General Clean", "industry": "general"}
+    ]
+
+    if industry:
+        templates = [t for t in all_templates if t["industry"] == industry or t["industry"] == "general"]
+    else:
+        templates = all_templates
+
+    return {"templates": templates}
+
+def process_document_task(job_id: str, llm: LlmRuntimeAdapter, parser: DocumentParserAdapter, job_repo: JobRepository):
+    # Build the graph injecting our adapters
+    graph = build_workflow_graph(llm_runtime=llm, doc_parser=parser)
+
+    job = job_repo.get_job(job_id)
+    if not job:
+        return
+    job.status = JobStatus.PROCESSING
+    job_repo.save_job(job)
+
+    # Initial state
+    initial_state = {
+        "session_id": job_id,
+        "file_path": "mock_file.pdf",
+        "file_type": "pdf",
+        "extracted_text": None,
+        "extraction_confidence": None,
+        "canonical_model": None,
+        "privacy_transformed_model": None,
+        "selected_template_id": job.selected_template_id,
+        "formatting_rules": None,
+        "transformed_document_json": None,
+        "validation_passed": False,
+        "validation_errors": None,
+        "requires_human_review": False,
+        "status": "ingested"
+    }
+
+    try:
+        # Execute the workflow
+        final_state = graph.invoke(initial_state)
+        job.status = JobStatus.COMPLETED
+        job_repo.save_job(job)
+    except Exception as e:
+        job.status = JobStatus.FAILED
+        job_repo.save_job(job)
+
+@router.post("/documents/submit", response_model=SubmitDocumentResponse)
 async def submit_document(
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
+    industry_id: Optional[str] = Form(None),
+    template_id: Optional[str] = Form(None),
     storage_provider: StorageProvider = Depends(storage_provider_dependency),
-    job_repository: JobRepository = Depends(job_repository_dependency)
+    job_repository: JobRepository = Depends(job_repository_dependency),
+    llm_runtime: LlmRuntimeAdapter = Depends(llm_runtime_dependency),
+    doc_parser: DocumentParserAdapter = Depends(document_parser_dependency)
 ):
     """
     Accepts multipart upload for candidate resume processing.
@@ -64,32 +142,62 @@ async def submit_document(
     # Store file via storage provider
     storage_ref = storage_provider.put_bytes(storage_key, file_bytes)
 
+    requires_confirmation = True
+    suggested_industry_id = None
+    suggested_template_id = None
+    allowed_template_ids = None
+    job_status = JobStatus.WAITING_FOR_CONFIRMATION
+
+    if industry_id and template_id:
+        requires_confirmation = False
+        job_status = JobStatus.CONFIRMED
+    else:
+        # Suggest if not provided
+        suggested_industry_id = "it"
+        suggested_template_id = "tech-standard"
+        allowed_template_ids = ["tech-standard", "tech-executive"]
+
     # Create job record
     job = ProcessingJob(
         id=job_id,
-        status=JobStatus.PENDING,
+        status=job_status,
         original_file_ref=storage_ref,
-        created_by="system" # Or real user context if available
+        created_by="system", # Or real user context if available
+        selected_template_id=template_id if not requires_confirmation else None,
+        extension_metadata={
+            "industry_id": industry_id if not requires_confirmation else None
+        }
     )
 
     # Save job record
     job_repository.save_job(job)
 
-    return RuntimeDocumentSubmitResponse(
+    if not requires_confirmation:
+        # Run the workflow graph in the background
+        background_tasks.add_task(process_document_task, job_id, llm_runtime, doc_parser, job_repository)
+
+    return SubmitDocumentResponse(
+        document_id=job_id,
         job_id=job_id,
-        status=JobStatus.PENDING,
-        message="Document submitted successfully and job initialized."
+        status=job_status,
+        requires_confirmation=requires_confirmation,
+        provided_industry_id=industry_id,
+        provided_template_id=template_id,
+        suggested_industry_id=suggested_industry_id,
+        suggested_template_id=suggested_template_id,
+        allowed_template_ids=allowed_template_ids,
+        message="Document submitted successfully."
     )
 
-@router.get("/jobs/{job_id}", response_model=RuntimeJobStatusResponse)
+@router.get("/jobs/{id}", response_model=RuntimeJobStatusResponse)
 async def get_job_status(
-    job_id: str,
+    id: str,
     job_repository: JobRepository = Depends(job_repository_dependency)
 ):
     """
     Returns processing job status.
     """
-    job = job_repository.get_job(job_id)
+    job = job_repository.get_job(id)
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
 
@@ -99,118 +207,35 @@ async def get_job_status(
         original_file_ref=job.original_file_ref
     )
 
-from fastapi import UploadFile, File, Form
-from typing import Optional, List
-
-@router.get("/lookups/industries")
-async def get_industries():
-    """
-    Returns available industries for form selection.
-    """
-    return {
-        "industries": [
-            {"id": "it", "name": "Information Technology"},
-            {"id": "finance", "name": "Finance & Accounting"},
-            {"id": "healthcare", "name": "Healthcare"}
-        ]
-    }
-
-@router.get("/lookups/templates")
-async def get_templates(industry: Optional[str] = None):
-    """
-    Returns available templates, optionally filtered by industry.
-    """
-    all_templates = [
-        {"id": "tech-standard", "name": "Tech Standard", "industry": "it"},
-        {"id": "tech-executive", "name": "Tech Executive", "industry": "it"},
-        {"id": "finance-basic", "name": "Finance Basic", "industry": "finance"},
-        {"id": "medical-pro", "name": "Medical Professional", "industry": "healthcare"},
-        {"id": "general", "name": "General Clean", "industry": "general"}
-    ]
-
-    if industry:
-        templates = [t for t in all_templates if t["industry"] == industry or t["industry"] == "general"]
-    else:
-        templates = all_templates
-
-    return {"templates": templates}
-
-@router.post("/documents/submit")
-async def submit_document(
+@router.post("/documents/{id}/confirm")
+async def confirm_document(
+    id: str,
+    request: ConfirmDocumentRequest,
     background_tasks: BackgroundTasks,
-    file: UploadFile = File(None),
-    industry: Optional[str] = Form(None),
-    template_id: Optional[str] = Form(None),
-    candidate_name: Optional[str] = Form(None),
+    job_repository: JobRepository = Depends(job_repository_dependency),
     llm_runtime: LlmRuntimeAdapter = Depends(llm_runtime_dependency),
     doc_parser: DocumentParserAdapter = Depends(document_parser_dependency)
 ):
     """
-    Accepts multipart upload.
-    Returns session_id, status, and initial metadata.
-    """
-    session_id = str(uuid.uuid4())
-    SESSIONS[session_id] = {"status": "processing", "state": {}}
-
-    def process_document(session_id: str, llm: LlmRuntimeAdapter, parser: DocumentParserAdapter):
-        # Build the graph injecting our adapters
-        graph = build_workflow_graph(llm_runtime=llm, doc_parser=parser)
-
-        # Initial state
-        initial_state = {
-            "session_id": session_id,
-            "file_path": "mock_file.pdf",
-            "file_type": "pdf",
-            "extracted_text": None,
-            "extraction_confidence": None,
-            "canonical_model": None,
-            "privacy_transformed_model": None,
-            "selected_template_id": None,
-            "formatting_rules": None,
-            "transformed_document_json": None,
-            "validation_passed": False,
-            "validation_errors": None,
-            "requires_human_review": False,
-            "status": "ingested"
-        }
-
-        try:
-            # Execute the workflow
-            final_state = graph.invoke(initial_state)
-            SESSIONS[session_id] = {"status": "completed", "state": final_state}
-        except Exception as e:
-            SESSIONS[session_id] = {"status": "failed", "error": str(e)}
-
-    # Run the workflow graph in the background
-    background_tasks.add_task(process_document, session_id, llm_runtime, doc_parser)
-
-    # Note: using session_id as job_id here
-    return {
-        "message": "Document submitted",
-        "session_id": session_id,
-        "job_id": session_id
-    }
-
-@router.get("/jobs/{id}")
-async def get_job_status(id: str):
-    """
-    Alias for document status using standard job routing.
-    """
-    return await get_session_status(id)
-
-@router.get("/documents/{id}/status")
-async def get_session_status(id: str):
-    """
-    Legacy endpoint. Use /jobs/{id} instead.
-    """
-    return {"session_id": id, "status": "deprecated"}
-
-@router.post("/documents/{id}/confirm")
-async def confirm_document(id: str):
-    """
     Used to resume a paused human review step.
     """
-    return {"message": "Document confirmed", "session_id": id}
+    job = job_repository.get_job(id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    if job.status != JobStatus.WAITING_FOR_CONFIRMATION:
+        raise HTTPException(status_code=400, detail="Job is not waiting for confirmation")
+
+    job.selected_template_id = request.template_id
+    job.extension_metadata["industry_id"] = request.industry_id
+    job.status = JobStatus.CONFIRMED
+
+    job_repository.save_job(job)
+
+    # Trigger background task to resume processing
+    background_tasks.add_task(process_document_task, id, llm_runtime, doc_parser, job_repository)
+
+    return {"message": "Document confirmed", "job_id": id, "status": job.status}
 
 @router.get("/documents/{id}/stream")
 async def stream_events(id: str):
@@ -231,13 +256,15 @@ async def get_job_output(id: str):
     return await download_output(id)
 
 @router.get("/jobs/{id}/summary")
-async def get_job_summary(id: str):
+async def get_job_summary(
+    id: str,
+    job_repository: JobRepository = Depends(job_repository_dependency)
+):
     """
     Returns summary of the processed CV.
     """
-    session = SESSIONS.get(id, {})
-    # For mock purposes
-    if session.get("status") == "completed":
+    job = job_repository.get_job(id)
+    if job and job.status == JobStatus.COMPLETED:
         return {
             "summary": "This candidate shows strong experience in their field with over 5 years of progressive responsibility. Key skills align well with the selected template and industry standards. PII has been successfully redacted."
         }
