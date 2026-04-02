@@ -66,3 +66,38 @@ After you start the servers, check out these local URLs:
 - **Health Check:** [http://localhost:8000/health](http://localhost:8000/health)
 
 Refresh your browser, and you should now seamlessly access the UI as well as the API!
+
+## Testing and Coverage
+
+### Backend
+The backend tests rely on `pytest`. Unit tests evaluate modules without any dependencies. Integration tests hit actual endpoints with a SQLite configuration in the `.data` folder.
+
+To run tests and get a coverage report:
+```bash
+cd backend
+PYTHONPATH=. poetry run pytest --cov=app --cov-report=term-missing tests/
+```
+
+### Frontend
+The frontend uses `karma` and `jasmine` for component integration and logic tests.
+
+To run tests and get a coverage report:
+```bash
+cd frontend
+CHROME_BIN=/usr/bin/google-chrome-stable npm run test -- --watch=false --browsers=ChromeHeadless --code-coverage
+```
+
+### Playwright E2E
+For E2E integration, Playwright is installed. You can run the fast local mocked tests, or the full worker loop.
+
+To run the full E2E flow:
+```bash
+cd frontend
+npx playwright test --config=playwright.full.config.ts
+```
+
+To run the fast CI smoke test:
+```bash
+cd frontend
+npx playwright test
+```
