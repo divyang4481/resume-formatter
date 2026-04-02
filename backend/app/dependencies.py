@@ -153,6 +153,10 @@ def get_template_repository(db: Session = Depends(get_db_session)) -> TemplateRe
 def template_repository_dependency(repo: TemplateRepository = Depends(get_template_repository)) -> TemplateRepository:
     return repo
 
+def template_lookup_service_dependency(template_repository: TemplateRepository = Depends(template_repository_dependency)):
+    from app.services.template_lookup_service import TemplateLookupService
+    return TemplateLookupService(template_repository)
+
 def get_knowledge_repository(db: Session = Depends(get_db_session)):
     """Dependency Factory to fetch Knowledge Repository (Stubbed)"""
     # A real implementation would go here similar to SqlAlchemyTemplateRepository
