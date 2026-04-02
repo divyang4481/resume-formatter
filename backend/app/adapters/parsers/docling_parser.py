@@ -2,15 +2,18 @@ import io
 import os
 import tempfile
 from typing import Any, Dict, List
-from docling.document_converter import DocumentConverter
 from app.domain.interfaces.document_parser import DocumentParser
 from app.schemas.parsed_document import ParsedDocument, ParsedSection, ParsedTable
 
 class DoclingParser(DocumentParser):
     def __init__(self):
-        self.converter = DocumentConverter()
+        self.converter = None
 
     async def parse(self, file_bytes: bytes, file_name: str, mime_type: str, options: Dict[str, Any] = None) -> ParsedDocument:
+        if self.converter is None:
+            from docling.document_converter import DocumentConverter
+            self.converter = DocumentConverter()
+
         # Docling primarily works with files on disk, so we use a temp file
         ext = os.path.splitext(file_name)[1]
         with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tmp:
