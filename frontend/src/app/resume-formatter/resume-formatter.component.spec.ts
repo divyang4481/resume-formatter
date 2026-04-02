@@ -8,7 +8,10 @@ describe('ResumeFormatterComponent', () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [ResumeFormatterComponent]
+      imports: [ResumeFormatterComponent],
+      providers: [
+        { provide: 'ActivatedRoute', useValue: {} }
+      ]
     })
     .compileComponents();
 

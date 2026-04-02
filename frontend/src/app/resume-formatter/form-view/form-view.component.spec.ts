@@ -8,7 +8,12 @@ describe('FormViewComponent', () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [FormViewComponent]
+      imports: [FormViewComponent],
+      providers: [
+        { provide: 'HttpClient', useValue: {} },
+        { provide: 'DocumentProcessingService', useValue: {} },
+        { provide: 'RuntimeApiService', useValue: {} }
+      ]
     })
     .compileComponents();
 

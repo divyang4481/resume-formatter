@@ -92,7 +92,7 @@ export class RealAgentBackendClient implements AgentBackendClient {
         ];
       } else {
         this.currentSession.status = 'processing';
-        this.currentSession.currentStep = 'pii_review';
+        this.currentSession.currentStep = 'review_resume';
         this.currentSession.messages.push({
           id: `m-status-${Date.now()}`,
           role: 'assistant',
@@ -137,7 +137,7 @@ export class RealAgentBackendClient implements AgentBackendClient {
 
         this.currentSession.status = 'processing';
         this.currentSession.pendingActions = [];
-        this.currentSession.currentStep = 'pii_review';
+        this.currentSession.currentStep = 'review_resume';
 
         try {
              await firstValueFrom(this.runtimeApi.confirmDocument(
@@ -149,7 +149,7 @@ export class RealAgentBackendClient implements AgentBackendClient {
                 id: `m-status-${Date.now()}`,
                 role: 'assistant',
                 type: 'status',
-                content: 'Template confirmed. Processing document and applying PII rules...',
+                content: 'Template confirmed. Processing document...',
                 timestamp: new Date().toISOString()
              });
              await this.waitForJobCompletion(sessionId);
@@ -163,12 +163,12 @@ export class RealAgentBackendClient implements AgentBackendClient {
                 timestamp: new Date().toISOString()
             });
         }
-    } else if (this.currentSession.currentStep === 'pii_review' && answer === 'Confirmed') {
+    } else if (this.currentSession.currentStep === 'review_resume' && answer === 'Confirmed') {
         this.currentSession.messages.push({
             id: `m-user-${Date.now()}`,
             role: 'user',
             type: 'text',
-            content: 'Confirmed PII Policy',
+            content: 'Confirmed Review',
             timestamp: new Date().toISOString()
         });
 
@@ -193,6 +193,11 @@ export class RealAgentBackendClient implements AgentBackendClient {
                  type: 'download_output',
                  label: 'Download Output',
                  payload: { url: outputRes.url }
+               },
+               {
+                 id: 'a-start-over',
+                 type: 'start_over',
+                 label: 'Start Over'
                }
             ];
         } catch(e) {
@@ -206,12 +211,23 @@ export class RealAgentBackendClient implements AgentBackendClient {
             });
         }
     } else {
-        // Fallback for other answers
+        // Fallback for other answers (generic chat messages)
+        const userMessageContent = typeof answer === 'string' ? answer : JSON.stringify(answer);
+
         this.currentSession.messages.push({
             id: `m-user-${Date.now()}`,
             role: 'user',
             type: 'text',
-            content: typeof answer === 'string' ? answer : JSON.stringify(answer),
+            content: userMessageContent,
+            timestamp: new Date().toISOString()
+        });
+
+        // Add a generic acknowledgement from the agent
+        this.currentSession.messages.push({
+            id: `m-agent-ack-${Date.now()}`,
+            role: 'assistant',
+            type: 'text',
+            content: `I received your message: "${userMessageContent}". I am a simple resume formatting agent, but I'm here to help you through the process!`,
             timestamp: new Date().toISOString()
         });
     }
@@ -234,19 +250,19 @@ export class RealAgentBackendClient implements AgentBackendClient {
             if (statusRes.status === 'completed') {
                 if (this.currentSession) {
                     this.currentSession.status = 'waiting_for_user';
-                    this.currentSession.currentStep = 'pii_review';
+                    this.currentSession.currentStep = 'review_resume';
                     this.currentSession.messages.push({
                         id: `m-status-${Date.now()}`,
                         role: 'assistant',
                         type: 'text',
-                        content: 'Document processing completed. Please review and confirm the PII policy before we export.',
+                        content: 'Document processing completed. Please review the generated resume before we export.',
                         timestamp: new Date().toISOString()
                     });
                     this.currentSession.pendingActions = [
                         {
-                            id: 'a-confirm-pii',
-                            type: 'confirm_pii_policy',
-                            label: 'Confirm PII Policy'
+                            id: 'a-confirm-review',
+                            type: 'confirm_review',
+                            label: 'Confirm Review'
                         }
                     ];
                 }

@@ -14,11 +14,12 @@ export type AgentMessage = {
 export type AgentActionType =
   | "upload_document"
   | "select_template"
-  | "confirm_pii_policy"
+  | "confirm_review"
   | "review_extraction"
   | "submit_correction"
   | "rerun_job"
-  | "download_output";
+  | "download_output"
+  | "start_over";
 
 export type AgentAction = {
   id: string;
