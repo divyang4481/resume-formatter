@@ -9,9 +9,9 @@
     <form class="cv-form" [formGroup]="form">
       <div class="upload-area" (click)="triggerFileInput()">
         <mat-icon class="upload-icon">cloud_upload</mat-icon>
-        <p *ngIf="!selectedFile">Click to browse or drag and drop original CV (PDF)</p>
+        <p *ngIf="!selectedFile">Click to browse or drag and drop original CV (PDF, DOC, DOCX)</p>
         <p *ngIf="selectedFile" class="file-name">Selected: {{ selectedFile.name }}</p>
-        <input type="file" #fileInput hidden (change)="onFileSelected($event)" accept="application/pdf">
+        <input type="file" #fileInput hidden (change)="onFileSelected($event)" accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document">
         <button type="button" mat-stroked-button color="primary" (click)="triggerFileInput(); $event.stopPropagation()">Browse Files</button>
       </div>
 
