@@ -1,37 +1,37 @@
 from typing import Optional
 from app.config import settings
-from app.adapters.base import DocumentParserAdapter, LlmRuntimeAdapter
-from app.domain.interfaces import StorageProvider, TemplateRepository, EventBus
+from app.adapters.base import LlmRuntimeAdapter
+from app.domain.interfaces import StorageProvider, TemplateRepository, EventBus, DocumentExtractionService
 
-def get_document_parser() -> DocumentParserAdapter:
+def get_document_extraction_service() -> DocumentExtractionService:
     """
-    Dependency Factory to fetch the configured document parsing adapter.
+    Dependency Factory to fetch the configured document extraction service adapter.
     This logic dynamically resolves implementations based on the system config.
     """
-    backend = settings.document_parser_backend.lower()
+    backend = settings.document_extractor_backend.lower()
 
     if backend == "azure_document_intelligence":
-        from app.adapters.impls.azure.document_parser import AzureDocumentIntelligenceParser
-        return AzureDocumentIntelligenceParser()
+        from app.adapters.impls.azure.document_parser import AzureDocumentIntelligenceExtractionService
+        return AzureDocumentIntelligenceExtractionService()
     elif backend == "aws_textract":
-        from app.adapters.impls.aws.document_parser import AwsTextractParser
-        return AwsTextractParser()
+        from app.adapters.impls.aws.document_parser import AwsTextractExtractionService
+        return AwsTextractExtractionService()
     elif backend == "gcp_document_ai":
-        from app.adapters.impls.gcp.document_parser import GcpDocumentAiParser
-        return GcpDocumentAiParser()
+        from app.adapters.impls.gcp.document_parser import GcpDocumentAiExtractionService
+        return GcpDocumentAiExtractionService()
     elif backend == "ibm_docling":
-        from app.adapters.impls.ibm.document_parser import IbmDoclingParser
-        return IbmDoclingParser()
+        from app.adapters.impls.ibm.document_parser import IbmDoclingExtractionService
+        return IbmDoclingExtractionService()
     elif backend == "tika":
-        from app.adapters.impls.local.document_parser import ApacheTikaParser
-        return ApacheTikaParser()
+        from app.adapters.impls.local.document_parser import ApacheTikaExtractionService
+        return ApacheTikaExtractionService()
     elif backend == "local_parser":
-        from app.adapters.impls.local.document_parser import LocalParser
-        return LocalParser()
+        from app.adapters.impls.local.document_parser import LocalParserExtractionService
+        return LocalParserExtractionService()
     else:
         # Fallback to local parser
-        from app.adapters.impls.local.document_parser import LocalParser
-        return LocalParser()
+        from app.adapters.impls.local.document_parser import LocalParserExtractionService
+        return LocalParserExtractionService()
 
 def get_llm_runtime() -> LlmRuntimeAdapter:
     """
@@ -125,8 +125,8 @@ def mock_is_admin(x_admin_token: Optional[str] = Header(None, description="Mock 
     return True
 
 # Fast API dependency injection wrappers
-def document_parser_dependency() -> DocumentParserAdapter:
-    return get_document_parser()
+def document_extraction_service_dependency() -> DocumentExtractionService:
+    return get_document_extraction_service()
 
 def llm_runtime_dependency() -> LlmRuntimeAdapter:
     return get_llm_runtime()

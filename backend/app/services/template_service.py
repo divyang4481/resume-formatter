@@ -3,7 +3,7 @@ import uuid
 from datetime import datetime
 from typing import Optional
 
-from app.domain.interfaces import StorageProvider, TemplateRepository, EventBus
+from app.domain.interfaces import StorageProvider, TemplateRepository, EventBus, DocumentExtractionService, KnowledgeIndex, ExtractionContext
 from app.schemas.template import TemplateAsset
 from app.schemas.admin import AssetUploadRequestMetadata
 from app.schemas.events import AssetUploadedEvent
@@ -14,18 +14,23 @@ class TemplateService:
         self,
         storage_provider: StorageProvider,
         template_repository: TemplateRepository,
-        event_bus: EventBus
+        event_bus: EventBus,
+        extraction_service: Optional[DocumentExtractionService] = None,
+        knowledge_index: Optional[KnowledgeIndex] = None
     ):
         self.storage_provider = storage_provider
         self.template_repository = template_repository
         self.event_bus = event_bus
+        self.extraction_service = extraction_service
+        self.knowledge_index = knowledge_index
 
-    async def upload_asset(self, filename: str, content: bytes, metadata: AssetUploadRequestMetadata, uploaded_by: str = "system") -> str:
+    async def upload_asset(self, filename: str, content: bytes, metadata: AssetUploadRequestMetadata, content_type: str, uploaded_by: str = "system") -> str:
         """
         Handles the logic for uploading a template asset:
         - Stores the asset
         - Computes checksum
         - Saves draft metadata
+        - If knowledge-bearing, extracts text and indexes it
         - Emits an audit event
         """
         # 1. Compute checksum
@@ -38,7 +43,32 @@ class TemplateService:
         storage_key = f"templates/{asset_id}/{filename}"
         storage_uri = self.storage_provider.put_bytes(storage_key, content)
 
-        # 4. Save metadata record (draft)
+        # 4. Extract and Index if Knowledge-bearing
+        # Only extract if it is a knowledge asset, not a structured template shell/rule
+        knowledge_bearing_kinds = {"sample_resume", "guidance_pdf", "policy_doc"}
+        structured_template_kinds = {"template_docx", "template_json", "template_yaml"}
+
+        extracted_text = None
+        backend_used = None
+
+        if metadata.asset_type in knowledge_bearing_kinds and self.extraction_service and self.knowledge_index:
+            context = ExtractionContext(intent="template_knowledge", actor_role=uploaded_by)
+            extracted_doc = await self.extraction_service.extract(
+                file_bytes=content,
+                filename=filename,
+                content_type=content_type,
+                context=context
+            )
+            extracted_text = extracted_doc.extracted_text
+            backend_used = extracted_doc.backend_used
+
+            # Simple indexing stub
+            self.knowledge_index.index_chunks(
+                chunks=[{"text": extracted_text}],
+                asset_id=asset_id
+            )
+
+        # 5. Save metadata record (draft)
         template_asset = TemplateAsset(
             id=asset_id,
             asset_type=metadata.asset_type,
@@ -53,11 +83,12 @@ class TemplateService:
             status=AssetStatus.DRAFT,
             original_file_ref=storage_uri,
             checksum=checksum,
-            created_by=uploaded_by
+            created_by=uploaded_by,
+            extension_metadata={"document_extractor_backend": backend_used} if backend_used else {}
         )
         self.template_repository.save_template(template_asset)
 
-        # 5. Emit Audit Event
+        # 6. Emit Audit Event
         event = AssetUploadedEvent(
             asset_id=asset_id,
             asset_type=metadata.asset_type,

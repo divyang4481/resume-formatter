@@ -1,25 +1,25 @@
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, BackgroundTasks, status
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, BackgroundTasks, status, Form, Header
 import uuid
 import os
 from app.dependencies import (
     storage_provider_dependency,
     job_repository_dependency,
     llm_runtime_dependency,
-    document_parser_dependency
+    document_extraction_service_dependency
 )
-from app.domain.interfaces import StorageProvider, JobRepository
+from app.domain.interfaces import StorageProvider, JobRepository, DocumentExtractionService, ExtractionContext
 from app.schemas.job import ProcessingJob
-from app.adapters.base import LlmRuntimeAdapter, DocumentParserAdapter
+from app.adapters.base import LlmRuntimeAdapter
 from app.agent.graph import build_workflow_graph
 from app.schemas.enums import JobStatus
 from app.schemas.runtime import SubmitDocumentResponse, RuntimeJobStatusResponse, ConfirmDocumentRequest
+from app.services.resume_ingestion_service import ResumeIngestionService
 
 router = APIRouter()
 
 ALLOWED_EXTENSIONS = {".pdf", ".docx", ".md", ".txt", ".json", ".yaml", ".yml"}
 MAX_FILE_SIZE = 25 * 1024 * 1024  # 25 MB
 
-from fastapi import UploadFile, File, Form
 from typing import Optional, List
 
 @router.get("/lookups/industries")
@@ -55,9 +55,18 @@ async def get_templates(industry: Optional[str] = None):
 
     return {"templates": templates}
 
-def process_document_task(job_id: str, llm: LlmRuntimeAdapter, parser: DocumentParserAdapter, job_repo: JobRepository):
+import asyncio
+
+def process_document_task(job_id: str, llm: LlmRuntimeAdapter, parser_service: DocumentExtractionService, job_repo: JobRepository):
+    # Wrap in asyncio.run or just call async functions if we're in an async context.
+    # BackgroundTasks runs synchronous functions if def is used.
+    # To use async graph effectively, we should define this as async or use an event loop.
+    # We will let fastapi run the async function.
+    pass
+
+async def async_process_document_task(job_id: str, llm: LlmRuntimeAdapter, parser_service: DocumentExtractionService, job_repo: JobRepository):
     # Build the graph injecting our adapters
-    graph = build_workflow_graph(llm_runtime=llm, doc_parser=parser)
+    graph = build_workflow_graph(llm_runtime=llm, doc_parser=parser_service)
 
     job = job_repo.get_job(job_id)
     if not job:
@@ -65,10 +74,21 @@ def process_document_task(job_id: str, llm: LlmRuntimeAdapter, parser: DocumentP
     job.status = JobStatus.PROCESSING
     job_repo.save_job(job)
 
+    # Reconstruct intent from job metadata
+    ext_meta = job.extension_metadata or {}
+    intent = ext_meta.get("intent", "candidate_runtime")
+    actor_role = ext_meta.get("actor_role", "system")
+    filename = ext_meta.get("filename", "mock_file.pdf")
+    content_type = ext_meta.get("content_type", "application/pdf")
+
+    # Store information inside state or job to be retrieved by node
+    # Since we don't pass the storage provider to the background task here currently,
+    # the node will handle it, or we can just pass the metadata through the state.
+
     # Initial state
     initial_state = {
         "session_id": job_id,
-        "file_path": "mock_file.pdf",
+        "file_path": job.original_file_ref,
         "file_type": "pdf",
         "extracted_text": None,
         "extraction_confidence": None,
@@ -80,12 +100,17 @@ def process_document_task(job_id: str, llm: LlmRuntimeAdapter, parser: DocumentP
         "validation_passed": False,
         "validation_errors": None,
         "requires_human_review": False,
-        "status": "ingested"
+        "status": "ingested",
+        # Custom state to pass down
+        "intent": intent,
+        "actor_role": actor_role,
+        "filename": filename,
+        "content_type": content_type
     }
 
     try:
         # Execute the workflow
-        final_state = graph.invoke(initial_state)
+        final_state = await graph.ainvoke(initial_state)
         job.status = JobStatus.COMPLETED
         job_repo.save_job(job)
     except Exception as e:
@@ -98,14 +123,28 @@ async def submit_document(
     file: UploadFile = File(...),
     industry_id: Optional[str] = Form(None),
     template_id: Optional[str] = Form(None),
+    x_processing_intent: str = Header("candidate_runtime", alias="X-Processing-Intent"),
+    x_admin_token: Optional[str] = Header(None, alias="X-Admin-Token"),
     storage_provider: StorageProvider = Depends(storage_provider_dependency),
     job_repository: JobRepository = Depends(job_repository_dependency),
     llm_runtime: LlmRuntimeAdapter = Depends(llm_runtime_dependency),
-    doc_parser: DocumentParserAdapter = Depends(document_parser_dependency)
+    doc_parser_service: DocumentExtractionService = Depends(document_extraction_service_dependency)
 ):
     """
-    Accepts multipart upload for candidate resume processing.
+    Accepts multipart upload for resume processing.
+    Supports intent-based processing (candidate_runtime vs admin_sample_resume).
     """
+    # Enforce role logic based on mock admin token
+    actor_role = "recruiter"
+    if x_admin_token == "admin-secret-token":
+        actor_role = "admin"
+
+    if x_processing_intent == "admin_sample_resume" and actor_role != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Forbidden: Admin access required for admin_sample_resume intent"
+        )
+
     if not file.filename:
         raise HTTPException(status_code=400, detail="Filename is required.")
 
@@ -162,10 +201,14 @@ async def submit_document(
         id=job_id,
         status=job_status,
         original_file_ref=storage_ref,
-        created_by="system", # Or real user context if available
+        created_by=actor_role,
         selected_template_id=template_id if not requires_confirmation else None,
         extension_metadata={
-            "industry_id": industry_id if not requires_confirmation else None
+            "industry_id": industry_id if not requires_confirmation else None,
+            "intent": x_processing_intent,
+            "actor_role": actor_role,
+            "filename": filename,
+            "content_type": file.content_type
         }
     )
 
@@ -174,7 +217,7 @@ async def submit_document(
 
     if not requires_confirmation:
         # Run the workflow graph in the background
-        background_tasks.add_task(process_document_task, job_id, llm_runtime, doc_parser, job_repository)
+        background_tasks.add_task(async_process_document_task, job_id, llm_runtime, doc_parser_service, job_repository)
 
     return SubmitDocumentResponse(
         document_id=job_id,
@@ -214,7 +257,7 @@ async def confirm_document(
     background_tasks: BackgroundTasks,
     job_repository: JobRepository = Depends(job_repository_dependency),
     llm_runtime: LlmRuntimeAdapter = Depends(llm_runtime_dependency),
-    doc_parser: DocumentParserAdapter = Depends(document_parser_dependency)
+    doc_parser_service: DocumentExtractionService = Depends(document_extraction_service_dependency)
 ):
     """
     Used to resume a paused human review step.
@@ -233,7 +276,7 @@ async def confirm_document(
     job_repository.save_job(job)
 
     # Trigger background task to resume processing
-    background_tasks.add_task(process_document_task, id, llm_runtime, doc_parser, job_repository)
+    background_tasks.add_task(async_process_document_task, id, llm_runtime, doc_parser_service, job_repository)
 
     return {"message": "Document confirmed", "job_id": id, "status": job.status}
 

@@ -1,7 +1,7 @@
-from app.adapters.base import DocumentParserAdapter
 from typing import Dict, Any
+from app.domain.interfaces import DocumentExtractionService, ExtractionContext, ExtractedDocument
 
-class AzureDocumentIntelligenceParser(DocumentParserAdapter):
+class AzureDocumentIntelligenceExtractionService(DocumentExtractionService):
     """
     Adapter for Azure AI Document Intelligence.
     """
@@ -10,8 +10,13 @@ class AzureDocumentIntelligenceParser(DocumentParserAdapter):
         # Initialize Azure Document Intelligence clients here
         pass
 
-    def parse(self, file_path: str, **kwargs) -> Dict[str, Any]:
+    async def extract(self, file_bytes: bytes, filename: str, content_type: str, context: ExtractionContext) -> ExtractedDocument:
         """
         Parses the document using Azure AI Document Intelligence.
         """
-        return {"backend": "azure_document_intelligence", "status": "Not Implemented", "extracted_text": ""}
+        return ExtractedDocument(
+            backend_used="azure_document_intelligence",
+            extracted_text="Sample text extracted via Azure AI Document Intelligence",
+            structured_data={"status": "Not Implemented"},
+            confidence=0.9
+        )

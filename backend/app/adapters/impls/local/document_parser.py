@@ -1,7 +1,7 @@
-from app.adapters.base import DocumentParserAdapter
 from typing import Dict, Any
+from app.domain.interfaces import DocumentExtractionService, ExtractionContext, ExtractedDocument
 
-class ApacheTikaParser(DocumentParserAdapter):
+class ApacheTikaExtractionService(DocumentExtractionService):
     """
     Adapter for Local Apache Tika Parser.
     Serves as a fallback or default for unstructured text/PDF.
@@ -11,13 +11,18 @@ class ApacheTikaParser(DocumentParserAdapter):
         # Initialize Tika or other local parsing libraries here
         pass
 
-    def parse(self, file_path: str, **kwargs) -> Dict[str, Any]:
+    async def extract(self, file_bytes: bytes, filename: str, content_type: str, context: ExtractionContext) -> ExtractedDocument:
         """
         Parses the document using a local implementation (e.g., Apache Tika).
         """
-        return {"backend": "local_tika", "status": "Not Implemented", "extracted_text": ""}
+        return ExtractedDocument(
+            backend_used="local_tika",
+            extracted_text="Sample text extracted via Apache Tika",
+            structured_data={"status": "Not Implemented"},
+            confidence=0.9
+        )
 
-class LocalParser(DocumentParserAdapter):
+class LocalParserExtractionService(DocumentExtractionService):
     """
     Adapter for simple local parsing (e.g. PyPDF2, pdfplumber, docx).
     """
@@ -25,8 +30,13 @@ class LocalParser(DocumentParserAdapter):
     def __init__(self):
         pass
 
-    def parse(self, file_path: str, **kwargs) -> Dict[str, Any]:
+    async def extract(self, file_bytes: bytes, filename: str, content_type: str, context: ExtractionContext) -> ExtractedDocument:
         """
         Parses the document locally.
         """
-        return {"backend": "local_parser", "status": "Not Implemented", "extracted_text": ""}
+        return ExtractedDocument(
+            backend_used="local_parser",
+            extracted_text="Sample text extracted via Local Parser",
+            structured_data={"status": "Not Implemented"},
+            confidence=0.9
+        )

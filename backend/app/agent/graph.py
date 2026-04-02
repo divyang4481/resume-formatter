@@ -1,23 +1,51 @@
 from langgraph.graph import StateGraph, END
 from app.agent.state import AgentState
 
-from app.adapters.base import LlmRuntimeAdapter, DocumentParserAdapter
+from app.adapters.base import LlmRuntimeAdapter
+from app.domain.interfaces import DocumentExtractionService, ExtractionContext
 from app.agent.nodes.transform import create_transform_node
 from app.agent.nodes.template_resolve import create_template_resolve_node
-# Mock imports for parsing
-def create_parse_node(doc_parser: DocumentParserAdapter):
-    def parse_node(state: AgentState):
+from app.services.resume_ingestion_service import ResumeIngestionService
+from app.dependencies import get_storage_provider
+
+def create_parse_node(doc_parser: DocumentExtractionService):
+    async def parse_node(state: AgentState):
         file_path = state.get("file_path")
-        result = doc_parser.parse(file_path=file_path)
+
+        # Retrieve context from state
+        intent = state.get("intent", "candidate_runtime")
+        actor_role = state.get("actor_role", "system")
+        filename = state.get("filename", "unknown.pdf")
+        content_type = state.get("content_type", "application/pdf")
+
+        context = ExtractionContext(intent=intent, actor_role=actor_role)
+
+        # Retrieve bytes from storage
+        # In a fully dependency-injected system, the graph or this node would take the storage provider as a dependency.
+        # Since this is a factory function, we fetch it locally.
+        storage = get_storage_provider()
+        try:
+            file_bytes = storage.get_bytes(file_path)
+        except Exception:
+            file_bytes = b"" # Fallback to empty if not found during dev
+
+        ingestion_service = ResumeIngestionService(extractor=doc_parser)
+        result = await ingestion_service.ingest(
+            file_bytes=file_bytes,
+            filename=filename,
+            content_type=content_type,
+            context=context
+        )
+
         return {
-             "extracted_text": result.get("extracted_text", "Sample mock resume text.\nJohn Doe\njohn@example.com\nSoftware Engineer at Tech Inc."),
-             "extraction_confidence": 0.95,
-             "status": "parsed"
+             "extracted_text": result.get("extracted_text", ""),
+             "extraction_confidence": 0.95, # Assuming a generic confidence for now as it's not strictly mapped
+             "status": result.get("status", "parsed")
         }
     return parse_node
 
 
-def build_workflow_graph(llm_runtime: LlmRuntimeAdapter, doc_parser: DocumentParserAdapter) -> StateGraph:
+def build_workflow_graph(llm_runtime: LlmRuntimeAdapter, doc_parser: DocumentExtractionService) -> StateGraph:
     """
     Builds the bounded agentic workflow using LangGraph.
     Takes dependencies injected from the factory configuration.
