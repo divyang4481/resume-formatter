@@ -1,2 +1,88 @@
-Creating virtualenv agentic-document-platform-vsmFjuTQ-py3.12 in /home/jules/.cache/pypoetry/virtualenvs
-Command not found: uvicorn
+INFO:     Will watch for changes in these directories: ['/app/backend']
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     Started reloader process [45929] using WatchFiles
+INFO:     Started server process [47611]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+Traceback (most recent call last):
+  File "/app/backend/app/api/runtime.py", line 133, in submit_document
+    raise HTTPException(status_code=400, detail=f"Unsupported MIME type: {file.content_type}")
+fastapi.exceptions.HTTPException: 400: Unsupported MIME type: application/octet-stream
+📥 File received: README.md
+❌ ERROR in submit_document: 400: Unsupported MIME type: application/octet-stream
+INFO:     127.0.0.1:43790 - "POST /v1/runtime/documents/submit HTTP/1.1" 500 Internal Server Error
+Traceback (most recent call last):
+  File "/home/jules/.cache/pypoetry/virtualenvs/agentic-document-platform-vsmFjuTQ-py3.12/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1967, in _exec_single_context
+    self.dialect.do_execute(
+  File "/home/jules/.cache/pypoetry/virtualenvs/agentic-document-platform-vsmFjuTQ-py3.12/lib/python3.12/site-packages/sqlalchemy/engine/default.py", line 952, in do_execute
+    cursor.execute(statement, parameters)
+sqlite3.OperationalError: no such table: processing_jobs
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/app/backend/app/api/runtime.py", line 179, in submit_document
+    job_repository.save_job(job)
+  File "/app/backend/app/adapters/repositories/job_repository.py", line 15, in save_job
+    model = self.db.query(ProcessingJobModel).filter(ProcessingJobModel.id == job.id).first()
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.cache/pypoetry/virtualenvs/agentic-document-platform-vsmFjuTQ-py3.12/lib/python3.12/site-packages/sqlalchemy/orm/query.py", line 2759, in first
+    return self.limit(1)._iter().first()  # type: ignore
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.cache/pypoetry/virtualenvs/agentic-document-platform-vsmFjuTQ-py3.12/lib/python3.12/site-packages/sqlalchemy/orm/query.py", line 2857, in _iter
+    result: Union[ScalarResult[_T], Result[_T]] = self.session.execute(
+                                                  ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.cache/pypoetry/virtualenvs/agentic-document-platform-vsmFjuTQ-py3.12/lib/python3.12/site-packages/sqlalchemy/orm/session.py", line 2351, in execute
+    return self._execute_internal(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.cache/pypoetry/virtualenvs/agentic-document-platform-vsmFjuTQ-py3.12/lib/python3.12/site-packages/sqlalchemy/orm/session.py", line 2249, in _execute_internal
+    result: Result[Any] = compile_state_cls.orm_execute_statement(
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.cache/pypoetry/virtualenvs/agentic-document-platform-vsmFjuTQ-py3.12/lib/python3.12/site-packages/sqlalchemy/orm/context.py", line 306, in orm_execute_statement
+    result = conn.execute(
+             ^^^^^^^^^^^^^
+  File "/home/jules/.cache/pypoetry/virtualenvs/agentic-document-platform-vsmFjuTQ-py3.12/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1419, in execute
+    return meth(
+           ^^^^^
+  File "/home/jules/.cache/pypoetry/virtualenvs/agentic-document-platform-vsmFjuTQ-py3.12/lib/python3.12/site-packages/sqlalchemy/sql/elements.py", line 527, in _execute_on_connection
+    return connection._execute_clauseelement(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.cache/pypoetry/virtualenvs/agentic-document-platform-vsmFjuTQ-py3.12/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1641, in _execute_clauseelement
+    ret = self._execute_context(
+          ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.cache/pypoetry/virtualenvs/agentic-document-platform-vsmFjuTQ-py3.12/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1846, in _execute_context
+    return self._exec_single_context(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.cache/pypoetry/virtualenvs/agentic-document-platform-vsmFjuTQ-py3.12/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1986, in _exec_single_context
+    self._handle_dbapi_exception(
+  File "/home/jules/.cache/pypoetry/virtualenvs/agentic-document-platform-vsmFjuTQ-py3.12/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 2363, in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+  File "/home/jules/.cache/pypoetry/virtualenvs/agentic-document-platform-vsmFjuTQ-py3.12/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1967, in _exec_single_context
+    self.dialect.do_execute(
+  File "/home/jules/.cache/pypoetry/virtualenvs/agentic-document-platform-vsmFjuTQ-py3.12/lib/python3.12/site-packages/sqlalchemy/engine/default.py", line 952, in do_execute
+    cursor.execute(statement, parameters)
+sqlalchemy.exc.OperationalError: (sqlite3.OperationalError) no such table: processing_jobs
+[SQL: SELECT processing_jobs.id AS processing_jobs_id, processing_jobs.candidate_resume_id AS processing_jobs_candidate_resume_id, processing_jobs.template_asset_id AS processing_jobs_template_asset_id, processing_jobs.template_version AS processing_jobs_template_version, processing_jobs.status AS processing_jobs_status, processing_jobs.stage AS processing_jobs_stage, processing_jobs.summary_uri AS processing_jobs_summary_uri, processing_jobs.render_uri AS processing_jobs_render_uri, processing_jobs.error_message AS processing_jobs_error_message, processing_jobs.created_at AS processing_jobs_created_at, processing_jobs.updated_at AS processing_jobs_updated_at
+FROM processing_jobs
+WHERE processing_jobs.id = ?
+ LIMIT ? OFFSET ?]
+[parameters: ('6bf6c9e4-06ee-42e7-a5fd-ee52c2e648cd', 1, 0)]
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+📥 File received: README.md
+📄 File size: 15216
+❌ ERROR in submit_document: (sqlite3.OperationalError) no such table: processing_jobs
+[SQL: SELECT processing_jobs.id AS processing_jobs_id, processing_jobs.candidate_resume_id AS processing_jobs_candidate_resume_id, processing_jobs.template_asset_id AS processing_jobs_template_asset_id, processing_jobs.template_version AS processing_jobs_template_version, processing_jobs.status AS processing_jobs_status, processing_jobs.stage AS processing_jobs_stage, processing_jobs.summary_uri AS processing_jobs_summary_uri, processing_jobs.render_uri AS processing_jobs_render_uri, processing_jobs.error_message AS processing_jobs_error_message, processing_jobs.created_at AS processing_jobs_created_at, processing_jobs.updated_at AS processing_jobs_updated_at
+FROM processing_jobs
+WHERE processing_jobs.id = ?
+ LIMIT ? OFFSET ?]
+[parameters: ('6bf6c9e4-06ee-42e7-a5fd-ee52c2e648cd', 1, 0)]
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+INFO:     127.0.0.1:39576 - "POST /v1/runtime/documents/submit HTTP/1.1" 500 Internal Server Error
+📥 File received: README.md
+📄 File size: 15216
+INFO:     127.0.0.1:49728 - "POST /v1/runtime/documents/submit HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60780 - "GET /v1/runtime/lookups/industries HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60782 - "GET /v1/runtime/lookups/templates HTTP/1.1" 200 OK
+📥 File received: dummy.txt
+📄 File size: 33
+INFO:     127.0.0.1:60782 - "POST /v1/runtime/documents/submit HTTP/1.1" 200 OK

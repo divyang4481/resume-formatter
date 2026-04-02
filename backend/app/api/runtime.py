@@ -92,6 +92,8 @@ def process_document_task(job_id: str, llm: LlmRuntimeAdapter, parser: DocumentP
         job.status = JobStatus.FAILED
         job_repo.save_job(job)
 
+import traceback
+
 @router.post("/documents/submit", response_model=SubmitDocumentResponse)
 async def submit_document(
     background_tasks: BackgroundTasks,
@@ -106,88 +108,96 @@ async def submit_document(
     """
     Accepts multipart upload for candidate resume processing.
     """
-    if not file.filename:
-        raise HTTPException(status_code=400, detail="Filename is required.")
+    try:
+        if not file.filename:
+            raise HTTPException(status_code=400, detail="Filename is required.")
 
-    ext = os.path.splitext(file.filename)[1].lower()
-    if ext not in ALLOWED_EXTENSIONS:
-        raise HTTPException(status_code=400, detail=f"Unsupported file type: {ext}")
+        print("📥 File received:", file.filename)
 
-    ALLOWED_MIME_TYPES = {
-        "application/pdf",
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        "text/markdown",
-        "text/plain",
-        "application/json",
-        "application/yaml",
-        "application/x-yaml",
-        "text/yaml"
-    }
+        ext = os.path.splitext(file.filename)[1].lower()
+        if ext not in ALLOWED_EXTENSIONS:
+            raise HTTPException(status_code=400, detail=f"Unsupported file type: {ext}")
 
-    if file.content_type and file.content_type not in ALLOWED_MIME_TYPES:
-        raise HTTPException(status_code=400, detail=f"Unsupported MIME type: {file.content_type}")
-
-
-    file_bytes = await file.read()
-    if not file_bytes:
-        raise HTTPException(status_code=400, detail="File is empty.")
-
-    if len(file_bytes) > MAX_FILE_SIZE:
-        raise HTTPException(status_code=400, detail="File size exceeds 25 MB limit.")
-
-    job_id = str(uuid.uuid4())
-    filename = os.path.basename(file.filename)
-    storage_key = f"jobs/{job_id}/input/{filename}"
-
-    # Store file via storage provider
-    storage_ref = storage_provider.put_bytes(storage_key, file_bytes)
-
-    requires_confirmation = True
-    suggested_industry_id = None
-    suggested_template_id = None
-    allowed_template_ids = None
-    job_status = JobStatus.WAITING_FOR_CONFIRMATION
-
-    if industry_id and template_id:
-        requires_confirmation = False
-        job_status = JobStatus.CONFIRMED
-    else:
-        # Suggest if not provided
-        suggested_industry_id = "it"
-        suggested_template_id = "tech-standard"
-        allowed_template_ids = ["tech-standard", "tech-executive"]
-
-    # Create job record
-    job = ProcessingJob(
-        id=job_id,
-        status=job_status,
-        original_file_ref=storage_ref,
-        created_by="system", # Or real user context if available
-        selected_template_id=template_id if not requires_confirmation else None,
-        extension_metadata={
-            "industry_id": industry_id if not requires_confirmation else None
+        ALLOWED_MIME_TYPES = {
+            "application/pdf",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "text/markdown",
+            "text/plain",
+            "application/json",
+            "application/yaml",
+            "application/x-yaml",
+            "text/yaml"
         }
-    )
 
-    # Save job record
-    job_repository.save_job(job)
+        if file.content_type and file.content_type not in ALLOWED_MIME_TYPES:
+            raise HTTPException(status_code=400, detail=f"Unsupported MIME type: {file.content_type}")
 
-    if not requires_confirmation:
-        # Run the workflow graph in the background
-        background_tasks.add_task(process_document_task, job_id, llm_runtime, doc_parser, job_repository)
+        file_bytes = await file.read()
+        if not file_bytes:
+            raise HTTPException(status_code=400, detail="File is empty.")
 
-    return SubmitDocumentResponse(
-        document_id=job_id,
-        job_id=job_id,
-        status=job_status,
-        requires_confirmation=requires_confirmation,
-        provided_industry_id=industry_id,
-        provided_template_id=template_id,
-        suggested_industry_id=suggested_industry_id,
-        suggested_template_id=suggested_template_id,
-        allowed_template_ids=allowed_template_ids,
-        message="Document submitted successfully."
-    )
+        print("📄 File size:", len(file_bytes))
+
+        if len(file_bytes) > MAX_FILE_SIZE:
+            raise HTTPException(status_code=400, detail="File size exceeds 25 MB limit.")
+
+        job_id = str(uuid.uuid4())
+        filename = os.path.basename(file.filename)
+        storage_key = f"jobs/{job_id}/input/{filename}"
+
+        # Store file via storage provider
+        storage_ref = storage_provider.put_bytes(storage_key, file_bytes)
+
+        requires_confirmation = True
+        suggested_industry_id = None
+        suggested_template_id = None
+        allowed_template_ids = None
+        job_status = JobStatus.WAITING_FOR_CONFIRMATION
+
+        if industry_id and template_id:
+            requires_confirmation = False
+            job_status = JobStatus.CONFIRMED
+        else:
+            # Suggest if not provided
+            suggested_industry_id = "it"
+            suggested_template_id = "tech-standard"
+            allowed_template_ids = ["tech-standard", "tech-executive"]
+
+        # Create job record
+        job = ProcessingJob(
+            id=job_id,
+            status=job_status,
+            original_file_ref=storage_ref,
+            created_by="system", # Or real user context if available
+            selected_template_id=template_id if not requires_confirmation else None,
+            extension_metadata={
+                "industry_id": industry_id if not requires_confirmation else None
+            }
+        )
+
+        # Save job record
+        job_repository.save_job(job)
+
+        if not requires_confirmation:
+            # Run the workflow graph in the background
+            background_tasks.add_task(process_document_task, job_id, llm_runtime, doc_parser, job_repository)
+
+        return SubmitDocumentResponse(
+            document_id=job_id,
+            job_id=job_id,
+            status=job_status,
+            requires_confirmation=requires_confirmation,
+            provided_industry_id=industry_id,
+            provided_template_id=template_id,
+            suggested_industry_id=suggested_industry_id,
+            suggested_template_id=suggested_template_id,
+            allowed_template_ids=allowed_template_ids,
+            message="Document submitted successfully."
+        )
+    except Exception as e:
+        print("❌ ERROR in submit_document:", str(e))
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/jobs/{id}", response_model=RuntimeJobStatusResponse)
 async def get_job_status(

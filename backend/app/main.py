@@ -12,6 +12,10 @@ def create_app() -> FastAPI:
     Integrates all API routes and core configurations.
     """
     from fastapi.middleware.cors import CORSMiddleware
+    from fastapi.responses import JSONResponse
+    from starlette.requests import Request
+    import traceback
+
     app = FastAPI(
         title=settings.project_name,
         description="A Template-aware, privacy-governed, agentic document processing platform",
@@ -22,11 +26,28 @@ def create_app() -> FastAPI:
 
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["http://localhost:4200"],
+        allow_origins=["http://localhost:4200", "http://127.0.0.1:4200"],
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    @app.middleware("http")
+    async def catch_exceptions_middleware(request: Request, call_next):
+        try:
+            return await call_next(request)
+        except Exception as e:
+            # We must return a JSONResponse with CORS headers so that
+            # the frontend does not show a misleading CORS error when a 500 occurs.
+            traceback.print_exc()
+            return JSONResponse(
+                status_code=500,
+                content={"detail": "Internal Server Error", "error": str(e)},
+                headers={
+                    "Access-Control-Allow-Origin": request.headers.get("origin", "*"),
+                    "Access-Control-Allow-Credentials": "true",
+                }
+            )
 
     app.include_router(runtime_router, prefix="/v1/runtime", tags=["Runtime"])
     app.include_router(admin_router, prefix="/admin", tags=["Admin"])
