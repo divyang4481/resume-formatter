@@ -8,7 +8,7 @@ from app.agent.nodes.template_resolve import create_template_resolve_node
 from app.services.resume_ingestion_service import ResumeIngestionService
 from app.dependencies import get_storage_provider
 
-def create_parse_node(doc_parser: DocumentExtractionService):
+def create_parse_node(doc_parser: DocumentExtractionService, storage):
     async def parse_node(state: AgentState):
         file_path = state.get("file_path")
 
@@ -21,9 +21,6 @@ def create_parse_node(doc_parser: DocumentExtractionService):
         context = ExtractionContext(intent=intent, actor_role=actor_role)
 
         # Retrieve bytes from storage
-        # In a fully dependency-injected system, the graph or this node would take the storage provider as a dependency.
-        # Since this is a factory function, we fetch it locally.
-        storage = get_storage_provider()
         try:
             file_bytes = storage.get_bytes(file_path)
         except Exception:
@@ -45,7 +42,7 @@ def create_parse_node(doc_parser: DocumentExtractionService):
     return parse_node
 
 
-def build_workflow_graph(llm_runtime: LlmRuntimeAdapter, doc_parser: DocumentExtractionService) -> StateGraph:
+def build_workflow_graph(llm_runtime: LlmRuntimeAdapter, doc_parser: DocumentExtractionService, storage=None) -> StateGraph:
     """
     Builds the bounded agentic workflow using LangGraph.
     Takes dependencies injected from the factory configuration.
@@ -56,9 +53,12 @@ def build_workflow_graph(llm_runtime: LlmRuntimeAdapter, doc_parser: DocumentExt
     """
     workflow = StateGraph(AgentState)
 
+    if storage is None:
+        storage = get_storage_provider()
+
     # Use the concrete factory implementations
     workflow.add_node("ingest", lambda state: {"status": "ingested"})
-    workflow.add_node("parse", create_parse_node(doc_parser))
+    workflow.add_node("parse", create_parse_node(doc_parser, storage))
     workflow.add_node("normalize", lambda state: {"status": "normalized"})
     workflow.add_node("privacy_transform", lambda state: {"status": "privacy_applied"})
 
@@ -66,8 +66,10 @@ def build_workflow_graph(llm_runtime: LlmRuntimeAdapter, doc_parser: DocumentExt
     workflow.add_node("template_resolution", create_template_resolve_node(llm_runtime))
     workflow.add_node("transform", create_transform_node(llm_runtime))
 
+    from app.agent.nodes.render import create_render_node
+
     workflow.add_node("validate", lambda state: {"status": "validated"})
-    workflow.add_node("render", lambda state: {"status": "rendered"})
+    workflow.add_node("render", create_render_node(llm_runtime, storage))
 
     # Define edges based on bounded workflow logic
     workflow.set_entry_point("ingest")

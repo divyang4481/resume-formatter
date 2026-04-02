@@ -24,5 +24,15 @@ class SqlAlchemyJobRepository(JobRepository):
         else:
             model.status = job.status.value if hasattr(job.status, 'value') else job.status
 
+        # Map additional fields that might be updated by the graph workflow
+        if hasattr(job, 'summary_uri'):
+            model.summary_uri = job.summary_uri
+        if hasattr(job, 'render_uri'):
+            model.render_uri = job.render_uri
+        if hasattr(job, 'error_message'):
+            model.error_message = job.error_message
+        if hasattr(job, 'selected_template_id'):
+            model.template_asset_id = job.selected_template_id
+
         self.db.commit()
         return model.id

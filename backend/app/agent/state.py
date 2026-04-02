@@ -30,6 +30,10 @@ class AgentState(TypedDict):
     validation_passed: bool
     validation_errors: Optional[list]
 
+    # Output Artifacts
+    summary_uri: Optional[str]
+    render_uri: Optional[str]
+
     # Orchestration control variables
     requires_human_review: bool
     status: str
