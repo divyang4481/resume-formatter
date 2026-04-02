@@ -85,6 +85,8 @@ export class MockAgentBackendClient implements AgentBackendClient {
   async answerQuestion(sessionId: string, answer: unknown): Promise<AgentSession> {
     if (!this.currentSession) return this.createSession();
 
+    const isGenericText = typeof answer === 'string' && answer !== 'Confirmed' && !answer.includes('{');
+
     this.currentSession.messages.push({
       id: `m-user-${Date.now()}`,
       role: 'user',
@@ -93,29 +95,44 @@ export class MockAgentBackendClient implements AgentBackendClient {
       timestamp: new Date().toISOString()
     });
 
-    this.currentSession.status = 'processing';
-    this.currentSession.pendingActions = [];
-
     // Simulate response delay
     await new Promise(resolve => setTimeout(resolve, 800));
 
-    this.currentSession.status = 'waiting_for_user';
-    this.currentSession.currentStep = 'pii_review';
-    this.currentSession.messages.push({
-      id: `m-${Date.now()}`,
-      role: 'assistant',
-      type: 'text',
-      content: 'Got it. Now let\'s review the PII policy before we export.',
-      timestamp: new Date().toISOString()
-    });
+    if (isGenericText) {
+        this.currentSession.messages.push({
+            id: `m-agent-ack-${Date.now()}`,
+            role: 'assistant',
+            type: 'text',
+            content: `I received your message: "${answer}". I am a simple resume formatting agent, but I'm here to help you through the process!`,
+            timestamp: new Date().toISOString()
+        });
+    } else {
+        this.currentSession.status = 'processing';
+        this.currentSession.pendingActions = [];
 
-    this.currentSession.pendingActions = [
-      {
-        id: 'a-confirm-pii',
-        type: 'confirm_pii_policy',
-        label: 'Confirm PII Policy'
-      }
-    ];
+        this.currentSession.status = 'waiting_for_user';
+        this.currentSession.currentStep = 'pii_review';
+        this.currentSession.messages.push({
+          id: `m-${Date.now()}`,
+          role: 'assistant',
+          type: 'text',
+          content: 'Got it. Now let\'s review the PII policy before we export.',
+          timestamp: new Date().toISOString()
+        });
+
+        this.currentSession.pendingActions = [
+          {
+            id: 'a-confirm-pii',
+            type: 'confirm_pii_policy',
+            label: 'Confirm PII Policy'
+          },
+          {
+            id: 'a-start-over',
+            type: 'start_over',
+            label: 'Start Over'
+          }
+        ];
+    }
 
     return this.clone(this.currentSession);
   }

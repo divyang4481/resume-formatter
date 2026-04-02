@@ -75,7 +75,7 @@
       <span class="step-badge">Step {{ getStepIndex(session.currentStep) + 1 }} of 5</span>
     </div>
 
-    <div class="chat-messages">
+    <div class="chat-messages" #chatContainer>
       <ng-container *ngFor="let msg of session.messages">
         <!-- Agent Message -->
         <div *ngIf="msg.role === 'assistant'" class="message-group agent">
@@ -119,6 +119,11 @@
                 <mat-icon>download</mat-icon>
                 {{ action.label }}
               </a>
+
+              <button *ngIf="action.type === 'start_over'" mat-stroked-button color="primary" (click)="startOver()">
+                <mat-icon>refresh</mat-icon>
+                {{ action.label }}
+              </button>
             </ng-container>
           </div>
         </div>
@@ -131,6 +136,15 @@
           <span>Typing...</span>
         </div>
       </div>
+    </div>
+
+    <div class="chat-input-container">
+      <mat-form-field appearance="outline" class="chat-input">
+        <input matInput placeholder="Type a message..." [(ngModel)]="chatInput" (keyup.enter)="sendChatMessage()" [disabled]="loading" />
+      </mat-form-field>
+      <button mat-icon-button color="primary" (click)="sendChatMessage()" [disabled]="!chatInput.trim() || loading">
+        <mat-icon>send</mat-icon>
+      </button>
     </div>
   </div>
 </div>

@@ -193,6 +193,11 @@ export class RealAgentBackendClient implements AgentBackendClient {
                  type: 'download_output',
                  label: 'Download Output',
                  payload: { url: outputRes.url }
+               },
+               {
+                 id: 'a-start-over',
+                 type: 'start_over',
+                 label: 'Start Over'
                }
             ];
         } catch(e) {
@@ -206,12 +211,23 @@ export class RealAgentBackendClient implements AgentBackendClient {
             });
         }
     } else {
-        // Fallback for other answers
+        // Fallback for other answers (generic chat messages)
+        const userMessageContent = typeof answer === 'string' ? answer : JSON.stringify(answer);
+
         this.currentSession.messages.push({
             id: `m-user-${Date.now()}`,
             role: 'user',
             type: 'text',
-            content: typeof answer === 'string' ? answer : JSON.stringify(answer),
+            content: userMessageContent,
+            timestamp: new Date().toISOString()
+        });
+
+        // Add a generic acknowledgement from the agent
+        this.currentSession.messages.push({
+            id: `m-agent-ack-${Date.now()}`,
+            role: 'assistant',
+            type: 'text',
+            content: `I received your message: "${userMessageContent}". I am a simple resume formatting agent, but I'm here to help you through the process!`,
             timestamp: new Date().toISOString()
         });
     }
