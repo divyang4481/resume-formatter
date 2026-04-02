@@ -117,6 +117,17 @@ class LLMProvider(ABC):
         """Generates structured output constrained to a schema."""
         pass
 
+class MessageQueue(ABC):
+    @abstractmethod
+    def enqueue(self, queue_name: str, payload: Dict[str, Any]) -> None:
+        """Enqueues a message."""
+        pass
+
+    @abstractmethod
+    def dequeue(self, queue_name: str) -> Optional[Dict[str, Any]]:
+        """Dequeues a message (if available)."""
+        pass
+
 class EventBus(ABC):
     @abstractmethod
     def publish(self, topic: str, event: Any) -> None:

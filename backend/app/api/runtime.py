@@ -5,9 +5,10 @@ from app.dependencies import (
     storage_provider_dependency,
     job_repository_dependency,
     llm_runtime_dependency,
-    document_extraction_service_dependency
+    document_extraction_service_dependency,
+    message_queue_dependency
 )
-from app.domain.interfaces import StorageProvider, JobRepository, DocumentExtractionService, ExtractionContext
+from app.domain.interfaces import StorageProvider, JobRepository, DocumentExtractionService, ExtractionContext, MessageQueue
 from app.schemas.job import ProcessingJob
 from app.adapters.base import LlmRuntimeAdapter
 from app.agent.graph import build_workflow_graph
@@ -150,7 +151,8 @@ async def submit_document(
     storage_provider: StorageProvider = Depends(storage_provider_dependency),
     job_repository: JobRepository = Depends(job_repository_dependency),
     llm_runtime: LlmRuntimeAdapter = Depends(llm_runtime_dependency),
-    doc_parser_service: DocumentExtractionService = Depends(document_extraction_service_dependency)
+    doc_parser_service: DocumentExtractionService = Depends(document_extraction_service_dependency),
+    message_queue: MessageQueue = Depends(message_queue_dependency)
 ):
     """
     Accepts multipart upload for resume processing.
@@ -238,8 +240,8 @@ async def submit_document(
     job_repository.save_job(job)
 
     if not requires_confirmation:
-        # Run the workflow graph in the background
-        background_tasks.add_task(async_process_document_task, job_id, llm_runtime, doc_parser_service, job_repository)
+        # Enqueue job to the message queue instead of using BackgroundTasks in-memory
+        message_queue.enqueue("document_processing", {"job_id": job_id})
 
     return SubmitDocumentResponse(
         document_id=job_id,
@@ -276,10 +278,8 @@ async def get_job_status(
 async def confirm_document(
     id: str,
     request: ConfirmDocumentRequest,
-    background_tasks: BackgroundTasks,
     job_repository: JobRepository = Depends(job_repository_dependency),
-    llm_runtime: LlmRuntimeAdapter = Depends(llm_runtime_dependency),
-    doc_parser_service: DocumentExtractionService = Depends(document_extraction_service_dependency)
+    message_queue: MessageQueue = Depends(message_queue_dependency)
 ):
     """
     Used to resume a paused human review step.
@@ -299,8 +299,8 @@ async def confirm_document(
 
     job_repository.save_job(job)
 
-    # Trigger background task to resume processing
-    background_tasks.add_task(async_process_document_task, id, llm_runtime, doc_parser_service, job_repository)
+    # Enqueue job to the message queue to resume processing
+    message_queue.enqueue("document_processing", {"job_id": id})
 
     return {"message": "Document confirmed", "job_id": id, "status": job.status}
 
