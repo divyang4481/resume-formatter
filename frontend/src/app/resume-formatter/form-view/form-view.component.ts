@@ -1,4 +1,4 @@
-import { Component, OnInit, ViewChild, ElementRef, effect } from '@angular/core';
+import { Component, OnInit, ViewChild, ElementRef, effect, untracked } from '@angular/core';
 import { FormBuilder, FormGroup, ReactiveFormsModule } from '@angular/forms';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
@@ -44,12 +44,24 @@ export class FormViewComponent implements OnInit {
     });
 
     effect(() => {
-      if (this.docService.status() === 'waiting_for_confirmation') {
-        this.form.patchValue({
-          industry: this.docService.suggestedIndustryId(),
-          templateId: this.docService.suggestedTemplateId()
-        });
+      if (this.docService.status() !== 'waiting_for_confirmation') return;
+
+      const industry = this.docService.suggestedIndustryId();
+      const templateId = this.docService.suggestedTemplateId();
+
+      if (
+        this.form.get('industry')?.value === industry &&
+        this.form.get('templateId')?.value === templateId
+      ) {
+        return;
       }
+
+      untracked(() => {
+        this.form.patchValue(
+          { industry, templateId },
+          { emitEvent: false }
+        );
+      });
     });
   }
 
