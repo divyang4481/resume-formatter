@@ -24,6 +24,7 @@ class Settings(BaseSettings):
     # LLM Settings
     llm_backend: str = "local_ollama" # "aws_bedrock", "gcp_vertex", "azure_openai", "local_ollama"
     llm_model_name: str = "llama3" # Default Ollama model. Override with Claude/Gemini/GPT for cloud.
+    ollama_endpoint: str = "http://localhost:11434/api/generate" # Default for local Ollama
 
     # AWS Settings
     aws_region: str = "us-east-1"

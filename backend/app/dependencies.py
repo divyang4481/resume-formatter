@@ -16,6 +16,14 @@ def get_llm_runtime() -> LlmRuntimeAdapter:
     Dependency Factory to fetch the configured LLM runtime adapter.
     Resolves to AWS Bedrock, Azure OpenAI, GCP Vertex AI, or Local Ollama.
     """
+    # If the cloud environment is strictly local, force Ollama usage overrides
+    if settings.cloud.lower() == "local" or settings.llm_backend.lower() == "local_ollama":
+        from app.adapters.impls.local.llm_runtime import LocalOllamaLlmRuntime
+        return LocalOllamaLlmRuntime(
+            model_name=settings.llm_model_name,
+            endpoint=settings.ollama_endpoint
+        )
+
     backend = settings.llm_backend.lower()
 
     if backend == "aws_bedrock":
@@ -39,16 +47,12 @@ def get_llm_runtime() -> LlmRuntimeAdapter:
             deployment_name=settings.azure_openai_deployment_name,
             api_version=settings.azure_openai_api_version
         )
-    elif backend == "local_ollama":
-        from app.adapters.impls.local.llm_runtime import LocalOllamaLlmRuntime
-        return LocalOllamaLlmRuntime(
-            model_name=settings.llm_model_name
-        )
     else:
         # Fallback to local
         from app.adapters.impls.local.llm_runtime import LocalOllamaLlmRuntime
         return LocalOllamaLlmRuntime(
-            model_name="llama3"
+            model_name=settings.llm_model_name,
+            endpoint=settings.ollama_endpoint
         )
 
 def get_storage_provider() -> StorageProvider:
