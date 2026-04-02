@@ -1,7 +1,7 @@
-from app.adapters.base import DocumentParserAdapter
 from typing import Dict, Any
+from app.domain.interfaces import DocumentExtractionService, ExtractionContext, ExtractedDocument
 
-class IbmDoclingParser(DocumentParserAdapter):
+class IbmDoclingExtractionService(DocumentExtractionService):
     """
     Adapter for IBM Docling.
     """
@@ -10,8 +10,13 @@ class IbmDoclingParser(DocumentParserAdapter):
         # Initialize IBM Docling dependencies here
         pass
 
-    def parse(self, file_path: str, **kwargs) -> Dict[str, Any]:
+    async def extract(self, file_bytes: bytes, filename: str, content_type: str, context: ExtractionContext) -> ExtractedDocument:
         """
         Parses the document using IBM Docling.
         """
-        return {"backend": "ibm_docling", "status": "Not Implemented", "extracted_text": ""}
+        return ExtractedDocument(
+            backend_used="ibm_docling",
+            extracted_text="Sample text extracted via IBM Docling",
+            structured_data={"status": "Not Implemented"},
+            confidence=0.9
+        )

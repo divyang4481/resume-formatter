@@ -33,3 +33,9 @@ class AgentState(TypedDict):
     # Orchestration control variables
     requires_human_review: bool
     status: str
+
+    # Intent variables passed from router
+    intent: Optional[str]
+    actor_role: Optional[str]
+    filename: Optional[str]
+    content_type: Optional[str]

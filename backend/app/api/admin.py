@@ -5,10 +5,17 @@ import uuid
 
 from app.schemas.admin import AssetUploadRequestMetadata, AssetUploadResponse
 from app.schemas.enums import AssetStatus
-from app.dependencies import mock_is_admin, storage_provider_dependency, template_repository_dependency, event_bus_dependency
+from app.dependencies import (
+    mock_is_admin,
+    storage_provider_dependency,
+    template_repository_dependency,
+    event_bus_dependency,
+    document_extraction_service_dependency,
+    get_knowledge_index
+)
 from app.utils import validate_uploaded_file
 from app.services.template_service import TemplateService
-from app.domain.interfaces import StorageProvider, TemplateRepository, EventBus
+from app.domain.interfaces import StorageProvider, TemplateRepository, EventBus, DocumentExtractionService, KnowledgeIndex
 
 router = APIRouter()
 
@@ -23,7 +30,9 @@ async def upload_asset(
     is_admin: bool = Depends(mock_is_admin),
     storage_provider: StorageProvider = Depends(storage_provider_dependency),
     template_repository: TemplateRepository = Depends(template_repository_dependency),
-    event_bus: EventBus = Depends(event_bus_dependency)
+    event_bus: EventBus = Depends(event_bus_dependency),
+    extraction_service: DocumentExtractionService = Depends(document_extraction_service_dependency),
+    knowledge_index: KnowledgeIndex = Depends(get_knowledge_index)
 ):
     try:
         # Validate metadata JSON
@@ -50,13 +59,16 @@ async def upload_asset(
     template_service = TemplateService(
         storage_provider=storage_provider,
         template_repository=template_repository,
-        event_bus=event_bus
+        event_bus=event_bus,
+        extraction_service=extraction_service,
+        knowledge_index=knowledge_index
     )
 
     asset_id = await template_service.upload_asset(
         filename=file.filename,
         content=content,
         metadata=parsed_metadata,
+        content_type=file.content_type or "application/octet-stream",
         uploaded_by="admin-user" # placeholder since auth isn't complete yet
     )
 

@@ -1,7 +1,7 @@
-from app.adapters.base import DocumentParserAdapter
 from typing import Dict, Any
+from app.domain.interfaces import DocumentExtractionService, ExtractionContext, ExtractedDocument
 
-class AwsTextractParser(DocumentParserAdapter):
+class AwsTextractExtractionService(DocumentExtractionService):
     """
     Adapter for Amazon Textract.
     """
@@ -10,8 +10,13 @@ class AwsTextractParser(DocumentParserAdapter):
         # Initialize boto3 clients here
         pass
 
-    def parse(self, file_path: str, **kwargs) -> Dict[str, Any]:
+    async def extract(self, file_bytes: bytes, filename: str, content_type: str, context: ExtractionContext) -> ExtractedDocument:
         """
         Parses the document using AWS Textract.
         """
-        return {"backend": "aws_textract", "status": "Not Implemented", "extracted_text": ""}
+        return ExtractedDocument(
+            backend_used="aws_textract",
+            extracted_text="Sample text extracted via AWS Textract",
+            structured_data={"status": "Not Implemented"},
+            confidence=0.9
+        )

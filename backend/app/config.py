@@ -8,8 +8,8 @@ class Settings(BaseSettings):
 
     # Cloud and Adapter Selection
     cloud: str = "local"  # "aws", "azure", "gcp", "ibm", "local"
-    document_parser_backend: str = "local_parser"
-    document_parser_fallback: str = "tika"
+    document_extractor_backend: str = "local_parser"
+    document_extractor_fallback: str = "tika"
     ocr_backend: str = "local"
     docx_parser_backend: str = "local"
     enable_multi_backend_routing: bool = False

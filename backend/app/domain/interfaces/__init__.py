@@ -2,17 +2,7 @@ from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional
 
 
-class DocumentExtractor(ABC):
-    @abstractmethod
-    def extract_text(self, document_path: str, **kwargs: Any) -> str:
-        """Extracts plain text from a document."""
-        pass
-
-    @abstractmethod
-    def extract_structure(self, document_path: str, **kwargs: Any) -> Dict[str, Any]:
-        """Extracts structured layout and text (e.g., sections, tables) from a document."""
-        pass
-
+from .document_extraction import DocumentExtractionService, ExtractionContext, ExtractedDocument
 
 class TemplateRepository(ABC):
     @abstractmethod

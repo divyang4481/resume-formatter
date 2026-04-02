@@ -1,7 +1,7 @@
-from app.adapters.base import DocumentParserAdapter
 from typing import Dict, Any
+from app.domain.interfaces import DocumentExtractionService, ExtractionContext, ExtractedDocument
 
-class GcpDocumentAiParser(DocumentParserAdapter):
+class GcpDocumentAiExtractionService(DocumentExtractionService):
     """
     Adapter for Google Cloud Document AI.
     """
@@ -10,8 +10,13 @@ class GcpDocumentAiParser(DocumentParserAdapter):
         # Initialize Google Cloud clients here
         pass
 
-    def parse(self, file_path: str, **kwargs) -> Dict[str, Any]:
+    async def extract(self, file_bytes: bytes, filename: str, content_type: str, context: ExtractionContext) -> ExtractedDocument:
         """
         Parses the document using Google Cloud Document AI.
         """
-        return {"backend": "gcp_document_ai", "status": "Not Implemented", "extracted_text": ""}
+        return ExtractedDocument(
+            backend_used="gcp_document_ai",
+            extracted_text="Sample text extracted via GCP Document AI",
+            structured_data={"status": "Not Implemented"},
+            confidence=0.9
+        )
