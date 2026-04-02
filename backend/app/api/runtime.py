@@ -103,7 +103,7 @@ async def async_process_document_task(job_id: str, llm: LlmRuntimeAdapter, parse
         "validation_passed": False,
         "validation_errors": None,
         "summary_uri": None,
-        "render_uri": None,
+        "render_docx_uri": None,
         "requires_human_review": False,
         "status": "ingested",
         # Custom state to pass down
@@ -121,8 +121,8 @@ async def async_process_document_task(job_id: str, llm: LlmRuntimeAdapter, parse
         job.status = JobStatus.COMPLETED
         if final_state.get("summary_uri"):
             job.summary_uri = final_state["summary_uri"]
-        if final_state.get("render_uri"):
-            job.render_uri = final_state["render_uri"]
+        if final_state.get("render_docx_uri"):
+            job.render_docx_uri = final_state["render_docx_uri"]
 
         job_repo.save_job(job)
 
@@ -379,13 +379,17 @@ async def download_output(
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
 
-    render_uri = getattr(job, "render_uri", None)
-    if not render_uri:
+    render_docx_uri = getattr(job, "render_docx_uri", None)
+    if not render_docx_uri:
         raise HTTPException(status_code=404, detail="Rendered output not found for this job")
 
     try:
-        data = storage_provider.get_bytes(render_uri)
-        return Response(content=data, media_type="text/markdown") # For now we return markdown as mock
+        data = storage_provider.get_bytes(render_docx_uri)
+        return Response(
+            content=data,
+            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            headers={"Content-Disposition": f'attachment; filename="formatted_resume_{job.id}.docx"'}
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to retrieve output: {e}")
 
@@ -402,8 +406,8 @@ async def get_job_output(
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
 
-    render_uri = getattr(job, "render_uri", None)
-    if not render_uri:
+    render_docx_uri = getattr(job, "render_docx_uri", None)
+    if not render_docx_uri:
         return {"message": "Output not available", "url": ""}
 
     # We return the URL that points back to our own download endpoint
