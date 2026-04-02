@@ -82,25 +82,24 @@ export class DocumentProcessingService {
   }
 
   private pollJobStatus(jobId: string) {
-    const interval = setInterval(() => {
-      this.api.getJobStatus(jobId).subscribe({
-        next: (res) => {
-          if (res.status === 'completed') {
-            clearInterval(interval);
-            this.status.set('completed');
-            this.fetchResults(jobId);
-          } else if (res.status === 'failed') {
-            clearInterval(interval);
-            this.status.set('error');
-          }
-        },
-        error: (err) => {
-          console.error('Failed to get job status', err);
-          clearInterval(interval);
+    this.api.getJobStatus(jobId).subscribe({
+      next: (res) => {
+        if (res.status === 'completed') {
+          this.status.set('completed');
+          this.fetchResults(jobId);
+        } else if (res.status === 'failed') {
           this.status.set('error');
+        } else {
+          // If still processing, wait 2 seconds and poll again
+          setTimeout(() => this.pollJobStatus(jobId), 2000);
         }
-      });
-    }, 2000);
+      },
+      error: (err) => {
+        console.error('Failed to get job status', err);
+        // We can either retry or fail. For now, we will mark as error to match old behavior.
+        this.status.set('error');
+      }
+    });
   }
 
   private fetchResults(jobId: string) {
