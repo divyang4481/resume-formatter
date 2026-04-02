@@ -1,0 +1,131 @@
+from sqlalchemy import Column, String, Integer, Boolean, DateTime, ForeignKey, Text
+from sqlalchemy.orm import declarative_base, relationship
+from sqlalchemy.sql import func
+from datetime import datetime
+
+Base = declarative_base()
+
+class TemplateAsset(Base):
+    __tablename__ = "template_assets"
+
+    id = Column(String, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    version = Column(String, nullable=False)
+    status = Column(String, nullable=False)
+    industry = Column(String, nullable=True)
+    role_family = Column(String, nullable=True)
+    region = Column(String, nullable=True)
+    language = Column(String, default="en")
+    file_name = Column(String, nullable=True)
+    storage_uri = Column(String, nullable=True)
+    extraction_uri = Column(String, nullable=True)
+    checksum_sha256 = Column(String, nullable=True)
+    is_active = Column(Boolean, default=False)
+    created_by = Column(String, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+class TemplateRule(Base):
+    __tablename__ = "template_rules"
+
+    id = Column(String, primary_key=True, index=True)
+    template_asset_id = Column(String, ForeignKey("template_assets.id"), nullable=False)
+    rule_type = Column(String, nullable=False)
+    rule_name = Column(String, nullable=False)
+    rule_payload_json = Column(Text, nullable=False)
+    severity = Column(String, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+class CandidateResume(Base):
+    __tablename__ = "candidate_resumes"
+
+    id = Column(String, primary_key=True, index=True)
+    source_file_name = Column(String, nullable=False)
+    source_storage_uri = Column(String, nullable=False)
+    extraction_uri = Column(String, nullable=True)
+    normalized_resume_json = Column(Text, nullable=True)
+    industry_hint = Column(String, nullable=True)
+    template_hint = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+class ProcessingJob(Base):
+    __tablename__ = "processing_jobs"
+
+    id = Column(String, primary_key=True, index=True)
+    candidate_resume_id = Column(String, ForeignKey("candidate_resumes.id"), nullable=False)
+    template_asset_id = Column(String, ForeignKey("template_assets.id"), nullable=True)
+    template_version = Column(String, nullable=True)
+    status = Column(String, nullable=False)
+    stage = Column(String, nullable=False)
+    summary_uri = Column(String, nullable=True)
+    render_uri = Column(String, nullable=True)
+    error_message = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+class ValidationResult(Base):
+    __tablename__ = "validation_results"
+
+    id = Column(String, primary_key=True, index=True)
+    job_id = Column(String, ForeignKey("processing_jobs.id"), nullable=False)
+    validation_type = Column(String, nullable=False)
+    severity = Column(String, nullable=False)
+    passed = Column(Boolean, nullable=False)
+    message = Column(Text, nullable=True)
+    details_json = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+class KnowledgeAsset(Base):
+    __tablename__ = "knowledge_assets"
+
+    id = Column(String, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    version = Column(String, nullable=False)
+    status = Column(String, nullable=False)
+    pack_id = Column(String, ForeignKey("knowledge_packs.id"), nullable=True)
+    asset_kind = Column(String, nullable=False)
+    industry = Column(String, nullable=True)
+    role_family = Column(String, nullable=True)
+    region = Column(String, nullable=True)
+    language = Column(String, default="en")
+    file_name = Column(String, nullable=True)
+    storage_uri = Column(String, nullable=True)
+    extraction_uri = Column(String, nullable=True)
+    checksum_sha256 = Column(String, nullable=True)
+    created_by = Column(String, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+class KnowledgePack(Base):
+    __tablename__ = "knowledge_packs"
+
+    id = Column(String, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    pack_type = Column(String, nullable=False)
+    industry = Column(String, nullable=True)
+    role_family = Column(String, nullable=True)
+    region = Column(String, nullable=True)
+    language = Column(String, default="en")
+    status = Column(String, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+class TemplateKnowledgeBinding(Base):
+    __tablename__ = "template_knowledge_bindings"
+
+    id = Column(String, primary_key=True, index=True)
+    template_asset_id = Column(String, ForeignKey("template_assets.id"), nullable=False)
+    template_version = Column(String, nullable=False)
+    knowledge_pack_id = Column(String, ForeignKey("knowledge_packs.id"), nullable=False)
+    binding_reason = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+class AuditEvent(Base):
+    __tablename__ = "audit_events"
+
+    id = Column(String, primary_key=True, index=True)
+    entity_type = Column(String, nullable=False)
+    entity_id = Column(String, nullable=False)
+    action = Column(String, nullable=False)
+    actor = Column(String, nullable=False)
+    payload_json = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)

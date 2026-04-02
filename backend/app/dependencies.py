@@ -99,7 +99,18 @@ def get_storage_provider() -> StorageProvider:
         return LocalStorageProvider(base_path=settings.local_storage_path)
 
 
-from fastapi import Header, HTTPException, status
+from fastapi import Header, HTTPException, status, Depends
+from sqlalchemy.orm import Session
+from app.db.session import SessionLocal
+
+def get_db_session():
+    """Dependency to get SQLAlchemy DB Session."""
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
 
 def mock_is_admin(x_admin_token: Optional[str] = Header(None, description="Mock admin token for RBAC")) -> bool:
     """
@@ -132,38 +143,53 @@ def storage_provider_dependency() -> StorageProvider:
     return get_storage_provider()
 
 
-from app.adapters.impls.local.job_repository import InMemoryJobRepository
+from app.domain.interfaces import KnowledgeIndex
 
-_job_repo_instance = InMemoryJobRepository()
-
-def get_job_repository() -> JobRepository:
-    return _job_repo_instance
-
-def job_repository_dependency() -> JobRepository:
-    return get_job_repository()
-def storage_provider_dependency() -> StorageProvider:
-    return get_storage_provider()
-
-def get_template_repository() -> TemplateRepository:
+def get_knowledge_index() -> KnowledgeIndex:
     """
-    Dependency Factory to fetch the configured Template Repository.
-    Currently defaults to an in-memory implementation for Story 2.2.
+    Dependency Factory to fetch the Knowledge Index.
+    Attempts Qdrant -> Chroma -> InMemory.
     """
-    from app.adapters.impls.local.template_repository import InMemoryTemplateRepository
-    # Typically would be singleton or injected correctly, but initializing per request for now
-    # Since this is in-memory, to persist across requests it should be instantiated globally
+    try:
+        from app.adapters.vector.qdrant_index import QdrantKnowledgeIndex
+        return QdrantKnowledgeIndex()
+    except Exception as e:
+        print(f"Failed to load Qdrant, falling back to Chroma: {e}")
+        try:
+            from app.adapters.vector.chroma_index import ChromaKnowledgeIndex
+            return ChromaKnowledgeIndex()
+        except Exception as e2:
+            print(f"Failed to load Chroma, falling back to InMemory: {e2}")
+            from app.adapters.vector.in_memory_index import InMemoryKnowledgeIndex
+            return InMemoryKnowledgeIndex()
+
+def get_template_repository(db: Session = Depends(get_db_session)) -> TemplateRepository:
+    """Dependency Factory to fetch Template Repository"""
+    from app.adapters.repositories.template_repository import SqlAlchemyTemplateRepository
+    return SqlAlchemyTemplateRepository(db=db)
+
+def template_repository_dependency(repo: TemplateRepository = Depends(get_template_repository)) -> TemplateRepository:
+    return repo
+
+def get_knowledge_repository(db: Session = Depends(get_db_session)):
+    """Dependency Factory to fetch Knowledge Repository (Stubbed)"""
+    # A real implementation would go here similar to SqlAlchemyTemplateRepository
     pass
 
-_in_memory_template_repo = None
-def get_global_template_repository() -> TemplateRepository:
-    global _in_memory_template_repo
-    if _in_memory_template_repo is None:
-        from app.adapters.impls.local.template_repository import InMemoryTemplateRepository
-        _in_memory_template_repo = InMemoryTemplateRepository()
-    return _in_memory_template_repo
+def get_job_repository(db: Session = Depends(get_db_session)) -> JobRepository:
+    """Dependency Factory to fetch Job Repository"""
+    from app.adapters.repositories.job_repository import SqlAlchemyJobRepository
+    return SqlAlchemyJobRepository(db=db)
 
-def template_repository_dependency() -> TemplateRepository:
-    return get_global_template_repository()
+def job_repository_dependency(repo: JobRepository = Depends(get_job_repository)) -> JobRepository:
+    return repo
+
+def get_validation_repository(db: Session = Depends(get_db_session)):
+    """Dependency Factory to fetch Validation Repository (Stubbed)"""
+    pass
+
+def storage_provider_dependency() -> StorageProvider:
+    return get_storage_provider()
 
 _local_event_bus = None
 def get_event_bus() -> EventBus:
