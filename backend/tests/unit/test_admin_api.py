@@ -78,3 +78,20 @@ def test_upload_asset_empty_file():
         files={"file": ("test.pdf", b"", "application/pdf")}
     )
     assert response.status_code == 400
+
+
+def test_pull_templates_success():
+    response = client.get(
+        "/admin/templates",
+        headers={"X-Admin-Token": "admin-secret-token"}
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert "templates" in data
+    assert isinstance(data["templates"], list)
+
+def test_pull_templates_unauthorized():
+    response = client.get(
+        "/admin/templates"
+    )
+    assert response.status_code == 403

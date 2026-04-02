@@ -1,5 +1,7 @@
 from app.agent.state import AgentState
 from app.adapters.base import LlmRuntimeAdapter
+from app.db.session import SessionLocal
+from app.adapters.repositories.template_repository import SqlAlchemyTemplateRepository
 
 def create_template_resolve_node(llm_runtime: LlmRuntimeAdapter):
     """
@@ -16,15 +18,31 @@ def create_template_resolve_node(llm_runtime: LlmRuntimeAdapter):
              print(f"Template already selected: {state['selected_template_id']}")
              return {"status": "template_resolved"}
 
+        # Fetch available templates from DB
+        db = SessionLocal()
+        try:
+            repo = SqlAlchemyTemplateRepository(db)
+            available_templates = repo.list_templates({})
+
+            if not available_templates:
+                template_options_str = "No templates available in database."
+                default_template = "general_cv_v1"
+            else:
+                options = []
+                for idx, t in enumerate(available_templates, 1):
+                    desc = f"for {t.industry} / {t.role_family}" if t.industry else (t.description or "general template")
+                    options.append(f"{idx}. {t.id} ({desc})")
+                template_options_str = "\n        ".join(options)
+                default_template = available_templates[0].id
+        finally:
+            db.close()
+
         prompt = f"""
         Based on the following resume or document text, identify the industry and recommend
         the best template ID for formatting it.
 
         Available templates:
-        1. tech_resume_v1 (for software engineering, IT, data science)
-        2. finance_resume_v1 (for banking, accounting, finance)
-        3. creative_portfolio_v1 (for design, marketing, content creation)
-        4. general_cv_v1 (for academic, research, or general professional)
+        {template_options_str}
 
         Document Text:
         {extracted_text[:1500]} ... (truncated)
@@ -35,14 +53,13 @@ def create_template_resolve_node(llm_runtime: LlmRuntimeAdapter):
         try:
             response_text = llm_runtime.generate(prompt=prompt, temperature=0.0).strip()
 
-            # Simple fuzzy match in case the model is wordy
-            chosen_template = "general_cv_v1"
-            if "tech" in response_text.lower():
-                 chosen_template = "tech_resume_v1"
-            elif "finance" in response_text.lower():
-                 chosen_template = "finance_resume_v1"
-            elif "creative" in response_text.lower():
-                 chosen_template = "creative_portfolio_v1"
+            chosen_template = default_template
+            # Try to find a matching ID from the available templates
+            if available_templates:
+                for t in available_templates:
+                    if t.id in response_text:
+                        chosen_template = t.id
+                        break
 
             print(f"Resolved Template ID: {chosen_template}")
 
@@ -53,7 +70,7 @@ def create_template_resolve_node(llm_runtime: LlmRuntimeAdapter):
         except Exception as e:
             print(f"Error during template resolution: {e}")
             return {
-                "selected_template_id": "general_cv_v1", # fallback
+                "selected_template_id": default_template, # fallback
                 "status": "template_resolved_fallback"
             }
 
