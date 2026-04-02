@@ -34,6 +34,7 @@ class TemplateAsset(BaseModel):
 
     # Provenance and Storage References
     original_file_ref: str
+    checksum: str
     extraction_artifact_ref: Optional[str] = None
     render_config_ref: Optional[str] = None
 

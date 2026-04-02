@@ -1,6 +1,7 @@
 from typing import Optional
 from app.config import settings
 from app.adapters.base import DocumentParserAdapter, LlmRuntimeAdapter
+from app.domain.interfaces import StorageProvider, TemplateRepository, EventBus
 
 def get_document_parser() -> DocumentParserAdapter:
     """
@@ -72,6 +73,31 @@ def get_llm_runtime() -> LlmRuntimeAdapter:
             model_name="llama3"
         )
 
+def get_storage_provider() -> StorageProvider:
+    """
+    Dependency Factory to fetch the configured storage provider adapter.
+    Resolves to Local, S3, GCP, or Azure based on configuration.
+    """
+    backend = settings.storage_backend.lower()
+
+    if backend == "s3":
+        from app.adapters.storage.s3_storage import S3StorageProvider
+        return S3StorageProvider(bucket=settings.s3_bucket, region=settings.aws_region)
+    elif backend == "gcp":
+        from app.adapters.storage.gcp_storage import GcpCloudStorageProvider
+        # You'd normally add a setting for GCP bucket, reusing s3_bucket as generic bucket for now or hardcoding
+        return GcpCloudStorageProvider(bucket=settings.s3_bucket, project_id=settings.gcp_project_id)
+    elif backend == "azure":
+        from app.adapters.storage.azure_storage import AzureBlobStorageProvider
+        return AzureBlobStorageProvider(container=settings.s3_bucket)
+    elif backend == "local":
+        from app.adapters.storage.local_storage import LocalStorageProvider
+        return LocalStorageProvider(base_path=settings.local_storage_path)
+    else:
+        # Fallback to local
+        from app.adapters.storage.local_storage import LocalStorageProvider
+        return LocalStorageProvider(base_path=settings.local_storage_path)
+
 
 from fastapi import Header, HTTPException, status
 
@@ -115,3 +141,37 @@ def get_job_repository() -> JobRepository:
 
 def job_repository_dependency() -> JobRepository:
     return get_job_repository()
+def storage_provider_dependency() -> StorageProvider:
+    return get_storage_provider()
+
+def get_template_repository() -> TemplateRepository:
+    """
+    Dependency Factory to fetch the configured Template Repository.
+    Currently defaults to an in-memory implementation for Story 2.2.
+    """
+    from app.adapters.impls.local.template_repository import InMemoryTemplateRepository
+    # Typically would be singleton or injected correctly, but initializing per request for now
+    # Since this is in-memory, to persist across requests it should be instantiated globally
+    pass
+
+_in_memory_template_repo = None
+def get_global_template_repository() -> TemplateRepository:
+    global _in_memory_template_repo
+    if _in_memory_template_repo is None:
+        from app.adapters.impls.local.template_repository import InMemoryTemplateRepository
+        _in_memory_template_repo = InMemoryTemplateRepository()
+    return _in_memory_template_repo
+
+def template_repository_dependency() -> TemplateRepository:
+    return get_global_template_repository()
+
+_local_event_bus = None
+def get_event_bus() -> EventBus:
+    global _local_event_bus
+    if _local_event_bus is None:
+        from app.adapters.impls.local.event_bus import LocalEventBus
+        _local_event_bus = LocalEventBus()
+    return _local_event_bus
+
+def event_bus_dependency() -> EventBus:
+    return get_event_bus()
