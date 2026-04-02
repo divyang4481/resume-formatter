@@ -1,4 +1,4 @@
-import { Component, Inject, OnInit } from '@angular/core';
+import { Component, Inject, OnInit, ViewChild, ElementRef } from '@angular/core';
 import { MatStepperModule } from '@angular/material/stepper';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
@@ -24,6 +24,8 @@ export class AgentViewComponent implements OnInit {
   session: AgentSession | null = null;
   loading = false;
 
+  @ViewChild('fileInput') fileInput!: ElementRef;
+
   constructor(
     @Inject(AGENT_BACKEND_CLIENT) private agentClient: AgentBackendClient
   ) {}
@@ -39,11 +41,16 @@ export class AgentViewComponent implements OnInit {
     }
   }
 
-  async triggerUpload(): Promise<void> {
+  triggerUpload(): void {
+    this.fileInput.nativeElement.click();
+  }
+
+  async onFileSelected(event: any): Promise<void> {
+    const file = event.target.files[0];
+    if (!file) return;
+
     this.loading = true;
     try {
-      // Create a dummy file for the mock
-      const file = new File(['dummy content'], 'resume.pdf', { type: 'application/pdf' });
       this.session = await this.agentClient.uploadDocument(file);
     } catch (e) {
       console.error('Failed to upload document', e);

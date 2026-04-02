@@ -16,7 +16,7 @@ class SqlAlchemyJobRepository(JobRepository):
         if not model:
             model = ProcessingJobModel(
                 id=job.id,
-                candidate_resume_id=job.candidate_resume_id if hasattr(job, 'candidate_resume_id') else f"resume-{job.id}",
+                candidate_resume_id=job.candidate_id if hasattr(job, 'candidate_id') and job.candidate_id else f"resume-{job.id}",
                 status=job.status.value if hasattr(job.status, 'value') else job.status,
                 stage="INITIAL"
             )

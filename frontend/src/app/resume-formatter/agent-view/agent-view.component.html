@@ -63,6 +63,9 @@
 
   <!-- Right Side: Chat -->
   <div class="chat-panel">
+    <!-- Hidden file input for real uploads -->
+    <input type="file" #fileInput style="display: none" (change)="onFileSelected($event)" accept=".pdf,.doc,.docx,.txt" />
+
     <div class="chat-header">
       <h3 *ngIf="session.currentStep === 'upload_resume'">Upload Resume</h3>
       <h3 *ngIf="session.currentStep === 'detect_industry'">Detecting Industry</h3>
@@ -100,19 +103,22 @@
                 {{ action.label }}
               </button>
 
-              <button *ngIf="action.type === 'select_template'" mat-stroked-button color="primary" (click)="answerQuestion('Clean technical')">
-                <mat-icon>description</mat-icon>
-                Clean Technical
-              </button>
-              <button *ngIf="action.type === 'select_template'" mat-stroked-button (click)="answerQuestion('Modern dev')">
-                <mat-icon>description</mat-icon>
-                Modern Dev
-              </button>
+              <ng-container *ngIf="action.type === 'select_template' && action.payload && $any(action.payload)['templates']">
+                  <button *ngFor="let tpl of $any(action.payload)['templates']" mat-stroked-button color="primary" (click)="answerQuestion({template_id: tpl.id, industry_id: $any(action.payload)['industry_id']})">
+                    <mat-icon>description</mat-icon>
+                    {{ tpl.name }}
+                  </button>
+              </ng-container>
 
               <button *ngIf="action.type === 'confirm_pii_policy'" mat-stroked-button color="primary" (click)="answerQuestion('Confirmed')">
                 <mat-icon>check_circle</mat-icon>
                 {{ action.label }}
               </button>
+
+              <a *ngIf="action.type === 'download_output' && action.payload && $any(action.payload)['url']" mat-stroked-button color="primary" [href]="$any(action.payload)['url']" target="_blank">
+                <mat-icon>download</mat-icon>
+                {{ action.label }}
+              </a>
             </ng-container>
           </div>
         </div>

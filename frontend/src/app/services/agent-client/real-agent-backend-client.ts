@@ -1,0 +1,289 @@
+import { Injectable } from '@angular/core';
+import { AgentBackendClient } from './agent-backend-client';
+import { AgentSession, AgentMessage, AgentAction } from './contracts';
+import { RuntimeApiService, Template } from '../api/runtime-api.service';
+import { firstValueFrom } from 'rxjs';
+
+@Injectable({
+  providedIn: 'root'
+})
+export class RealAgentBackendClient implements AgentBackendClient {
+  private currentSession: AgentSession | null = null;
+
+  constructor(private runtimeApi: RuntimeApiService) {}
+
+  async createSession(): Promise<AgentSession> {
+    const session: AgentSession = {
+      sessionId: 'session-' + Date.now(),
+      status: 'idle',
+      currentStep: 'upload_resume',
+      messages: [
+        {
+          id: 'm-init',
+          role: 'assistant',
+          type: 'text',
+          content: 'Hello! Please upload your resume to begin.',
+          timestamp: new Date().toISOString()
+        }
+      ],
+      pendingActions: [
+        {
+          id: 'a-upload',
+          type: 'upload_document',
+          label: 'Upload Document'
+        }
+      ]
+    };
+
+    this.currentSession = session;
+    return this.clone(this.currentSession);
+  }
+
+  async uploadDocument(file: File): Promise<AgentSession> {
+    if (!this.currentSession) {
+      this.currentSession = await this.createSession();
+    }
+
+    this.currentSession.status = 'uploading';
+    this.currentSession.messages.push({
+      id: `m-user-upload-${Date.now()}`,
+      role: 'user',
+      type: 'text',
+      content: `Uploaded file: ${file.name}`,
+      timestamp: new Date().toISOString()
+    });
+    this.currentSession.pendingActions = [];
+
+    try {
+      const res = await firstValueFrom(this.runtimeApi.submitDocument(file));
+      this.currentSession.sessionId = res.job_id; // Using job_id as sessionId
+
+      if (res.requires_confirmation) {
+        this.currentSession.status = 'waiting_for_user';
+        this.currentSession.currentStep = 'choose_template';
+
+        let msg = 'I parsed your resume.';
+        if (res.suggested_industry_id) {
+          msg += ` I detected your industry as <strong>${res.suggested_industry_id}</strong>.`;
+        }
+        msg += ' Please choose a template.';
+
+        this.currentSession.messages.push({
+          id: `m-status-${Date.now()}`,
+          role: 'assistant',
+          type: 'question',
+          content: msg,
+          timestamp: new Date().toISOString()
+        });
+
+        // Fetch templates for the suggested industry
+        const templatesRes = await firstValueFrom(this.runtimeApi.getTemplates(res.suggested_industry_id));
+
+        this.currentSession.pendingActions = [
+          {
+            id: 'a-choose-template',
+            type: 'select_template',
+            label: 'Choose template',
+            payload: {
+                industry_id: res.suggested_industry_id,
+                templates: templatesRes.templates
+            }
+          }
+        ];
+      } else {
+        this.currentSession.status = 'processing';
+        this.currentSession.currentStep = 'pii_review';
+        this.currentSession.messages.push({
+          id: `m-status-${Date.now()}`,
+          role: 'assistant',
+          type: 'status',
+          content: 'Processing document...',
+          timestamp: new Date().toISOString()
+        });
+        await this.waitForJobCompletion(res.job_id);
+      }
+    } catch (e) {
+      this.currentSession.status = 'failed';
+      this.currentSession.messages.push({
+        id: `m-error-${Date.now()}`,
+        role: 'assistant',
+        type: 'text',
+        content: 'Failed to upload document. Please try again.',
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    return this.clone(this.currentSession);
+  }
+
+  async getSession(sessionId: string): Promise<AgentSession> {
+    if (!this.currentSession || this.currentSession.sessionId !== sessionId) {
+      return this.createSession();
+    }
+    return this.clone(this.currentSession);
+  }
+
+  async answerQuestion(sessionId: string, answer: any): Promise<AgentSession> {
+    if (!this.currentSession) return this.createSession();
+
+    if (this.currentSession.currentStep === 'choose_template' && answer && answer.template_id) {
+        this.currentSession.messages.push({
+            id: `m-user-${Date.now()}`,
+            role: 'user',
+            type: 'text',
+            content: `Selected template: ${answer.template_id}`,
+            timestamp: new Date().toISOString()
+        });
+
+        this.currentSession.status = 'processing';
+        this.currentSession.pendingActions = [];
+        this.currentSession.currentStep = 'pii_review';
+
+        try {
+             await firstValueFrom(this.runtimeApi.confirmDocument(
+                sessionId,
+                answer.industry_id || 'it',
+                answer.template_id
+            ));
+             this.currentSession.messages.push({
+                id: `m-status-${Date.now()}`,
+                role: 'assistant',
+                type: 'status',
+                content: 'Template confirmed. Processing document and applying PII rules...',
+                timestamp: new Date().toISOString()
+             });
+             await this.waitForJobCompletion(sessionId);
+        } catch(e) {
+            this.currentSession.status = 'failed';
+            this.currentSession.messages.push({
+                id: `m-error-${Date.now()}`,
+                role: 'assistant',
+                type: 'text',
+                content: 'Failed to confirm document. Please try again.',
+                timestamp: new Date().toISOString()
+            });
+        }
+    } else if (this.currentSession.currentStep === 'pii_review' && answer === 'Confirmed') {
+        this.currentSession.messages.push({
+            id: `m-user-${Date.now()}`,
+            role: 'user',
+            type: 'text',
+            content: 'Confirmed PII Policy',
+            timestamp: new Date().toISOString()
+        });
+
+        this.currentSession.status = 'completed';
+        this.currentSession.pendingActions = [];
+        this.currentSession.currentStep = 'export';
+
+        try {
+            const summaryRes = await firstValueFrom(this.runtimeApi.getJobSummary(sessionId));
+            this.currentSession.messages.push({
+                id: `m-summary-${Date.now()}`,
+                role: 'assistant',
+                type: 'result',
+                content: `Processing complete! Summary: ${summaryRes.summary}`,
+                timestamp: new Date().toISOString()
+            });
+
+            const outputRes = await firstValueFrom(this.runtimeApi.getJobOutput(sessionId));
+            this.currentSession.pendingActions = [
+               {
+                 id: 'a-download',
+                 type: 'download_output',
+                 label: 'Download Output',
+                 payload: { url: outputRes.url }
+               }
+            ];
+        } catch(e) {
+            this.currentSession.status = 'failed';
+            this.currentSession.messages.push({
+                id: `m-error-${Date.now()}`,
+                role: 'assistant',
+                type: 'text',
+                content: 'Failed to retrieve results. Please try again.',
+                timestamp: new Date().toISOString()
+            });
+        }
+    } else {
+        // Fallback for other answers
+        this.currentSession.messages.push({
+            id: `m-user-${Date.now()}`,
+            role: 'user',
+            type: 'text',
+            content: typeof answer === 'string' ? answer : JSON.stringify(answer),
+            timestamp: new Date().toISOString()
+        });
+    }
+
+    return this.clone(this.currentSession);
+  }
+
+  async submitCorrection(sessionId: string, correction: unknown): Promise<AgentSession> {
+    return this.answerQuestion(sessionId, correction);
+  }
+
+  async rerunSession(sessionId: string): Promise<AgentSession> {
+    return this.createSession();
+  }
+
+  private async waitForJobCompletion(jobId: string): Promise<void> {
+    while (true) {
+        try {
+            const statusRes = await firstValueFrom(this.runtimeApi.getJobStatus(jobId));
+            if (statusRes.status === 'completed') {
+                if (this.currentSession) {
+                    this.currentSession.status = 'waiting_for_user';
+                    this.currentSession.currentStep = 'pii_review';
+                    this.currentSession.messages.push({
+                        id: `m-status-${Date.now()}`,
+                        role: 'assistant',
+                        type: 'text',
+                        content: 'Document processing completed. Please review and confirm the PII policy before we export.',
+                        timestamp: new Date().toISOString()
+                    });
+                    this.currentSession.pendingActions = [
+                        {
+                            id: 'a-confirm-pii',
+                            type: 'confirm_pii_policy',
+                            label: 'Confirm PII Policy'
+                        }
+                    ];
+                }
+                break;
+            } else if (statusRes.status === 'failed') {
+                if (this.currentSession) {
+                    this.currentSession.status = 'failed';
+                    this.currentSession.messages.push({
+                        id: `m-error-${Date.now()}`,
+                        role: 'assistant',
+                        type: 'text',
+                        content: 'Job failed during processing.',
+                        timestamp: new Date().toISOString()
+                    });
+                }
+                break;
+            }
+            // Wait before polling again
+            await new Promise(resolve => setTimeout(resolve, 2000));
+        } catch(e) {
+            console.error('Error polling job status', e);
+            if (this.currentSession) {
+                this.currentSession.status = 'failed';
+                this.currentSession.messages.push({
+                    id: `m-error-${Date.now()}`,
+                    role: 'assistant',
+                    type: 'text',
+                    content: 'Error checking job status.',
+                    timestamp: new Date().toISOString()
+                });
+            }
+            break;
+        }
+    }
+  }
+
+  private clone<T>(obj: T): T {
+    return JSON.parse(JSON.stringify(obj));
+  }
+}
