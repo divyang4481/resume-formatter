@@ -17,13 +17,9 @@ export const routes: Routes = [
     path: 'admin',
     component: PipelineShellComponent,
     children: [
-      { path: '', redirectTo: 'assets', pathMatch: 'full' },
-      { path: 'assets', component: AssetsComponent },
+      { path: '', redirectTo: 'templates', pathMatch: 'full' },
       { path: 'templates', component: TemplatesComponent },
-      { path: 'templates/:id', component: TemplateDetailComponent },
-      { path: 'knowledge', component: KnowledgeComponent },
-      { path: 'reviews', component: ReviewsComponent },
-      { path: 'publish-registry', component: PublishRegistryComponent }
+      { path: 'templates/:id', component: TemplateDetailComponent }
     ]
   },
   {
