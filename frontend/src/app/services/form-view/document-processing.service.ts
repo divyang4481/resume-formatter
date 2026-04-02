@@ -1,7 +1,7 @@
 import { Injectable, signal } from '@angular/core';
 import { RuntimeApiService, Industry, Template } from '../api/runtime-api.service';
 
-export type ProcessingStatus = 'idle' | 'uploading' | 'processing' | 'completed' | 'error';
+export type ProcessingStatus = 'idle' | 'uploading' | 'waiting_for_confirmation' | 'processing' | 'completed' | 'error';
 
 @Injectable({
   providedIn: 'root'
@@ -12,6 +12,10 @@ export class DocumentProcessingService {
 
   public status = signal<ProcessingStatus>('idle');
   public currentJobId = signal<string | null>(null);
+  public currentDocumentId = signal<string | null>(null);
+
+  public suggestedIndustryId = signal<string | null>(null);
+  public suggestedTemplateId = signal<string | null>(null);
 
   public summary = signal<string | null>(null);
   public outputUrl = signal<string | null>(null);
@@ -32,19 +36,46 @@ export class DocumentProcessingService {
     });
   }
 
-  submitDocument(file: File, industry: string, templateId: string, candidateName: string) {
+  submitDocument(file: File, industry?: string | null, templateId?: string | null) {
     this.status.set('uploading');
     this.summary.set(null);
     this.outputUrl.set(null);
+    this.suggestedIndustryId.set(null);
+    this.suggestedTemplateId.set(null);
 
-    this.api.submitDocument(file, industry, templateId, candidateName).subscribe({
+    this.api.submitDocument(file, industry, templateId).subscribe({
       next: (res) => {
-        this.currentJobId.set(res.job_id);
-        this.status.set('processing');
-        this.pollJobStatus(res.job_id);
+        this.currentDocumentId.set(res.documentId || res.jobId);
+        this.currentJobId.set(res.jobId);
+
+        if (res.requiresConfirmation) {
+          this.suggestedIndustryId.set(res.suggestedIndustryId || null);
+          this.suggestedTemplateId.set(res.suggestedTemplateId || null);
+          this.status.set('waiting_for_confirmation');
+        } else {
+          this.status.set('processing');
+          this.pollJobStatus(res.jobId);
+        }
       },
       error: (err) => {
         console.error('Failed to submit document', err);
+        this.status.set('error');
+      }
+    });
+  }
+
+  confirmDocument(industry: string, templateId: string) {
+    const docId = this.currentDocumentId();
+    const jobId = this.currentJobId();
+    if (!docId || !jobId) return;
+
+    this.status.set('processing');
+    this.api.confirmDocument(docId, industry, templateId).subscribe({
+      next: () => {
+        this.pollJobStatus(jobId);
+      },
+      error: (err) => {
+        console.error('Failed to confirm document', err);
         this.status.set('error');
       }
     });
