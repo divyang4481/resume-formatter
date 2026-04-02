@@ -5,8 +5,10 @@ import uuid
 
 from app.schemas.admin import AssetUploadRequestMetadata, AssetUploadResponse
 from app.schemas.enums import AssetStatus
-from app.dependencies import mock_is_admin
+from app.dependencies import mock_is_admin, storage_provider_dependency, template_repository_dependency, event_bus_dependency
 from app.utils import validate_uploaded_file
+from app.services.template_service import TemplateService
+from app.domain.interfaces import StorageProvider, TemplateRepository, EventBus
 
 router = APIRouter()
 
@@ -18,7 +20,10 @@ async def push_template():
 async def upload_asset(
     file: UploadFile = File(...),
     metadata: str = Form(..., description="JSON string of AssetUploadRequestMetadata"),
-    is_admin: bool = Depends(mock_is_admin)
+    is_admin: bool = Depends(mock_is_admin),
+    storage_provider: StorageProvider = Depends(storage_provider_dependency),
+    template_repository: TemplateRepository = Depends(template_repository_dependency),
+    event_bus: EventBus = Depends(event_bus_dependency)
 ):
     try:
         # Validate metadata JSON
@@ -38,8 +43,22 @@ async def upload_asset(
     # Validate file
     await validate_uploaded_file(file)
 
-    # Simulate generating an ID and processing the file
-    asset_id = str(uuid.uuid4())
+    # Read the file content bytes
+    content = await file.read()
+
+    # Run the template service
+    template_service = TemplateService(
+        storage_provider=storage_provider,
+        template_repository=template_repository,
+        event_bus=event_bus
+    )
+
+    asset_id = await template_service.upload_asset(
+        filename=file.filename,
+        content=content,
+        metadata=parsed_metadata,
+        uploaded_by="admin-user" # placeholder since auth isn't complete yet
+    )
 
     return AssetUploadResponse(
         asset_id=asset_id,
