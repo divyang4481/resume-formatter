@@ -1,13 +1,96 @@
-from fastapi import APIRouter, Depends, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, BackgroundTasks, status
 import uuid
-from app.dependencies import llm_runtime_dependency, document_parser_dependency
-from app.adapters.base import LlmRuntimeAdapter, DocumentParserAdapter
-from app.agent.graph import build_workflow_graph
+import os
+from app.dependencies import storage_provider_dependency, job_repository_dependency
+from app.domain.interfaces import StorageProvider, JobRepository
+from app.schemas.job import ProcessingJob
+from app.schemas.enums import JobStatus
+from app.schemas.runtime import RuntimeDocumentSubmitResponse, RuntimeJobStatusResponse
 
 router = APIRouter()
 
-# In-memory store for session states (for mock purposes)
-SESSIONS = {}
+ALLOWED_EXTENSIONS = {".pdf", ".docx", ".md", ".txt", ".json", ".yaml", ".yml"}
+MAX_FILE_SIZE = 25 * 1024 * 1024  # 25 MB
+
+@router.post("/documents/submit", response_model=RuntimeDocumentSubmitResponse)
+async def submit_document(
+    file: UploadFile = File(...),
+    storage_provider: StorageProvider = Depends(storage_provider_dependency),
+    job_repository: JobRepository = Depends(job_repository_dependency)
+):
+    """
+    Accepts multipart upload for candidate resume processing.
+    """
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="Filename is required.")
+
+    ext = os.path.splitext(file.filename)[1].lower()
+    if ext not in ALLOWED_EXTENSIONS:
+        raise HTTPException(status_code=400, detail=f"Unsupported file type: {ext}")
+
+    ALLOWED_MIME_TYPES = {
+        "application/pdf",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "text/markdown",
+        "text/plain",
+        "application/json",
+        "application/yaml",
+        "application/x-yaml",
+        "text/yaml"
+    }
+
+    if file.content_type and file.content_type not in ALLOWED_MIME_TYPES:
+        raise HTTPException(status_code=400, detail=f"Unsupported MIME type: {file.content_type}")
+
+
+    file_bytes = await file.read()
+    if not file_bytes:
+        raise HTTPException(status_code=400, detail="File is empty.")
+
+    if len(file_bytes) > MAX_FILE_SIZE:
+        raise HTTPException(status_code=400, detail="File size exceeds 25 MB limit.")
+
+    job_id = str(uuid.uuid4())
+    filename = os.path.basename(file.filename)
+    storage_key = f"jobs/{job_id}/input/{filename}"
+
+    # Store file via storage provider
+    storage_ref = storage_provider.put_bytes(storage_key, file_bytes)
+
+    # Create job record
+    job = ProcessingJob(
+        id=job_id,
+        status=JobStatus.PENDING,
+        original_file_ref=storage_ref,
+        created_by="system" # Or real user context if available
+    )
+
+    # Save job record
+    job_repository.save_job(job)
+
+    return RuntimeDocumentSubmitResponse(
+        job_id=job_id,
+        status=JobStatus.PENDING,
+        message="Document submitted successfully and job initialized."
+    )
+
+@router.get("/jobs/{job_id}", response_model=RuntimeJobStatusResponse)
+async def get_job_status(
+    job_id: str,
+    job_repository: JobRepository = Depends(job_repository_dependency)
+):
+    """
+    Returns processing job status.
+    """
+    job = job_repository.get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    return RuntimeJobStatusResponse(
+        job_id=job.id,
+        status=job.status,
+        original_file_ref=job.original_file_ref
+    )
 
 from fastapi import UploadFile, File, Form
 from typing import Optional, List
@@ -111,10 +194,9 @@ async def get_job_status(id: str):
 @router.get("/documents/{id}/status")
 async def get_session_status(id: str):
     """
-    Returns processing status, current stage, warnings, and final metadata.
+    Legacy endpoint. Use /jobs/{id} instead.
     """
-    session = SESSIONS.get(id, {"status": "not_found"})
-    return {"session_id": id, "status": session.get("status"), "details": session}
+    return {"session_id": id, "status": "deprecated"}
 
 @router.post("/documents/{id}/confirm")
 async def confirm_document(id: str):
