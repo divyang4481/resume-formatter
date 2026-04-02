@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, Router } from '@angular/router';
 import { MatTabsModule } from '@angular/material/tabs';
@@ -9,7 +9,11 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { MatTableModule } from '@angular/material/table';
+import { MatChipsModule } from '@angular/material/chips';
+import { MatExpansionModule } from '@angular/material/expansion';
 import { ReactiveFormsModule, FormBuilder, FormGroup } from '@angular/forms';
+import { animate, state, style, transition, trigger } from '@angular/animations';
 import { AdminTemplateApiService } from '../../../../services/admin-template-api.service';
 import { AdminTemplateTestingService } from '../../../../services/admin-template-testing.service';
 
@@ -26,16 +30,37 @@ import { AdminTemplateTestingService } from '../../../../services/admin-template
     MatInputModule,
     MatSlideToggleModule,
     MatProgressSpinnerModule,
+    MatTableModule,
+    MatChipsModule,
+    MatExpansionModule,
     ReactiveFormsModule
   ],
   templateUrl: './template-detail.component.html',
-  styleUrls: ['./template-detail.component.scss']
+  styleUrls: ['./template-detail.component.scss'],
+  animations: [
+    trigger('detailExpand', [
+      state('collapsed', style({height: '0px', minHeight: '0', display: 'none'})),
+      state('expanded', style({height: '*'})),
+      transition('expanded <=> collapsed', animate('225ms cubic-bezier(0.4, 0.0, 0.2, 1)')),
+    ]),
+  ]
 })
-export class TemplateDetailComponent implements OnInit {
+export class TemplateDetailComponent implements OnInit, OnDestroy {
   templateId: string = '';
   template: any = null;
   publishEligibility: any = null;
   testRuns: any[] = [];
+  displayedColumns: string[] = ['created_at', 'status', 'decision', 'warnings', 'actions'];
+  expandedElement: any | null = null;
+
+  pipelineStages = [
+    { id: 'upload', name: 'Sample Uploaded', icon: 'cloud_upload' },
+    { id: 'extraction', name: 'Parsing / Extraction', icon: 'document_scanner' },
+    { id: 'mapping', name: 'Structure Mapping', icon: 'schema' },
+    { id: 'render', name: 'Template Rendering', icon: 'picture_as_pdf' },
+    { id: 'validation', name: 'Validation', icon: 'fact_check' },
+    { id: 'result', name: 'Final Result', icon: 'done_all' }
+  ];
 
   metadataForm: FormGroup;
   notesForm: FormGroup;
@@ -46,6 +71,8 @@ export class TemplateDetailComponent implements OnInit {
   jobStatus: any = null;
   jobOutputs: any = null;
   isRunningTest: boolean = false;
+
+  private pollingTimeout: any;
 
   constructor(
     private route: ActivatedRoute,
@@ -96,7 +123,54 @@ export class TemplateDetailComponent implements OnInit {
   loadTestRuns() {
     this.templateApi.listTestRuns(this.templateId).subscribe(res => {
       this.testRuns = res.test_runs;
+      this.checkAndPollActiveRuns();
     });
+  }
+
+  checkAndPollActiveRuns() {
+    // If any test run doesn't have a decision and we aren't currently tracking it as currentJobId,
+    // we should occasionally refresh the list. Since we don't have individual job statuses
+    // without polling `getJob`, we'll just poll `listTestRuns` to see if results arrived.
+    const hasPendingRuns = this.testRuns.some(run => !run.decision && !run.generated_summary);
+    if (hasPendingRuns && !this.isRunningTest) {
+      this.pollingTimeout = setTimeout(() => {
+        this.loadTestRuns();
+      }, 5000);
+    }
+  }
+
+  ngOnDestroy(): void {
+    if (this.pollingTimeout) {
+      clearTimeout(this.pollingTimeout);
+    }
+  }
+
+  getStageStatus(stageId: string): string {
+    if (!this.jobStatus) return 'pending';
+
+    const status = this.jobStatus.status;
+    const currentStage = this.jobStatus.stage;
+
+    const stageIndex = this.pipelineStages.findIndex(s => s.id === stageId);
+    const currentIndex = this.pipelineStages.findIndex(s => s.id === currentStage);
+
+    if (status === 'failed' && currentStage === stageId) return 'failed';
+    if (status === 'completed') return 'completed';
+
+    if (stageIndex < currentIndex) return 'completed';
+    if (stageIndex === currentIndex && this.isRunningTest) return 'running';
+
+    return 'pending';
+  }
+
+  getValidationWarningsCount(run: any): number {
+    if (!run || !run.validation_result || !run.validation_result.warnings) return 0;
+    return run.validation_result.warnings.length;
+  }
+
+  getValidationErrorsCount(run: any): number {
+    if (!run || !run.validation_result || !run.validation_result.errors) return 0;
+    return run.validation_result.errors.length;
   }
 
   saveMetadata() {
@@ -118,6 +192,8 @@ export class TemplateDetailComponent implements OnInit {
   runTest() {
     if (!this.selectedFile) return;
     this.isRunningTest = true;
+    this.jobStatus = { status: 'pending', stage: 'upload' };
+    this.jobOutputs = null;
 
     const formData = new FormData();
     formData.append('file', this.selectedFile);
@@ -179,7 +255,27 @@ export class TemplateDetailComponent implements OnInit {
     this.templateApi.saveTestReview(this.templateId, testRunId, payload).subscribe(() => {
       this.loadTestRuns();
       this.loadTemplate(); // reload template to update publish eligibility
+
+      // Update currently displayed job output if we are looking at the current run
+      if (this.currentJobId) {
+        const matchingRun = this.testRuns.find(r => r.job_id === this.currentJobId);
+        if (matchingRun && matchingRun.id === testRunId) {
+            matchingRun.decision = decision;
+        }
+      }
     });
+  }
+
+  getCurrentTestRunId(): string | null {
+    if (!this.currentJobId || !this.testRuns) return null;
+    const run = this.testRuns.find(r => r.job_id === this.currentJobId);
+    return run ? run.id : null;
+  }
+
+  getCurrentTestRunDecision(): string | null {
+    if (!this.currentJobId || !this.testRuns) return null;
+    const run = this.testRuns.find(r => r.job_id === this.currentJobId);
+    return run ? run.decision : null;
   }
 
   publish() {
