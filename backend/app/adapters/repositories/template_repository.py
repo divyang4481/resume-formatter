@@ -64,10 +64,12 @@ class SqlAlchemyTemplateRepository(TemplateRepository):
     def list_templates(self, filters: Dict[str, Any]) -> List[TemplateAsset]:
         query = self.db.query(TemplateAssetModel)
 
+        from sqlalchemy import func
+
         if "status" in filters:
-            query = query.filter(TemplateAssetModel.status == filters["status"].upper())
+            query = query.filter(func.lower(TemplateAssetModel.status) == filters["status"].lower())
         if "industry" in filters:
-            query = query.filter(TemplateAssetModel.industry == filters["industry"])
+            query = query.filter(func.lower(TemplateAssetModel.industry) == filters["industry"].lower())
 
         models = query.all()
         results = []
