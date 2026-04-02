@@ -117,7 +117,7 @@ export class AgentViewComponent implements OnInit {
   }
 
   getStepIndex(currentStep: string | undefined): number {
-    const steps = ['upload_resume', 'detect_industry', 'choose_template', 'pii_review', 'export'];
+    const steps = ['upload_resume', 'detect_industry', 'choose_template', 'review_resume', 'export'];
     const idx = steps.indexOf(currentStep || 'upload_resume');
     return idx === -1 ? 0 : idx;
   }

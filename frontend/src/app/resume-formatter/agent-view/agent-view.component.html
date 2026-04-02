@@ -36,9 +36,9 @@
 
       <mat-step [state]="getStepIndex(session.currentStep) > 3 ? 'done' : 'number'">
         <ng-template matStepLabel>
-          <div class="step-label" [class.active]="session.currentStep === 'pii_review'">
-            <strong>PII review</strong>
-            <span>Mask / redact fields</span>
+          <div class="step-label" [class.active]="session.currentStep === 'review_resume'">
+            <strong>Review generated resume</strong>
+            <span>Review output before export</span>
           </div>
         </ng-template>
       </mat-step>
@@ -70,7 +70,7 @@
       <h3 *ngIf="session.currentStep === 'upload_resume'">Upload Resume</h3>
       <h3 *ngIf="session.currentStep === 'detect_industry'">Detecting Industry</h3>
       <h3 *ngIf="session.currentStep === 'choose_template'">Choose Template</h3>
-      <h3 *ngIf="session.currentStep === 'pii_review'">PII Review</h3>
+      <h3 *ngIf="session.currentStep === 'review_resume'">Review generated resume</h3>
       <h3 *ngIf="session.currentStep === 'export'">Export</h3>
       <span class="step-badge">Step {{ getStepIndex(session.currentStep) + 1 }} of 5</span>
     </div>
@@ -110,7 +110,7 @@
                   </button>
               </ng-container>
 
-              <button *ngIf="action.type === 'confirm_pii_policy'" mat-stroked-button color="primary" (click)="answerQuestion('Confirmed')">
+              <button *ngIf="action.type === 'confirm_review'" mat-stroked-button color="primary" (click)="answerQuestion('Confirmed')">
                 <mat-icon>check_circle</mat-icon>
                 {{ action.label }}
               </button>

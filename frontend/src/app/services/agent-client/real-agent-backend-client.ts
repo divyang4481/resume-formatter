@@ -92,7 +92,7 @@ export class RealAgentBackendClient implements AgentBackendClient {
         ];
       } else {
         this.currentSession.status = 'processing';
-        this.currentSession.currentStep = 'pii_review';
+        this.currentSession.currentStep = 'review_resume';
         this.currentSession.messages.push({
           id: `m-status-${Date.now()}`,
           role: 'assistant',
@@ -137,7 +137,7 @@ export class RealAgentBackendClient implements AgentBackendClient {
 
         this.currentSession.status = 'processing';
         this.currentSession.pendingActions = [];
-        this.currentSession.currentStep = 'pii_review';
+        this.currentSession.currentStep = 'review_resume';
 
         try {
              await firstValueFrom(this.runtimeApi.confirmDocument(
@@ -149,7 +149,7 @@ export class RealAgentBackendClient implements AgentBackendClient {
                 id: `m-status-${Date.now()}`,
                 role: 'assistant',
                 type: 'status',
-                content: 'Template confirmed. Processing document and applying PII rules...',
+                content: 'Template confirmed. Processing document...',
                 timestamp: new Date().toISOString()
              });
              await this.waitForJobCompletion(sessionId);
@@ -163,12 +163,12 @@ export class RealAgentBackendClient implements AgentBackendClient {
                 timestamp: new Date().toISOString()
             });
         }
-    } else if (this.currentSession.currentStep === 'pii_review' && answer === 'Confirmed') {
+    } else if (this.currentSession.currentStep === 'review_resume' && answer === 'Confirmed') {
         this.currentSession.messages.push({
             id: `m-user-${Date.now()}`,
             role: 'user',
             type: 'text',
-            content: 'Confirmed PII Policy',
+            content: 'Confirmed Review',
             timestamp: new Date().toISOString()
         });
 
@@ -250,19 +250,19 @@ export class RealAgentBackendClient implements AgentBackendClient {
             if (statusRes.status === 'completed') {
                 if (this.currentSession) {
                     this.currentSession.status = 'waiting_for_user';
-                    this.currentSession.currentStep = 'pii_review';
+                    this.currentSession.currentStep = 'review_resume';
                     this.currentSession.messages.push({
                         id: `m-status-${Date.now()}`,
                         role: 'assistant',
                         type: 'text',
-                        content: 'Document processing completed. Please review and confirm the PII policy before we export.',
+                        content: 'Document processing completed. Please review the generated resume before we export.',
                         timestamp: new Date().toISOString()
                     });
                     this.currentSession.pendingActions = [
                         {
-                            id: 'a-confirm-pii',
-                            type: 'confirm_pii_policy',
-                            label: 'Confirm PII Policy'
+                            id: 'a-confirm-review',
+                            type: 'confirm_review',
+                            label: 'Confirm Review'
                         }
                     ];
                 }

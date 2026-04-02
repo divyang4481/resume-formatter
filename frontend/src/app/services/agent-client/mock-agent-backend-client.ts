@@ -111,20 +111,20 @@ export class MockAgentBackendClient implements AgentBackendClient {
         this.currentSession.pendingActions = [];
 
         this.currentSession.status = 'waiting_for_user';
-        this.currentSession.currentStep = 'pii_review';
+        this.currentSession.currentStep = 'review_resume';
         this.currentSession.messages.push({
           id: `m-${Date.now()}`,
           role: 'assistant',
           type: 'text',
-          content: 'Got it. Now let\'s review the PII policy before we export.',
+          content: 'Got it. Now let\'s review the generated resume before we export.',
           timestamp: new Date().toISOString()
         });
 
         this.currentSession.pendingActions = [
           {
-            id: 'a-confirm-pii',
-            type: 'confirm_pii_policy',
-            label: 'Confirm PII Policy'
+            id: 'a-confirm-review',
+            type: 'confirm_review',
+            label: 'Confirm Review'
           },
           {
             id: 'a-start-over',

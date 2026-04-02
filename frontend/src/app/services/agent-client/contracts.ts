@@ -14,7 +14,7 @@ export type AgentMessage = {
 export type AgentActionType =
   | "upload_document"
   | "select_template"
-  | "confirm_pii_policy"
+  | "confirm_review"
   | "review_extraction"
   | "submit_correction"
   | "rerun_job"

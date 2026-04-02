@@ -16,3 +16,82 @@ Application bundle generation complete. [4.585 seconds]
 Watch mode enabled. Watching for file changes...
 NOTE: Raw file sizes do not reflect development server per-request transformations.
   ➜  Local:   http://localhost:4200/
+❯ Changes detected. Rebuilding...
+✔ Changes detected. Rebuilding...
+Application bundle generation failed. [2.374 seconds]
+
+[31m✘ [41;31m[[41;97mERROR[41;31m][0m [1mNG7: This comparison appears to be unintentional because the types 'AgentActionType' and '"confirm_review"' have no overlap.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/resume-formatter/agent-view/agent-view.component.html:113:29:
+[37m      113 │ ...<button *ngIf="[32maction.type === 'confirm_review'[37m" mat-stroked-b...
+          ╵                   [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component AgentViewComponent.
+
+    src/app/resume-formatter/agent-view/agent-view.component.ts:24:15:
+[37m      24 │   templateUrl: [32m'./agent-view.component.html'[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+❯ Changes detected. Rebuilding...
+✔ Changes detected. Rebuilding...
+Application bundle generation failed. [0.742 seconds]
+
+[31m✘ [41;31m[[41;97mERROR[41;31m][0m [1mNG7: This comparison appears to be unintentional because the types 'AgentActionType' and '"confirm_review"' have no overlap.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/resume-formatter/agent-view/agent-view.component.html:113:29:
+[37m      113 │ ...<button *ngIf="[32maction.type === 'confirm_review'[37m" mat-stroked-b...
+          ╵                   [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component AgentViewComponent.
+
+    src/app/resume-formatter/agent-view/agent-view.component.ts:24:15:
+[37m      24 │   templateUrl: [32m'./agent-view.component.html'[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+❯ Changes detected. Rebuilding...
+✔ Changes detected. Rebuilding...
+Application bundle generation failed. [0.228 seconds]
+
+[31m✘ [41;31m[[41;97mERROR[41;31m][0m [1mNG7: This comparison appears to be unintentional because the types 'AgentActionType' and '"confirm_review"' have no overlap.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/resume-formatter/agent-view/agent-view.component.html:113:29:
+[37m      113 │ ...<button *ngIf="[32maction.type === 'confirm_review'[37m" mat-stroked-b...
+          ╵                   [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component AgentViewComponent.
+
+    src/app/resume-formatter/agent-view/agent-view.component.ts:24:15:
+[37m      24 │   templateUrl: [32m'./agent-view.component.html'[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31m✘ [41;31m[[41;97mERROR[41;31m][0m [1mTS2322: Type '"confirm_pii_policy"' is not assignable to type 'AgentActionType'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/services/agent-client/real-agent-backend-client.ts:264:28:
+[37m      264 │                             [32mtype[37m: 'confirm_pii_policy',
+          ╵                             [32m~~~~[0m
+
+  The expected type comes from property 'type' which is declared here on type 'AgentAction'
+
+    src/app/services/agent-client/contracts.ts:26:2:
+[37m      26 │   [32mtype[37m: AgentActionType;
+         ╵   [32m~~~~[0m
+
+
+❯ Changes detected. Rebuilding...
+✔ Changes detected. Rebuilding...
+Application bundle generation failed. [0.209 seconds]
+
+[31m✘ [41;31m[[41;97mERROR[41;31m][0m [1mNG7: This comparison appears to be unintentional because the types 'AgentActionType' and '"confirm_review"' have no overlap.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/resume-formatter/agent-view/agent-view.component.html:113:29:
+[37m      113 │ ...<button *ngIf="[32maction.type === 'confirm_review'[37m" mat-stroked-b...
+          ╵                   [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component AgentViewComponent.
+
+    src/app/resume-formatter/agent-view/agent-view.component.ts:24:15:
+[37m      24 │   templateUrl: [32m'./agent-view.component.html'[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
