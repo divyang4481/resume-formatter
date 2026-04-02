@@ -1,9 +1,16 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, BackgroundTasks, status
 import uuid
 import os
-from app.dependencies import storage_provider_dependency, job_repository_dependency
+from app.dependencies import (
+    storage_provider_dependency,
+    job_repository_dependency,
+    llm_runtime_dependency,
+    document_parser_dependency
+)
 from app.domain.interfaces import StorageProvider, JobRepository
 from app.schemas.job import ProcessingJob
+from app.adapters.base import LlmRuntimeAdapter, DocumentParserAdapter
+from app.agent.graph import build_workflow_graph
 from app.schemas.enums import JobStatus
 from app.schemas.runtime import RuntimeDocumentSubmitResponse, RuntimeJobStatusResponse
 
