@@ -39,14 +39,14 @@ export class RuntimeApiService {
     industry?: string | null,
     templateId?: string | null
   ): Observable<{
-    documentId: string,
-    jobId: string,
+    document_id: string,
+    job_id: string,
     status: string,
-    requiresConfirmation: boolean,
-    suggestedIndustryId?: string,
-    suggestedTemplateId?: string,
-    providedIndustryId?: string,
-    providedTemplateId?: string,
+    requires_confirmation: boolean,
+    suggested_industry_id?: string,
+    suggested_template_id?: string,
+    provided_industry_id?: string,
+    provided_template_id?: string,
     message: string
   }> {
     const formData = new FormData();

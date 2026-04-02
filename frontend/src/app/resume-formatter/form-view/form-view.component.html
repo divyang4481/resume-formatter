@@ -1,4 +1,4 @@
-<div class="form-view-container">
+<div class="form-view-container" [ngClass]="{'is-idle': docService.status() === 'idle'}">
   <!-- Top/Left Side: Form Area -->
   <div class="form-panel">
     <div class="form-header">
@@ -7,6 +7,14 @@
     </div>
 
     <form class="cv-form" [formGroup]="form">
+      <div class="upload-area" (click)="triggerFileInput()">
+        <mat-icon class="upload-icon">cloud_upload</mat-icon>
+        <p *ngIf="!selectedFile">Click to browse or drag and drop original CV (PDF)</p>
+        <p *ngIf="selectedFile" class="file-name">Selected: {{ selectedFile.name }}</p>
+        <input type="file" #fileInput hidden (change)="onFileSelected($event)" accept="application/pdf">
+        <button type="button" mat-stroked-button color="primary" (click)="triggerFileInput(); $event.stopPropagation()">Browse Files</button>
+      </div>
+
       <mat-form-field appearance="outline" class="full-width">
         <mat-label>Target Industry (Optional)</mat-label>
         <mat-select formControlName="industry">
@@ -24,14 +32,6 @@
           </mat-option>
         </mat-select>
       </mat-form-field>
-
-      <div class="upload-area" (click)="triggerFileInput()">
-        <mat-icon class="upload-icon">cloud_upload</mat-icon>
-        <p *ngIf="!selectedFile">Click to browse or drag and drop original CV (PDF)</p>
-        <p *ngIf="selectedFile" class="file-name">Selected: {{ selectedFile.name }}</p>
-        <input type="file" #fileInput hidden (change)="onFileSelected($event)" accept="application/pdf">
-        <button type="button" mat-stroked-button color="primary" (click)="triggerFileInput(); $event.stopPropagation()">Browse Files</button>
-      </div>
 
       <div class="action-buttons">
         <button type="button" mat-raised-button color="primary"

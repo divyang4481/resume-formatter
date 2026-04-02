@@ -7,6 +7,19 @@
   overflow: hidden;
   max-width: 1200px;
   margin: 0 auto;
+  transition: all 0.3s ease-in-out;
+
+  &.is-idle {
+    justify-content: center;
+
+    .form-panel {
+      border-right: none;
+    }
+
+    .results-panel {
+      display: none;
+    }
+  }
 }
 
 .form-panel {
