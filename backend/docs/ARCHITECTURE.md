@@ -515,6 +515,13 @@ Core business logic remains cloud-agnostic. Provider adapters supply storage, OC
 | Model Provider | Azure OpenAI | Bedrock | Vertex AI | Ollama |
 | Parser Provider | Document Intelligence | Textract | Document AI | Docling/Tika |
 
+### 14.4 Statelessness and Container Scalability
+To support horizontal scaling and dynamic load balancing across cloud container environments (e.g., Kubernetes, ECS, Cloud Run), the API tier is strictly **stateless**.
+* **Zero Container Affinity (No Sticky Sessions):** The API containers do not hold job status or runtime file payloads in local memory across HTTP requests. 
+* **Centralized Job Tracking:** When a client uploads a document, the API instantly writes the raw file to the `StorageProvider` (e.g., S3/Blob) and the job state to the `Metadata DB` (via the `JobRepository`), returning a `job_id`.
+* **Asynchronous Processing:** Heavy workflow tasks (extraction, PII redaction, LLM calls) are triggered via an Event Bus or Message Queue, rather than blocking the HTTP thread. Background workers process these jobs and update the centralized DB.
+* **Polling Resiliency:** A client polling `GET /runtime/jobs/{job_id}` can hit any API container. That container will simply query the `Metadata DB` for the current state, ensuring 100% resilience against container termination, autoscaling events, or random load balancer routing.
+
 ---
 
 ## 15. Implementation Epics
