@@ -5,33 +5,11 @@ from app.domain.interfaces import StorageProvider, TemplateRepository, EventBus,
 
 def get_document_extraction_service() -> DocumentExtractionService:
     """
-    Dependency Factory to fetch the configured document extraction service adapter.
-    This logic dynamically resolves implementations based on the system config.
+    Dependency Factory to fetch the document extraction service.
+    Now uses the multi-tier ParserRouter internally.
     """
-    backend = settings.document_extractor_backend.lower()
-
-    if backend == "azure_document_intelligence":
-        from app.adapters.impls.azure.document_parser import AzureDocumentIntelligenceExtractionService
-        return AzureDocumentIntelligenceExtractionService()
-    elif backend == "aws_textract":
-        from app.adapters.impls.aws.document_parser import AwsTextractExtractionService
-        return AwsTextractExtractionService()
-    elif backend == "gcp_document_ai":
-        from app.adapters.impls.gcp.document_parser import GcpDocumentAiExtractionService
-        return GcpDocumentAiExtractionService()
-    elif backend == "ibm_docling":
-        from app.adapters.impls.ibm.document_parser import IbmDoclingExtractionService
-        return IbmDoclingExtractionService()
-    elif backend == "tika":
-        from app.adapters.impls.local.document_parser import ApacheTikaExtractionService
-        return ApacheTikaExtractionService()
-    elif backend == "local_parser":
-        from app.adapters.impls.local.document_parser import LocalParserExtractionService
-        return LocalParserExtractionService()
-    else:
-        # Fallback to local parser
-        from app.adapters.impls.local.document_parser import LocalParserExtractionService
-        return LocalParserExtractionService()
+    from app.services.extraction_service_adapter import RouterBasedExtractionService
+    return RouterBasedExtractionService()
 
 def get_llm_runtime() -> LlmRuntimeAdapter:
     """
