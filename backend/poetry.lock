@@ -316,7 +316,7 @@ description = "The Blis BLAS-like linear algebra library, as a self-contained C-
 optional = true
 python-versions = "<3.15,>=3.9"
 groups = ["main"]
-markers = "python_version <= \"3.13\" and extra == \"parser-unstructured\""
+markers = "extra == \"parser-unstructured\" and python_version <= \"3.13\""
 files = [
     {file = "blis-1.3.3-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:650f1d2b28e3c875927c63deebda463a6f9d237dff30e445bfe2127718c1a344"},
     {file = "blis-1.3.3-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:9b0d42420ddd543eec51ccb99d38364a0c0833b6895eced37127822de6ecacff"},
@@ -429,7 +429,7 @@ description = "Super lightweight function registries for your library"
 optional = true
 python-versions = ">=3.6"
 groups = ["main"]
-markers = "python_version <= \"3.13\" and extra == \"parser-unstructured\""
+markers = "extra == \"parser-unstructured\" and python_version <= \"3.13\""
 files = [
     {file = "catalogue-2.0.10-py3-none-any.whl", hash = "sha256:58c2de0020aa90f4a2da7dfad161bf7b3b054c86a5f09fcedc0b2b740c109a9f"},
     {file = "catalogue-2.0.10.tar.gz", hash = "sha256:4f56daa940913d3f09d589c191c74e5a6d51762b3a9e37dd53b7437afd6cda15"},
@@ -451,10 +451,10 @@ files = [
 name = "cffi"
 version = "2.0.0"
 description = "Foreign Function Interface for Python calling C code."
-optional = true
+optional = false
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "platform_python_implementation != \"PyPy\" and (extra == \"cloud-azure-native\" or extra == \"runtime-local-azure\" or extra == \"cloud-gcp-native\" or extra == \"runtime-local-gcp\" or extra == \"parser-unstructured\")"
+markers = "platform_python_implementation != \"PyPy\""
 files = [
     {file = "cffi-2.0.0-cp310-cp310-macosx_10_13_x86_64.whl", hash = "sha256:0cf2d91ecc3fcc0625c2c530fe004f82c110405f101548512cce44322fa8ac44"},
     {file = "cffi-2.0.0-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:f73b96c41e3b2adedc34a7356e64c8eb96e03a3782b535e043a986276ce12a49"},
@@ -754,7 +754,7 @@ description = "pathlib-style classes for cloud storage services."
 optional = true
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "python_version <= \"3.13\" and extra == \"parser-unstructured\""
+markers = "extra == \"parser-unstructured\" and python_version <= \"3.13\""
 files = [
     {file = "cloudpathlib-0.23.0-py3-none-any.whl", hash = "sha256:8520b3b01468fee77de37ab5d50b1b524ea6b4a8731c35d1b7407ac0cd716002"},
     {file = "cloudpathlib-0.23.0.tar.gz", hash = "sha256:eb38a34c6b8a048ecfd2b2f60917f7cbad4a105b7c979196450c2f541f4d6b4b"},
@@ -805,7 +805,7 @@ description = "The sweetest config system for Python"
 optional = true
 python-versions = ">=3.10"
 groups = ["main"]
-markers = "python_version <= \"3.13\" and extra == \"parser-unstructured\""
+markers = "extra == \"parser-unstructured\" and python_version <= \"3.13\""
 files = [
     {file = "confection-1.3.3-py3-none-any.whl", hash = "sha256:b9fef9ee84b237ef4611ec3eb5797b70e13063e6310ad9f15536373f5e313c82"},
     {file = "confection-1.3.3.tar.gz", hash = "sha256:f0f6810d567ff73993fe74d218ca5e1ffb6a44fb03f391257fc5d033546cbfaa"},
@@ -815,10 +815,9 @@ files = [
 name = "cryptography"
 version = "46.0.6"
 description = "cryptography is a package which provides cryptographic recipes and primitives to Python developers."
-optional = true
+optional = false
 python-versions = "!=3.9.0,!=3.9.1,>=3.8"
 groups = ["main"]
-markers = "extra == \"cloud-azure-native\" or extra == \"runtime-local-azure\" or extra == \"cloud-gcp-native\" or extra == \"runtime-local-gcp\" or extra == \"parser-unstructured\""
 files = [
     {file = "cryptography-46.0.6-cp311-abi3-macosx_10_9_universal2.whl", hash = "sha256:64235194bad039a10bb6d2d930ab3323baaec67e2ce36215fd0952fad0930ca8"},
     {file = "cryptography-46.0.6-cp311-abi3-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:26031f1e5ca62fcb9d1fcb34b2b60b390d1aacaa15dc8b895a9ed00968b97b30"},
@@ -911,7 +910,7 @@ files = [
     {file = "cuda_bindings-13.2.0-cp314-cp314t-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:e8a16384c6494e5485f39314b0b4afb04bee48d49edb16d5d8593fd35bbd231b"},
     {file = "cuda_bindings-13.2.0-cp314-cp314t-win_amd64.whl", hash = "sha256:6ccf14e0c1def3b7200100aafff3a9f7e210ecb6e409329e92dcf6cd2c00d5c7"},
 ]
-markers = {main = "python_version <= \"3.13\" and extra == \"parser-docling\" and platform_system == \"Linux\"", dev = "python_version <= \"3.13\" and platform_system == \"Linux\""}
+markers = {main = "extra == \"parser-docling\" and platform_system == \"Linux\" and python_version <= \"3.13\"", dev = "platform_system == \"Linux\" and python_version <= \"3.13\""}
 
 [package.dependencies]
 cuda-pathfinder = ">=1.1,<2.0"
@@ -929,7 +928,7 @@ groups = ["main", "dev"]
 files = [
     {file = "cuda_pathfinder-1.5.0-py3-none-any.whl", hash = "sha256:498f90a9e9de36044a7924742aecce11c50c49f735f1bc53e05aa46de9ea4110"},
 ]
-markers = {main = "python_version <= \"3.13\" and extra == \"parser-docling\" and platform_system == \"Linux\"", dev = "python_version <= \"3.13\" and platform_system == \"Linux\""}
+markers = {main = "extra == \"parser-docling\" and platform_system == \"Linux\" and python_version <= \"3.13\"", dev = "platform_system == \"Linux\" and python_version <= \"3.13\""}
 
 [[package]]
 name = "cuda-toolkit"
@@ -941,7 +940,7 @@ groups = ["main", "dev"]
 files = [
     {file = "cuda_toolkit-13.0.2-py2.py3-none-any.whl", hash = "sha256:b198824cf2f54003f50d64ada3a0f184b42ca0846c1c94192fa269ecd97a66eb"},
 ]
-markers = {main = "python_version <= \"3.13\" and extra == \"parser-docling\" and platform_system == \"Linux\"", dev = "python_version <= \"3.13\" and platform_system == \"Linux\""}
+markers = {main = "extra == \"parser-docling\" and platform_system == \"Linux\" and python_version <= \"3.13\"", dev = "platform_system == \"Linux\" and python_version <= \"3.13\""}
 
 [package.dependencies]
 nvidia-cublas = {version = "==13.1.0.3.*", optional = true, markers = "(sys_platform == \"linux\" or sys_platform == \"win32\") and extra == \"cublas\""}
@@ -991,7 +990,7 @@ description = "Manage calls to calloc/free through Cython"
 optional = true
 python-versions = "<3.15,>=3.9"
 groups = ["main"]
-markers = "python_version <= \"3.13\" and extra == \"parser-unstructured\""
+markers = "extra == \"parser-unstructured\" and python_version <= \"3.13\""
 files = [
     {file = "cymem-2.0.13-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:8efc4f308169237aade0e82877a65a563833dec32eb7ab2326120253e0e9e918"},
     {file = "cymem-2.0.13-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:e03bb575a96c59bc210d7d59862747f0012696b0dac3427ce8af33c7afb3d4a2"},
@@ -1435,13 +1434,62 @@ test-full = ["adlfs", "aiohttp (!=4.0.0a0,!=4.0.0a1)", "backports-zstd ; python_
 tqdm = ["tqdm"]
 
 [[package]]
+name = "google-ai-generativelanguage"
+version = "0.6.15"
+description = "Google Ai Generativelanguage API client library"
+optional = false
+python-versions = ">=3.7"
+groups = ["main"]
+files = [
+    {file = "google_ai_generativelanguage-0.6.15-py3-none-any.whl", hash = "sha256:5a03ef86377aa184ffef3662ca28f19eeee158733e45d7947982eb953c6ebb6c"},
+    {file = "google_ai_generativelanguage-0.6.15.tar.gz", hash = "sha256:8f6d9dc4c12b065fe2d0289026171acea5183ebf2d0b11cefe12f3821e159ec3"},
+]
+
+[package.dependencies]
+google-api-core = {version = ">=1.34.1,<2.0.dev0 || >=2.11.dev0,<3.0.0.dev0", extras = ["grpc"]}
+google-auth = ">=2.14.1,<2.24.0 || >2.24.0,<2.25.0 || >2.25.0,<3.0.0.dev0"
+proto-plus = [
+    {version = ">=1.25.0,<2.0.0.dev0", markers = "python_version >= \"3.13\""},
+    {version = ">=1.22.3,<2.0.0.dev0", markers = "python_version < \"3.13\""},
+]
+protobuf = ">=3.20.2,<4.21.0 || >4.21.0,<4.21.1 || >4.21.1,<4.21.2 || >4.21.2,<4.21.3 || >4.21.3,<4.21.4 || >4.21.4,<4.21.5 || >4.21.5,<6.0.0.dev0"
+
+[[package]]
+name = "google-api-core"
+version = "2.25.2"
+description = "Google API client core library"
+optional = false
+python-versions = ">=3.7"
+groups = ["main"]
+markers = "python_version >= \"3.14\""
+files = [
+    {file = "google_api_core-2.25.2-py3-none-any.whl", hash = "sha256:e9a8f62d363dc8424a8497f4c2a47d6bcda6c16514c935629c257ab5d10210e7"},
+    {file = "google_api_core-2.25.2.tar.gz", hash = "sha256:1c63aa6af0d0d5e37966f157a77f9396d820fba59f9e43e9415bc3dc5baff300"},
+]
+
+[package.dependencies]
+google-auth = ">=2.14.1,<3.0.0"
+googleapis-common-protos = ">=1.56.2,<2.0.0"
+grpcio = {version = ">=1.49.1,<2.0.0", optional = true, markers = "python_version >= \"3.11\" and extra == \"grpc\""}
+grpcio-status = {version = ">=1.49.1,<2.0.0", optional = true, markers = "python_version >= \"3.11\" and extra == \"grpc\""}
+proto-plus = {version = ">=1.25.0,<2.0.0", markers = "python_version >= \"3.13\""}
+protobuf = ">=3.19.5,<3.20.0 || >3.20.0,<3.20.1 || >3.20.1,<4.21.0 || >4.21.0,<4.21.1 || >4.21.1,<4.21.2 || >4.21.2,<4.21.3 || >4.21.3,<4.21.4 || >4.21.4,<4.21.5 || >4.21.5,<7.0.0"
+requests = ">=2.18.0,<3.0.0"
+
+[package.extras]
+async-rest = ["google-auth[aiohttp] (>=2.35.0,<3.0.0)"]
+grpc = ["grpcio (>=1.33.2,<2.0.0)", "grpcio (>=1.49.1,<2.0.0) ; python_version >= \"3.11\"", "grpcio-status (>=1.33.2,<2.0.0)", "grpcio-status (>=1.49.1,<2.0.0) ; python_version >= \"3.11\""]
+grpcgcp = ["grpcio-gcp (>=0.2.2,<1.0.0)"]
+grpcio-gcp = ["grpcio-gcp (>=0.2.2,<1.0.0)"]
+
+[[package]]
 name = "google-api-core"
 version = "2.30.1"
 description = "Google API client core library"
-optional = true
+optional = false
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "extra == \"cloud-gcp-native\" or extra == \"runtime-local-gcp\""
+markers = "python_version <= \"3.13\""
 files = [
     {file = "google_api_core-2.30.1-py3-none-any.whl", hash = "sha256:3be893babbb54a89c6807b598383ddf212112130e3d24d06c681b5d18f082e08"},
     {file = "google_api_core-2.30.1.tar.gz", hash = "sha256:7304ef3bd7e77fd26320a36eeb75868f9339532bfea21694964f4765b37574ee"},
@@ -1450,17 +1498,11 @@ files = [
 [package.dependencies]
 google-auth = ">=2.14.1,<3.0.0"
 googleapis-common-protos = ">=1.63.2,<2.0.0"
-grpcio = [
-    {version = ">=1.49.1,<2.0.0", optional = true, markers = "python_version >= \"3.11\" and extra == \"grpc\""},
-    {version = ">=1.75.1,<2.0.0", optional = true, markers = "python_version >= \"3.14\" and extra == \"grpc\""},
-]
-grpcio-status = [
-    {version = ">=1.49.1,<2.0.0", optional = true, markers = "python_version >= \"3.11\" and extra == \"grpc\""},
-    {version = ">=1.75.1,<2.0.0", optional = true, markers = "python_version >= \"3.14\" and extra == \"grpc\""},
-]
+grpcio = {version = ">=1.49.1,<2.0.0", optional = true, markers = "python_version >= \"3.11\" and extra == \"grpc\" and python_version < \"3.14\""}
+grpcio-status = {version = ">=1.49.1,<2.0.0", optional = true, markers = "python_version >= \"3.11\" and extra == \"grpc\""}
 proto-plus = [
-    {version = ">=1.22.3,<2.0.0"},
     {version = ">=1.25.0,<2.0.0", markers = "python_version >= \"3.13\""},
+    {version = ">=1.22.3,<2.0.0"},
 ]
 protobuf = ">=4.25.8,<7.0.0"
 requests = ">=2.20.0,<3.0.0"
@@ -1470,13 +1512,31 @@ async-rest = ["google-auth[aiohttp] (>=2.35.0,<3.0.0)"]
 grpc = ["grpcio (>=1.33.2,<2.0.0)", "grpcio (>=1.49.1,<2.0.0) ; python_version >= \"3.11\"", "grpcio (>=1.75.1,<2.0.0) ; python_version >= \"3.14\"", "grpcio-status (>=1.33.2,<2.0.0)", "grpcio-status (>=1.49.1,<2.0.0) ; python_version >= \"3.11\"", "grpcio-status (>=1.75.1,<2.0.0) ; python_version >= \"3.14\""]
 
 [[package]]
+name = "google-api-python-client"
+version = "2.193.0"
+description = "Google API Client Library for Python"
+optional = false
+python-versions = ">=3.7"
+groups = ["main"]
+files = [
+    {file = "google_api_python_client-2.193.0-py3-none-any.whl", hash = "sha256:c42aa324b822109901cfecab5dc4fc3915d35a7b376835233c916c70610322db"},
+    {file = "google_api_python_client-2.193.0.tar.gz", hash = "sha256:8f88d16e89d11341e0a8b199cafde0fb7e6b44260dffb88d451577cbd1bb5d33"},
+]
+
+[package.dependencies]
+google-api-core = ">=1.31.5,<2.0.dev0 || >2.3.0,<3.0.0"
+google-auth = ">=1.32.0,<2.24.0 || >2.24.0,<2.25.0 || >2.25.0,<3.0.0"
+google-auth-httplib2 = ">=0.2.0,<1.0.0"
+httplib2 = ">=0.19.0,<1.0.0"
+uritemplate = ">=3.0.1,<5"
+
+[[package]]
 name = "google-auth"
 version = "2.49.1"
 description = "Google Authentication Library"
-optional = true
+optional = false
 python-versions = ">=3.8"
 groups = ["main"]
-markers = "extra == \"cloud-gcp-native\" or extra == \"runtime-local-gcp\""
 files = [
     {file = "google_auth-2.49.1-py3-none-any.whl", hash = "sha256:195ebe3dca18eddd1b3db5edc5189b76c13e96f29e73043b923ebcf3f1a860f7"},
     {file = "google_auth-2.49.1.tar.gz", hash = "sha256:16d40da1c3c5a0533f57d268fe72e0ebb0ae1cc3b567024122651c045d879b64"},
@@ -1497,6 +1557,22 @@ requests = ["requests (>=2.20.0,<3.0.0)"]
 rsa = ["rsa (>=3.1.4,<5)"]
 testing = ["aiohttp (<3.10.0)", "aiohttp (>=3.6.2,<4.0.0)", "aioresponses", "flask", "freezegun", "grpcio", "packaging", "pyjwt (>=2.0)", "pyopenssl (<24.3.0)", "pyopenssl (>=20.0.0)", "pytest", "pytest-asyncio", "pytest-cov", "pytest-localserver", "pyu2f (>=0.1.5)", "requests (>=2.20.0,<3.0.0)", "responses", "urllib3"]
 urllib3 = ["packaging", "urllib3"]
+
+[[package]]
+name = "google-auth-httplib2"
+version = "0.3.1"
+description = "Google Authentication Library: httplib2 transport"
+optional = false
+python-versions = ">=3.9"
+groups = ["main"]
+files = [
+    {file = "google_auth_httplib2-0.3.1-py3-none-any.whl", hash = "sha256:682356a90ef4ba3d06548c37e9112eea6fc00395a11b0303a644c1a86abc275c"},
+    {file = "google_auth_httplib2-0.3.1.tar.gz", hash = "sha256:0af542e815784cb64159b4469aa5d71dd41069ba93effa006e1916b1dcd88e55"},
+]
+
+[package.dependencies]
+google-auth = ">=1.32.0,<3.0.0"
+httplib2 = ">=0.19.0,<1.0.0"
 
 [[package]]
 name = "google-cloud-core"
@@ -1535,12 +1611,12 @@ files = [
 google-api-core = {version = ">=2.11.0,<3.0.0", extras = ["grpc"]}
 google-auth = ">=2.14.1,<2.24.0 || >2.24.0,<2.25.0 || >2.25.0,<3.0.0"
 grpcio = [
-    {version = ">=1.33.2,<2.0.0"},
     {version = ">=1.75.1,<2.0.0", markers = "python_version >= \"3.14\""},
+    {version = ">=1.33.2,<2.0.0"},
 ]
 proto-plus = [
-    {version = ">=1.22.3,<2.0.0"},
     {version = ">=1.25.0,<2.0.0", markers = "python_version >= \"3.13\""},
+    {version = ">=1.22.3,<2.0.0"},
 ]
 protobuf = ">=4.25.8,<8.0.0"
 
@@ -1612,6 +1688,30 @@ files = [
     {file = "google_crc32c-1.8.0-pp311-pypy311_pp73-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:f639065ea2042d5c034bf258a9f085eaa7af0cd250667c0635a3118e8f92c69c"},
     {file = "google_crc32c-1.8.0.tar.gz", hash = "sha256:a428e25fb7691024de47fecfbff7ff957214da51eddded0da0ae0e0f03a2cf79"},
 ]
+
+[[package]]
+name = "google-generativeai"
+version = "0.8.6"
+description = "Google Generative AI High level API client library and tools."
+optional = false
+python-versions = ">=3.9"
+groups = ["main"]
+files = [
+    {file = "google_generativeai-0.8.6-py3-none-any.whl", hash = "sha256:37a0eaaa95e5bbf888828e20a4a1b2c196cc9527d194706e58a68ff388aeb0fa"},
+]
+
+[package.dependencies]
+google-ai-generativelanguage = "0.6.15"
+google-api-core = "*"
+google-api-python-client = "*"
+google-auth = ">=2.15.0"
+protobuf = "*"
+pydantic = "*"
+tqdm = "*"
+typing-extensions = "*"
+
+[package.extras]
+dev = ["Pillow", "absl-py", "black", "ipython", "nose2", "pandas", "pytype", "pyyaml"]
 
 [[package]]
 name = "google-resumable-media"
@@ -1798,21 +1898,20 @@ protobuf = ["grpcio-tools (>=1.80.0)"]
 
 [[package]]
 name = "grpcio-status"
-version = "1.80.0"
+version = "1.71.2"
 description = "Status proto mapping for gRPC"
-optional = true
+optional = false
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "extra == \"cloud-gcp-native\""
 files = [
-    {file = "grpcio_status-1.80.0-py3-none-any.whl", hash = "sha256:4b56990363af50dbf2c2ebb80f1967185c07d87aa25aa2bea45ddb75fc181dbe"},
-    {file = "grpcio_status-1.80.0.tar.gz", hash = "sha256:df73802a4c89a3ea88aa2aff971e886fccce162bc2e6511408b3d67a144381cd"},
+    {file = "grpcio_status-1.71.2-py3-none-any.whl", hash = "sha256:803c98cb6a8b7dc6dbb785b1111aed739f241ab5e9da0bba96888aa74704cfd3"},
+    {file = "grpcio_status-1.71.2.tar.gz", hash = "sha256:c7a97e176df71cdc2c179cd1847d7fc86cca5832ad12e9798d7fed6b7a1aab50"},
 ]
 
 [package.dependencies]
 googleapis-common-protos = ">=1.5.5"
-grpcio = ">=1.80.0"
-protobuf = ">=6.31.1,<7.0.0"
+grpcio = ">=1.71.2"
+protobuf = ">=5.26.1,<6.0.dev0"
 
 [[package]]
 name = "h11"
@@ -1937,6 +2036,21 @@ asyncio = ["anyio (>=4.0,<5.0)"]
 http2 = ["h2 (>=3,<5)"]
 socks = ["socksio (==1.*)"]
 trio = ["trio (>=0.22.0,<1.0)"]
+
+[[package]]
+name = "httplib2"
+version = "0.31.2"
+description = "A comprehensive HTTP client library."
+optional = false
+python-versions = ">=3.6"
+groups = ["main"]
+files = [
+    {file = "httplib2-0.31.2-py3-none-any.whl", hash = "sha256:dbf0c2fa3862acf3c55c078ea9c0bc4481d7dc5117cae71be9514912cf9f8349"},
+    {file = "httplib2-0.31.2.tar.gz", hash = "sha256:385e0869d7397484f4eab426197a4c020b606edd43372492337c0b4010ae5d24"},
+]
+
+[package.dependencies]
+pyparsing = ">=3.1,<4"
 
 [[package]]
 name = "httptools"
@@ -2143,7 +2257,7 @@ description = "A library for installing Python wheels."
 optional = true
 python-versions = ">=3.7"
 groups = ["main"]
-markers = "python_version <= \"3.13\" and extra == \"parser-unstructured\""
+markers = "extra == \"parser-unstructured\" and python_version <= \"3.13\""
 files = [
     {file = "installer-0.7.0-py3-none-any.whl", hash = "sha256:05d1933f0a5ba7d8d6296bb6d5018e7c94fa473ceb10cf198a92ccea19c27b53"},
     {file = "installer-0.7.0.tar.gz", hash = "sha256:a26d3e3116289bb08216e0d0f7d925fcef0b0194eedfa0c944bcaaa106c4b631"},
@@ -2173,7 +2287,7 @@ files = [
     {file = "jinja2-3.1.6-py3-none-any.whl", hash = "sha256:85ece4451f492d0c13c5dd7c13a64681a86afae63a5f347908daf103ce6d2f67"},
     {file = "jinja2-3.1.6.tar.gz", hash = "sha256:0137fb05990d35f1275a587e9aee6d56da821fc83491a0fb838183be43f66d6d"},
 ]
-markers = {main = "(python_version <= \"3.13\" or extra == \"parser-docling\") and (extra == \"parser-docling\" or extra == \"parser-unstructured\")"}
+markers = {main = "(extra == \"parser-docling\" or extra == \"parser-unstructured\") and (extra == \"parser-docling\" or python_version <= \"3.13\")"}
 
 [package.dependencies]
 MarkupSafe = ">=2.0"
@@ -2830,7 +2944,7 @@ files = [
     {file = "markupsafe-3.0.3-cp39-cp39-win_arm64.whl", hash = "sha256:38664109c14ffc9e7437e86b4dceb442b0096dfe3541d7864d9cbe1da4cf36c8"},
     {file = "markupsafe-3.0.3.tar.gz", hash = "sha256:722695808f4b6457b320fdc131280796bdceb04ab50fe1795cd540799ebe1698"},
 ]
-markers = {main = "(python_version <= \"3.13\" or extra == \"parser-docling\") and (extra == \"parser-docling\" or extra == \"parser-unstructured\")"}
+markers = {main = "(extra == \"parser-docling\" or extra == \"parser-unstructured\") and (extra == \"parser-docling\" or python_version <= \"3.13\")"}
 
 [[package]]
 name = "marshmallow"
@@ -3110,7 +3224,7 @@ description = "Cython bindings for MurmurHash"
 optional = true
 python-versions = "<3.15,>=3.6"
 groups = ["main"]
-markers = "python_version <= \"3.13\" and extra == \"parser-unstructured\""
+markers = "extra == \"parser-unstructured\" and python_version <= \"3.13\""
 files = [
     {file = "murmurhash-1.0.15-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:f4989c16053a9a83b02c520dd00a31f0877d5fd2ab8a9b6b75ed9eba0e25c489"},
     {file = "murmurhash-1.0.15-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:899068ba3d7c371e7edd093852c634cce802fefd9aaddfcc0d2fda1d7433c7f9"},
@@ -3227,7 +3341,7 @@ files = [
     {file = "networkx-3.6.1-py3-none-any.whl", hash = "sha256:d47fbf302e7d9cbbb9e2555a0d267983d2aa476bac30e90dfbe5669bd57f3762"},
     {file = "networkx-3.6.1.tar.gz", hash = "sha256:26b7c357accc0c8cde558ad486283728b65b6a95d85ee1cd66bafab4c8168509"},
 ]
-markers = {main = "python_version <= \"3.13\" and extra == \"parser-docling\"", dev = "python_version <= \"3.13\""}
+markers = {main = "extra == \"parser-docling\" and python_version <= \"3.13\"", dev = "python_version <= \"3.13\""}
 
 [package.extras]
 benchmarking = ["asv", "virtualenv"]
@@ -3401,7 +3515,7 @@ files = [
     {file = "nvidia_cublas-13.1.0.3-py3-none-manylinux_2_27_x86_64.whl", hash = "sha256:ee8722c1f0145ab246bccb9e452153b5e0515fd094c3678df50b2a0888b8b171"},
     {file = "nvidia_cublas-13.1.0.3-py3-none-win_amd64.whl", hash = "sha256:2a3b94a37def342471c59fad7856caee4926809a72dd5270155d6a31b5b277be"},
 ]
-markers = {main = "python_version <= \"3.13\" and extra == \"parser-docling\" and platform_system == \"Linux\"", dev = "python_version <= \"3.13\" and platform_system == \"Linux\""}
+markers = {main = "extra == \"parser-docling\" and platform_system == \"Linux\" and python_version <= \"3.13\"", dev = "platform_system == \"Linux\" and python_version <= \"3.13\""}
 
 [[package]]
 name = "nvidia-cublas-cu12"
@@ -3429,7 +3543,7 @@ files = [
     {file = "nvidia_cuda_cupti-13.0.85-py3-none-manylinux_2_25_x86_64.whl", hash = "sha256:4eb01c08e859bf924d222250d2e8f8b8ff6d3db4721288cf35d14252a4d933c8"},
     {file = "nvidia_cuda_cupti-13.0.85-py3-none-win_amd64.whl", hash = "sha256:683f58d301548deeefcb8f6fac1b8d907691b9d8b18eccab417f51e362102f00"},
 ]
-markers = {main = "python_version <= \"3.13\" and extra == \"parser-docling\" and platform_system == \"Linux\" and (sys_platform == \"linux\" or sys_platform == \"win32\")", dev = "python_version <= \"3.13\" and platform_system == \"Linux\" and (sys_platform == \"linux\" or sys_platform == \"win32\")"}
+markers = {main = "extra == \"parser-docling\" and platform_system == \"Linux\" and (sys_platform == \"linux\" or sys_platform == \"win32\") and python_version <= \"3.13\"", dev = "platform_system == \"Linux\" and (sys_platform == \"linux\" or sys_platform == \"win32\") and python_version <= \"3.13\""}
 
 [[package]]
 name = "nvidia-cuda-cupti-cu12"
@@ -3459,7 +3573,7 @@ files = [
     {file = "nvidia_cuda_nvrtc-13.0.88-py3-none-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:d27f20a0ca67a4bb34268a5e951033496c5b74870b868bacd046b1b8e0c3267b"},
     {file = "nvidia_cuda_nvrtc-13.0.88-py3-none-win_amd64.whl", hash = "sha256:6bcd4e7f8e205cbe644f5a98f2f799bef9556fefc89dd786e79a16312ce49872"},
 ]
-markers = {main = "python_version <= \"3.13\" and extra == \"parser-docling\" and platform_system == \"Linux\" and (sys_platform == \"linux\" or sys_platform == \"win32\")", dev = "python_version <= \"3.13\" and platform_system == \"Linux\" and (sys_platform == \"linux\" or sys_platform == \"win32\")"}
+markers = {main = "extra == \"parser-docling\" and platform_system == \"Linux\" and (sys_platform == \"linux\" or sys_platform == \"win32\") and python_version <= \"3.13\"", dev = "platform_system == \"Linux\" and (sys_platform == \"linux\" or sys_platform == \"win32\") and python_version <= \"3.13\""}
 
 [[package]]
 name = "nvidia-cuda-nvrtc-cu12"
@@ -3487,7 +3601,7 @@ files = [
     {file = "nvidia_cuda_runtime-13.0.96-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:7f82250d7782aa23b6cfe765ecc7db554bd3c2870c43f3d1821f1d18aebf0548"},
     {file = "nvidia_cuda_runtime-13.0.96-py3-none-win_amd64.whl", hash = "sha256:f79298c8a098cec150a597c8eba58ecdab96e3bdc4b9bc4f9983635031740492"},
 ]
-markers = {main = "python_version <= \"3.13\" and extra == \"parser-docling\" and platform_system == \"Linux\" and (sys_platform == \"linux\" or sys_platform == \"win32\")", dev = "python_version <= \"3.13\" and platform_system == \"Linux\" and (sys_platform == \"linux\" or sys_platform == \"win32\")"}
+markers = {main = "extra == \"parser-docling\" and platform_system == \"Linux\" and (sys_platform == \"linux\" or sys_platform == \"win32\") and python_version <= \"3.13\"", dev = "platform_system == \"Linux\" and (sys_platform == \"linux\" or sys_platform == \"win32\") and python_version <= \"3.13\""}
 
 [[package]]
 name = "nvidia-cuda-runtime-cu12"
@@ -3534,7 +3648,7 @@ files = [
     {file = "nvidia_cudnn_cu13-9.19.0.56-py3-none-manylinux_2_27_x86_64.whl", hash = "sha256:d20e1734305e9d68889a96e3f35094d733ff1f83932ebe462753973e53a572bf"},
     {file = "nvidia_cudnn_cu13-9.19.0.56-py3-none-win_amd64.whl", hash = "sha256:40d8c375005bcb01495f8edf375230b203a411a0c05fb6dc92a3781edcb23eac"},
 ]
-markers = {main = "python_version <= \"3.13\" and extra == \"parser-docling\" and platform_system == \"Linux\"", dev = "python_version <= \"3.13\" and platform_system == \"Linux\""}
+markers = {main = "extra == \"parser-docling\" and platform_system == \"Linux\" and python_version <= \"3.13\"", dev = "platform_system == \"Linux\" and python_version <= \"3.13\""}
 
 [package.dependencies]
 nvidia-cublas = "*"
@@ -3551,7 +3665,7 @@ files = [
     {file = "nvidia_cufft-12.0.0.61-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:6c44f692dce8fd5ffd3e3df134b6cdb9c2f72d99cf40b62c32dde45eea9ddad3"},
     {file = "nvidia_cufft-12.0.0.61-py3-none-win_amd64.whl", hash = "sha256:2abce5b39d2f5ae12730fb7e5db6696533e36c26e2d3e8fd1750bdd2853364eb"},
 ]
-markers = {main = "python_version <= \"3.13\" and extra == \"parser-docling\" and platform_system == \"Linux\" and (sys_platform == \"linux\" or sys_platform == \"win32\")", dev = "python_version <= \"3.13\" and platform_system == \"Linux\" and (sys_platform == \"linux\" or sys_platform == \"win32\")"}
+markers = {main = "extra == \"parser-docling\" and platform_system == \"Linux\" and (sys_platform == \"linux\" or sys_platform == \"win32\") and python_version <= \"3.13\"", dev = "platform_system == \"Linux\" and (sys_platform == \"linux\" or sys_platform == \"win32\") and python_version <= \"3.13\""}
 
 [package.dependencies]
 nvidia-nvjitlink = "*"
@@ -3586,7 +3700,7 @@ files = [
     {file = "nvidia_cufile-1.15.1.6-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:08a3ecefae5a01c7f5117351c64f17c7c62efa5fffdbe24fc7d298da19cd0b44"},
     {file = "nvidia_cufile-1.15.1.6-py3-none-manylinux_2_27_aarch64.whl", hash = "sha256:bdc0deedc61f548bddf7733bdc216456c2fdb101d020e1ab4b88d232d5e2f6d1"},
 ]
-markers = {main = "python_version <= \"3.13\" and extra == \"parser-docling\" and platform_system == \"Linux\" and sys_platform == \"linux\"", dev = "python_version <= \"3.13\" and platform_system == \"Linux\" and sys_platform == \"linux\""}
+markers = {main = "extra == \"parser-docling\" and platform_system == \"Linux\" and sys_platform == \"linux\" and python_version <= \"3.13\"", dev = "platform_system == \"Linux\" and sys_platform == \"linux\" and python_version <= \"3.13\""}
 
 [[package]]
 name = "nvidia-cufile-cu12"
@@ -3613,7 +3727,7 @@ files = [
     {file = "nvidia_curand-10.4.0.35-py3-none-manylinux_2_27_x86_64.whl", hash = "sha256:1aee33a5da6e1db083fe2b90082def8915f30f3248d5896bcec36a579d941bfc"},
     {file = "nvidia_curand-10.4.0.35-py3-none-win_amd64.whl", hash = "sha256:65b1710aa6961d326b411e314b374290904c5ddf41dc3f766ebc3f1d7d4ca69f"},
 ]
-markers = {main = "python_version <= \"3.13\" and extra == \"parser-docling\" and platform_system == \"Linux\" and (sys_platform == \"linux\" or sys_platform == \"win32\")", dev = "python_version <= \"3.13\" and platform_system == \"Linux\" and (sys_platform == \"linux\" or sys_platform == \"win32\")"}
+markers = {main = "extra == \"parser-docling\" and platform_system == \"Linux\" and (sys_platform == \"linux\" or sys_platform == \"win32\") and python_version <= \"3.13\"", dev = "platform_system == \"Linux\" and (sys_platform == \"linux\" or sys_platform == \"win32\") and python_version <= \"3.13\""}
 
 [[package]]
 name = "nvidia-curand-cu12"
@@ -3643,7 +3757,7 @@ files = [
     {file = "nvidia_cusolver-12.0.4.66-py3-none-manylinux_2_27_x86_64.whl", hash = "sha256:0a759da5dea5c0ea10fd307de75cdeb59e7ea4fcb8add0924859b944babf1112"},
     {file = "nvidia_cusolver-12.0.4.66-py3-none-win_amd64.whl", hash = "sha256:16515bd33a8e76bb54d024cfa068fa68d30e80fc34b9e1090813ea9362e0cb65"},
 ]
-markers = {main = "python_version <= \"3.13\" and extra == \"parser-docling\" and platform_system == \"Linux\" and (sys_platform == \"linux\" or sys_platform == \"win32\")", dev = "python_version <= \"3.13\" and platform_system == \"Linux\" and (sys_platform == \"linux\" or sys_platform == \"win32\")"}
+markers = {main = "extra == \"parser-docling\" and platform_system == \"Linux\" and (sys_platform == \"linux\" or sys_platform == \"win32\") and python_version <= \"3.13\"", dev = "platform_system == \"Linux\" and (sys_platform == \"linux\" or sys_platform == \"win32\") and python_version <= \"3.13\""}
 
 [package.dependencies]
 nvidia-cublas = "*"
@@ -3683,7 +3797,7 @@ files = [
     {file = "nvidia_cusparse-12.6.3.3-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:2b3c89c88d01ee0e477cb7f82ef60a11a4bcd57b6b87c33f789350b59759360b"},
     {file = "nvidia_cusparse-12.6.3.3-py3-none-win_amd64.whl", hash = "sha256:cbcf42feb737bd7ec15b4c0a63e62351886bd3f975027b8815d7f720a2b5ea79"},
 ]
-markers = {main = "python_version <= \"3.13\" and extra == \"parser-docling\" and platform_system == \"Linux\" and (sys_platform == \"linux\" or sys_platform == \"win32\")", dev = "python_version <= \"3.13\" and platform_system == \"Linux\" and (sys_platform == \"linux\" or sys_platform == \"win32\")"}
+markers = {main = "extra == \"parser-docling\" and platform_system == \"Linux\" and (sys_platform == \"linux\" or sys_platform == \"win32\") and python_version <= \"3.13\"", dev = "platform_system == \"Linux\" and (sys_platform == \"linux\" or sys_platform == \"win32\") and python_version <= \"3.13\""}
 
 [package.dependencies]
 nvidia-nvjitlink = "*"
@@ -3733,7 +3847,7 @@ files = [
     {file = "nvidia_cusparselt_cu13-0.8.0-py3-none-manylinux2014_x86_64.whl", hash = "sha256:25e30a8a7323935d4ad0340b95a0b69926eee755767e8e0b1cf8dd85b197d3fd"},
     {file = "nvidia_cusparselt_cu13-0.8.0-py3-none-win_amd64.whl", hash = "sha256:e80212ed7b1afc97102fbb2b5c82487aa73f6a0edfa6d26c5a152593e520bb8f"},
 ]
-markers = {main = "python_version <= \"3.13\" and extra == \"parser-docling\" and platform_system == \"Linux\"", dev = "python_version <= \"3.13\" and platform_system == \"Linux\""}
+markers = {main = "extra == \"parser-docling\" and platform_system == \"Linux\" and python_version <= \"3.13\"", dev = "platform_system == \"Linux\" and python_version <= \"3.13\""}
 
 [[package]]
 name = "nvidia-nccl-cu12"
@@ -3759,7 +3873,7 @@ files = [
     {file = "nvidia_nccl_cu13-2.28.9-py3-none-manylinux_2_18_aarch64.whl", hash = "sha256:01c873ba1626b54caa12272ed228dc5b2781545e0ae8ba3f432a8ef1c6d78643"},
     {file = "nvidia_nccl_cu13-2.28.9-py3-none-manylinux_2_18_x86_64.whl", hash = "sha256:e4553a30f34195f3fa1da02a6da3d6337d28f2003943aa0a3d247bbc25fefc42"},
 ]
-markers = {main = "python_version <= \"3.13\" and extra == \"parser-docling\" and platform_system == \"Linux\"", dev = "python_version <= \"3.13\" and platform_system == \"Linux\""}
+markers = {main = "extra == \"parser-docling\" and platform_system == \"Linux\" and python_version <= \"3.13\"", dev = "platform_system == \"Linux\" and python_version <= \"3.13\""}
 
 [[package]]
 name = "nvidia-nvjitlink"
@@ -3773,7 +3887,7 @@ files = [
     {file = "nvidia_nvjitlink-13.0.88-py3-none-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:e931536ccc7d467a98ba1d8b89ff7fa7f1fa3b13f2b0069118cd7f47bff07d0c"},
     {file = "nvidia_nvjitlink-13.0.88-py3-none-win_amd64.whl", hash = "sha256:634e96e3da9ef845ae744097a1f289238ecf946ce0b82e93cdce14b9782e682f"},
 ]
-markers = {main = "python_version <= \"3.13\" and extra == \"parser-docling\" and platform_system == \"Linux\" and (sys_platform == \"linux\" or sys_platform == \"win32\")", dev = "python_version <= \"3.13\" and platform_system == \"Linux\" and (sys_platform == \"linux\" or sys_platform == \"win32\")"}
+markers = {main = "extra == \"parser-docling\" and platform_system == \"Linux\" and (sys_platform == \"linux\" or sys_platform == \"win32\") and python_version <= \"3.13\"", dev = "platform_system == \"Linux\" and (sys_platform == \"linux\" or sys_platform == \"win32\") and python_version <= \"3.13\""}
 
 [[package]]
 name = "nvidia-nvjitlink-cu12"
@@ -3800,7 +3914,7 @@ files = [
     {file = "nvidia_nvshmem_cu13-3.4.5-py3-none-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:6dc2a197f38e5d0376ad52cd1a2a3617d3cdc150fd5966f4aee9bcebb1d68fe9"},
     {file = "nvidia_nvshmem_cu13-3.4.5-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:290f0a2ee94c9f3687a02502f3b9299a9f9fe826e6d0287ee18482e78d495b80"},
 ]
-markers = {main = "python_version <= \"3.13\" and extra == \"parser-docling\" and platform_system == \"Linux\"", dev = "python_version <= \"3.13\" and platform_system == \"Linux\""}
+markers = {main = "extra == \"parser-docling\" and platform_system == \"Linux\" and python_version <= \"3.13\"", dev = "platform_system == \"Linux\" and python_version <= \"3.13\""}
 
 [[package]]
 name = "nvidia-nvtx"
@@ -3814,7 +3928,7 @@ files = [
     {file = "nvidia_nvtx-13.0.85-py3-none-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:cb7780edb6b14107373c835bf8b72e7a178bac7367e23da7acb108f973f157a6"},
     {file = "nvidia_nvtx-13.0.85-py3-none-win_amd64.whl", hash = "sha256:d66ea44254dd3c6eacc300047af6e1288d2269dd072b417e0adffbf479e18519"},
 ]
-markers = {main = "python_version <= \"3.13\" and extra == \"parser-docling\" and platform_system == \"Linux\" and (sys_platform == \"linux\" or sys_platform == \"win32\")", dev = "python_version <= \"3.13\" and platform_system == \"Linux\" and (sys_platform == \"linux\" or sys_platform == \"win32\")"}
+markers = {main = "extra == \"parser-docling\" and platform_system == \"Linux\" and (sys_platform == \"linux\" or sys_platform == \"win32\") and python_version <= \"3.13\"", dev = "platform_system == \"Linux\" and (sys_platform == \"linux\" or sys_platform == \"win32\") and python_version <= \"3.13\""}
 
 [[package]]
 name = "nvidia-nvtx-cu12"
@@ -4025,9 +4139,9 @@ files = [
 [package.dependencies]
 googleapis-common-protos = ">=1.57,<2.0"
 grpcio = [
-    {version = ">=1.63.2,<2.0.0", markers = "python_version < \"3.13\""},
-    {version = ">=1.66.2,<2.0.0", markers = "python_version == \"3.13\""},
     {version = ">=1.75.1,<2.0.0", markers = "python_version >= \"3.14\""},
+    {version = ">=1.66.2,<2.0.0", markers = "python_version == \"3.13\""},
+    {version = ">=1.63.2,<2.0.0", markers = "python_version < \"3.13\""},
 ]
 opentelemetry-api = ">=1.15,<2.0"
 opentelemetry-exporter-otlp-proto-common = "1.40.0"
@@ -4314,8 +4428,8 @@ markers = {main = "extra == \"parser-docling\""}
 
 [package.dependencies]
 numpy = [
-    {version = ">=1.26.0", markers = "python_version < \"3.14\""},
     {version = ">=2.3.3", markers = "python_version >= \"3.14\""},
+    {version = ">=1.26.0", markers = "python_version < \"3.14\""},
 ]
 python-dateutil = ">=2.8.2"
 tzdata = {version = "*", markers = "sys_platform == \"win32\" or sys_platform == \"emscripten\""}
@@ -4526,7 +4640,7 @@ description = "Cython hash table that trusts the keys are pre-hashed"
 optional = true
 python-versions = "<3.15,>=3.9"
 groups = ["main"]
-markers = "python_version <= \"3.13\" and extra == \"parser-unstructured\""
+markers = "extra == \"parser-unstructured\" and python_version <= \"3.13\""
 files = [
     {file = "preshed-3.0.13-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:42c58b07e8b431e33d0ad9922e896632453821cad8b09171b619b8c61101916f"},
     {file = "preshed-3.0.13-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:a06e27f4e5b9d7943840087828c6a0dae4a3475576d12c2e95b71abbb325a80b"},
@@ -4595,10 +4709,9 @@ murmurhash = ">=0.28.0,<1.1.0"
 name = "proto-plus"
 version = "1.27.2"
 description = "Beautiful, Pythonic protocol buffers"
-optional = true
+optional = false
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "extra == \"cloud-gcp-native\" or extra == \"runtime-local-gcp\""
 files = [
     {file = "proto_plus-1.27.2-py3-none-any.whl", hash = "sha256:6432f75893d3b9e70b9c412f1d2f03f65b11fb164b793d14ae2ca01821d22718"},
     {file = "proto_plus-1.27.2.tar.gz", hash = "sha256:b2adde53adadf75737c44d3dcb0104fde65250dfc83ad59168b4aa3e574b6a24"},
@@ -4612,22 +4725,23 @@ testing = ["google-api-core (>=1.31.5)"]
 
 [[package]]
 name = "protobuf"
-version = "6.33.6"
+version = "5.29.6"
 description = ""
 optional = false
-python-versions = ">=3.9"
+python-versions = ">=3.8"
 groups = ["main"]
 files = [
-    {file = "protobuf-6.33.6-cp310-abi3-win32.whl", hash = "sha256:7d29d9b65f8afef196f8334e80d6bc1d5d4adedb449971fefd3723824e6e77d3"},
-    {file = "protobuf-6.33.6-cp310-abi3-win_amd64.whl", hash = "sha256:0cd27b587afca21b7cfa59a74dcbd48a50f0a6400cfb59391340ad729d91d326"},
-    {file = "protobuf-6.33.6-cp39-abi3-macosx_10_9_universal2.whl", hash = "sha256:9720e6961b251bde64edfdab7d500725a2af5280f3f4c87e57c0208376aa8c3a"},
-    {file = "protobuf-6.33.6-cp39-abi3-manylinux2014_aarch64.whl", hash = "sha256:e2afbae9b8e1825e3529f88d514754e094278bb95eadc0e199751cdd9a2e82a2"},
-    {file = "protobuf-6.33.6-cp39-abi3-manylinux2014_s390x.whl", hash = "sha256:c96c37eec15086b79762ed265d59ab204dabc53056e3443e702d2681f4b39ce3"},
-    {file = "protobuf-6.33.6-cp39-abi3-manylinux2014_x86_64.whl", hash = "sha256:e9db7e292e0ab79dd108d7f1a94fe31601ce1ee3f7b79e0692043423020b0593"},
-    {file = "protobuf-6.33.6-cp39-cp39-win32.whl", hash = "sha256:bd56799fb262994b2c2faa1799693c95cc2e22c62f56fb43af311cae45d26f0e"},
-    {file = "protobuf-6.33.6-cp39-cp39-win_amd64.whl", hash = "sha256:f443a394af5ed23672bc6c486be138628fbe5c651ccbc536873d7da23d1868cf"},
-    {file = "protobuf-6.33.6-py3-none-any.whl", hash = "sha256:77179e006c476e69bf8e8ce866640091ec42e1beb80b213c3900006ecfba6901"},
-    {file = "protobuf-6.33.6.tar.gz", hash = "sha256:a6768d25248312c297558af96a9f9c929e8c4cee0659cb07e780731095f38135"},
+    {file = "protobuf-5.29.6-cp310-abi3-win32.whl", hash = "sha256:62e8a3114992c7c647bce37dcc93647575fc52d50e48de30c6fcb28a6a291eb1"},
+    {file = "protobuf-5.29.6-cp310-abi3-win_amd64.whl", hash = "sha256:7e6ad413275be172f67fdee0f43484b6de5a904cc1c3ea9804cb6fe2ff366eda"},
+    {file = "protobuf-5.29.6-cp38-abi3-macosx_10_9_universal2.whl", hash = "sha256:b5a169e664b4057183a34bdc424540e86eea47560f3c123a0d64de4e137f9269"},
+    {file = "protobuf-5.29.6-cp38-abi3-manylinux2014_aarch64.whl", hash = "sha256:a8866b2cff111f0f863c1b3b9e7572dc7eaea23a7fae27f6fc613304046483e6"},
+    {file = "protobuf-5.29.6-cp38-abi3-manylinux2014_x86_64.whl", hash = "sha256:e3387f44798ac1106af0233c04fb8abf543772ff241169946f698b3a9a3d3ab9"},
+    {file = "protobuf-5.29.6-cp38-cp38-win32.whl", hash = "sha256:36ade6ff88212e91aef4e687a971a11d7d24d6948a66751abc1b3238648f5d05"},
+    {file = "protobuf-5.29.6-cp38-cp38-win_amd64.whl", hash = "sha256:831e2da16b6cc9d8f1654c041dd594eda43391affd3c03a91bea7f7f6da106d6"},
+    {file = "protobuf-5.29.6-cp39-cp39-win32.whl", hash = "sha256:cb4c86de9cd8a7f3a256b9744220d87b847371c6b2f10bde87768918ef33ba49"},
+    {file = "protobuf-5.29.6-cp39-cp39-win_amd64.whl", hash = "sha256:76e07e6567f8baf827137e8d5b8204b6c7b6488bbbff1bf0a72b383f77999c18"},
+    {file = "protobuf-5.29.6-py3-none-any.whl", hash = "sha256:6b9edb641441b2da9fa8f428760fc136a49cf97a52076010cf22a2ff73438a86"},
+    {file = "protobuf-5.29.6.tar.gz", hash = "sha256:da9ee6a5424b6b30fd5e45c5ea663aef540ca95f9ad99d1e887e819cdf9b8723"},
 ]
 
 [[package]]
@@ -4670,10 +4784,9 @@ test = ["psleak", "pytest", "pytest-instafail", "pytest-xdist", "pywin32 ; os_na
 name = "pyasn1"
 version = "0.6.3"
 description = "Pure-Python implementation of ASN.1 types and DER/BER/CER codecs (X.208)"
-optional = true
+optional = false
 python-versions = ">=3.8"
 groups = ["main"]
-markers = "extra == \"cloud-gcp-native\" or extra == \"runtime-local-gcp\""
 files = [
     {file = "pyasn1-0.6.3-py3-none-any.whl", hash = "sha256:a80184d120f0864a52a073acc6fc642847d0be408e7c7252f31390c0f4eadcde"},
     {file = "pyasn1-0.6.3.tar.gz", hash = "sha256:697a8ecd6d98891189184ca1fa05d1bb00e2f84b5977c481452050549c8a72cf"},
@@ -4683,10 +4796,9 @@ files = [
 name = "pyasn1-modules"
 version = "0.4.2"
 description = "A collection of ASN.1-based protocols modules"
-optional = true
+optional = false
 python-versions = ">=3.8"
 groups = ["main"]
-markers = "extra == \"cloud-gcp-native\" or extra == \"runtime-local-gcp\""
 files = [
     {file = "pyasn1_modules-0.4.2-py3-none-any.whl", hash = "sha256:29253a9207ce32b64c3ac6600edc75368f98473906e8fd1043bd6b5b1de2c14a"},
     {file = "pyasn1_modules-0.4.2.tar.gz", hash = "sha256:677091de870a80aae844b1ca6134f54652fa2c8c5a52aa396440ac3106e941e6"},
@@ -4971,10 +5083,10 @@ markers = {main = "extra == \"parser-docling\""}
 name = "pycparser"
 version = "3.0"
 description = "C parser in Python"
-optional = true
+optional = false
 python-versions = ">=3.10"
 groups = ["main"]
-markers = "platform_python_implementation != \"PyPy\" and (extra == \"cloud-azure-native\" or extra == \"runtime-local-azure\" or extra == \"cloud-gcp-native\" or extra == \"runtime-local-gcp\" or extra == \"parser-unstructured\") and implementation_name != \"PyPy\""
+markers = "platform_python_implementation != \"PyPy\" and implementation_name != \"PyPy\""
 files = [
     {file = "pycparser-3.0-py3-none-any.whl", hash = "sha256:b727414169a36b7d524c1c3e31839a521725078d7b2ff038656844266160a992"},
     {file = "pycparser-3.0.tar.gz", hash = "sha256:600f49d217304a5902ac3c37e1281c9fe94e4d0489de643a9504c5cdfdfc6b29"},
@@ -5320,6 +5432,21 @@ pyobjc-core = ">=12.1"
 pyobjc-framework-Cocoa = ">=12.1"
 pyobjc-framework-CoreML = ">=12.1"
 pyobjc-framework-Quartz = ">=12.1"
+
+[[package]]
+name = "pyparsing"
+version = "3.3.2"
+description = "pyparsing - Classes and methods to define and execute parsing grammars"
+optional = false
+python-versions = ">=3.9"
+groups = ["main"]
+files = [
+    {file = "pyparsing-3.3.2-py3-none-any.whl", hash = "sha256:850ba148bd908d7e2411587e247a1e4f0327839c40e2e5e6d05a007ecc69911d"},
+    {file = "pyparsing-3.3.2.tar.gz", hash = "sha256:c777f4d763f140633dcb6d8a3eda953bf7a214dc4eff598413c070bcdc117cbc"},
+]
+
+[package.extras]
+diagrams = ["jinja2", "railroad-diagrams"]
 
 [[package]]
 name = "pypdf"
@@ -5697,10 +5824,10 @@ files = [
 grpcio = ">=1.41.0"
 httpx = {version = ">=0.20.0", extras = ["http2"]}
 numpy = [
+    {version = ">=2.3.0", markers = "python_version >= \"3.14\""},
+    {version = ">=2.1.0", markers = "python_version == \"3.13\""},
     {version = ">=1.21", markers = "python_version == \"3.11\""},
     {version = ">=1.26", markers = "python_version == \"3.12\""},
-    {version = ">=2.1.0", markers = "python_version == \"3.13\""},
-    {version = ">=2.3.0", markers = "python_version >= \"3.14\""},
 ]
 portalocker = ">=2.7.0,<4.0"
 protobuf = ">=3.20.0"
@@ -6375,7 +6502,7 @@ files = [
     {file = "setuptools-81.0.0-py3-none-any.whl", hash = "sha256:fdd925d5c5d9f62e4b74b30d6dd7828ce236fd6ed998a08d81de62ce5a6310d6"},
     {file = "setuptools-81.0.0.tar.gz", hash = "sha256:487b53915f52501f0a79ccfd0c02c165ffe06631443a886740b91af4b7a5845a"},
 ]
-markers = {main = "python_version <= \"3.13\" and (extra == \"parser-docling\" or extra == \"parser-tika\" or extra == \"parser-unstructured\")", dev = "python_version <= \"3.13\""}
+markers = {main = "(extra == \"parser-docling\" or extra == \"parser-tika\" or extra == \"parser-unstructured\") and python_version <= \"3.13\"", dev = "python_version <= \"3.13\""}
 
 [package.extras]
 check = ["pytest-checkdocs (>=2.4)", "pytest-ruff (>=0.2.1) ; sys_platform != \"cygwin\"", "ruff (>=0.13.0) ; sys_platform != \"cygwin\""]
@@ -6514,7 +6641,7 @@ description = "Utils for streaming large files (S3, HDFS, GCS, SFTP, Azure Blob 
 optional = true
 python-versions = "<4.0,>=3.10"
 groups = ["main"]
-markers = "python_version <= \"3.13\" and extra == \"parser-unstructured\""
+markers = "extra == \"parser-unstructured\" and python_version <= \"3.13\""
 files = [
     {file = "smart_open-7.5.1-py3-none-any.whl", hash = "sha256:3e07cbbd9c8a908bcb8e25d48becf1a5cbb4886fa975e9f34c672ed171df2318"},
     {file = "smart_open-7.5.1.tar.gz", hash = "sha256:3f08e16827c4733699e6b2cc40328a3568f900cb12ad9a3ad233ba6c872d9fe7"},
@@ -6554,7 +6681,7 @@ description = "Industrial-strength Natural Language Processing (NLP) in Python"
 optional = true
 python-versions = "<3.15,>=3.9"
 groups = ["main"]
-markers = "python_version <= \"3.13\" and extra == \"parser-unstructured\""
+markers = "extra == \"parser-unstructured\" and python_version <= \"3.13\""
 files = [
     {file = "spacy-3.8.14-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:4a06e5cc029910eaa4a3c5a0a997f07fed6a41aba46b05da9f58643bc06fe8b9"},
     {file = "spacy-3.8.14-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:1d1bdc25a8351023b42619513bac82c861a25f45bfa4476d7e9673b6f0a177d3"},
@@ -6643,7 +6770,7 @@ description = "Legacy registered functions for spaCy backwards compatibility"
 optional = true
 python-versions = ">=3.6"
 groups = ["main"]
-markers = "python_version <= \"3.13\" and extra == \"parser-unstructured\""
+markers = "extra == \"parser-unstructured\" and python_version <= \"3.13\""
 files = [
     {file = "spacy-legacy-3.0.12.tar.gz", hash = "sha256:b37d6e0c9b6e1d7ca1cf5bc7152ab64a4c4671f59c85adaf7a3fcb870357a774"},
     {file = "spacy_legacy-3.0.12-py2.py3-none-any.whl", hash = "sha256:476e3bd0d05f8c339ed60f40986c07387c0a71479245d6d0f4298dbd52cda55f"},
@@ -6656,7 +6783,7 @@ description = "Logging utilities for SpaCy"
 optional = true
 python-versions = ">=3.6"
 groups = ["main"]
-markers = "python_version <= \"3.13\" and extra == \"parser-unstructured\""
+markers = "extra == \"parser-unstructured\" and python_version <= \"3.13\""
 files = [
     {file = "spacy-loggers-1.0.5.tar.gz", hash = "sha256:d60b0bdbf915a60e516cc2e653baeff946f0cfc461b452d11a4d5458c6fe5f24"},
     {file = "spacy_loggers-1.0.5-py3-none-any.whl", hash = "sha256:196284c9c446cc0cdb944005384270d775fdeaf4f494d8e269466cfa497ef645"},
@@ -6771,7 +6898,7 @@ description = "Modern high-performance serialization utilities for Python"
 optional = true
 python-versions = "<3.15,>=3.9"
 groups = ["main"]
-markers = "python_version <= \"3.13\" and extra == \"parser-unstructured\""
+markers = "extra == \"parser-unstructured\" and python_version <= \"3.13\""
 files = [
     {file = "srsly-2.5.3-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:c812302a9acfe171e82f680b7ad642014cd017380b2c678441b3da4fb513c498"},
     {file = "srsly-2.5.3-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:91688edb1f49110870d2c215db2cf445f1763c14173698ead0818908c51fb2a1"},
@@ -6911,7 +7038,7 @@ description = "A refreshing functional take on deep learning, compatible with yo
 optional = true
 python-versions = "<3.15,>=3.10"
 groups = ["main"]
-markers = "python_version <= \"3.13\" and extra == \"parser-unstructured\""
+markers = "extra == \"parser-unstructured\" and python_version <= \"3.13\""
 files = [
     {file = "thinc-8.3.13-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:84fb50fe572a1860165f2e7a640c7cb70d43d6962366e69f643fa9a27e4a2127"},
     {file = "thinc-8.3.13-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:3dac18a0fb0a42f711c2ce9c02cbb090385aecae92089aa17b9dfd808a542013"},
@@ -7158,7 +7285,7 @@ files = [
     {file = "torch-2.11.0-cp314-cp314t-manylinux_2_28_x86_64.whl", hash = "sha256:563ed3d25542d7e7bbc5b235ccfacfeb97fb470c7fee257eae599adb8005c8a2"},
     {file = "torch-2.11.0-cp314-cp314t-win_amd64.whl", hash = "sha256:b2a43985ff5ef6ddd923bbcf99943e5f58059805787c5c9a2622bf05ca2965b0"},
 ]
-markers = {main = "python_version <= \"3.13\" and extra == \"parser-docling\"", dev = "python_version <= \"3.13\""}
+markers = {main = "extra == \"parser-docling\" and python_version <= \"3.13\"", dev = "python_version <= \"3.13\""}
 
 [package.dependencies]
 cuda-bindings = {version = ">=13.0.3,<14", markers = "platform_system == \"Linux\""}
@@ -7262,7 +7389,7 @@ files = [
     {file = "torchvision-0.26.0-cp314-cp314t-manylinux_2_28_x86_64.whl", hash = "sha256:8008474855623c6ba52876589dc52df0aa66e518c25eca841445348e5f79844c"},
     {file = "torchvision-0.26.0-cp314-cp314t-win_amd64.whl", hash = "sha256:e9d0e022c19a78552fb055d0414d47fecb4a649309b9968573daea160ba6869c"},
 ]
-markers = {main = "python_version <= \"3.13\" and extra == \"parser-docling\"", dev = "python_version <= \"3.13\""}
+markers = {main = "extra == \"parser-docling\" and python_version <= \"3.13\"", dev = "python_version <= \"3.13\""}
 
 [package.dependencies]
 numpy = "*"
@@ -7539,7 +7666,7 @@ files = [
     {file = "triton-3.6.0-cp314-cp314t-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:0b3a97e8ed304dfa9bd23bb41ca04cdf6b2e617d5e782a8653d616037a5d537d"},
     {file = "triton-3.6.0-cp314-cp314t-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:46bd1c1af4b6704e554cad2eeb3b0a6513a980d470ccfa63189737340c7746a7"},
 ]
-markers = {main = "python_version <= \"3.13\" and extra == \"parser-docling\" and platform_system == \"Linux\"", dev = "python_version <= \"3.13\" and platform_system == \"Linux\""}
+markers = {main = "extra == \"parser-docling\" and platform_system == \"Linux\" and python_version <= \"3.13\"", dev = "platform_system == \"Linux\" and python_version <= \"3.13\""}
 
 [package.extras]
 build = ["cmake (>=3.20,<4.0)", "lit"]
@@ -7687,7 +7814,7 @@ description = "A library that prepares raw documents for downstream ML tasks."
 optional = true
 python-versions = "<3.14,>=3.11"
 groups = ["main"]
-markers = "python_version <= \"3.13\" and extra == \"parser-unstructured\""
+markers = "extra == \"parser-unstructured\" and python_version <= \"3.13\""
 files = [
     {file = "unstructured-0.22.10-py3-none-any.whl", hash = "sha256:4043b567b78ebc5adda6d463b2211efa8bf339ba6a556ea4a5775581f565ad3a"},
     {file = "unstructured-0.22.10.tar.gz", hash = "sha256:4fb058312b4abf0c531255cb734a840e8f41cfbd78c1747102660675359ffb72"},
@@ -7764,6 +7891,18 @@ pydantic = ">=2.11.2"
 pypdf = ">=6.2.0"
 pypdfium2 = ">=5.0.0"
 requests-toolbelt = ">=1.0.0"
+
+[[package]]
+name = "uritemplate"
+version = "4.2.0"
+description = "Implementation of RFC 6570 URI Templates"
+optional = false
+python-versions = ">=3.9"
+groups = ["main"]
+files = [
+    {file = "uritemplate-4.2.0-py3-none-any.whl", hash = "sha256:962201ba1c4edcab02e60f9a0d3821e82dfc5d2d6662a21abd533879bdb8a686"},
+    {file = "uritemplate-4.2.0.tar.gz", hash = "sha256:480c2ed180878955863323eea31b0ede668795de182617fef9c6ca09e6ec9d0e"},
+]
 
 [[package]]
 name = "urllib3"
@@ -7913,7 +8052,7 @@ description = "A lightweight console printing and formatting toolkit"
 optional = true
 python-versions = ">=3.6"
 groups = ["main"]
-markers = "python_version <= \"3.13\" and extra == \"parser-unstructured\""
+markers = "extra == \"parser-unstructured\" and python_version <= \"3.13\""
 files = [
     {file = "wasabi-1.1.3-py3-none-any.whl", hash = "sha256:f76e16e8f7e79f8c4c8be49b4024ac725713ab10cd7f19350ad18a8e3f71728c"},
     {file = "wasabi-1.1.3.tar.gz", hash = "sha256:4bb3008f003809db0c3e28b4daf20906ea871a2bb43f9914197d540f4f2e0878"},
@@ -8051,7 +8190,7 @@ description = "Weasel: A small and easy workflow system"
 optional = true
 python-versions = ">=3.7"
 groups = ["main"]
-markers = "python_version <= \"3.13\" and extra == \"parser-unstructured\""
+markers = "extra == \"parser-unstructured\" and python_version <= \"3.13\""
 files = [
     {file = "weasel-1.0.0-py3-none-any.whl", hash = "sha256:89518acee027f49d743126c3502d35e6dd14f5768be5c37c9af47c171b6005cc"},
     {file = "weasel-1.0.0.tar.gz", hash = "sha256:7b129b44c90cc543b760532974ca1e4eb30dad2aa2026f57bdce66354ae610fc"},
@@ -8584,4 +8723,4 @@ runtime-local-gcp = ["google-cloud-storage"]
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.11"
-content-hash = "b0ea1d2008cbd5df944be20b6262bad2694c56d08c458c3cd15f1e45cb9eaf71"
+content-hash = "9e6bc7eea229eca6cf26e092ca0247a5bcf0f7670d773935be7bd2c2e6ee3a78"

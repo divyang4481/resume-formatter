@@ -1,9 +1,11 @@
 from pydantic_settings import BaseSettings
 
+
 class Settings(BaseSettings):
     """
     Application Settings configured via environment variables.
     """
+
     project_name: str = "Agentic Document Platform"
 
     # Cloud and Adapter Selection
@@ -22,9 +24,18 @@ class Settings(BaseSettings):
     parser_timeout_seconds: int = 45
 
     # LLM Settings
-    llm_backend: str = "local_ollama" # "aws_bedrock", "gcp_vertex", "azure_openai", "local_ollama"
-    llm_model_name: str = "llama3" # Default Ollama model. Override with Claude/Gemini/GPT for cloud.
-    ollama_endpoint: str = "http://localhost:11434/api/generate" # Default for local Ollama
+    llm_backend: str = (
+        "gemini"  # "aws_bedrock", "gcp_vertex", "azure_openai", "local_ollama", "gemini"
+    )
+    llm_model_name: str = (
+        "llama3"  # Default Ollama model. Override with Claude/Gemini/GPT for cloud.
+    )
+    ollama_endpoint: str = (
+        "http://localhost:11434/api/generate"  # Default for local Ollama
+    )
+    gemini_api_key: str = (
+        "AIzaSyDATSpLyeZOoU-7Yb4PicOl7NFTZXApAoY"  # Key for Google Gemini API
+    )
 
     # AWS Settings
     aws_region: str = "us-east-1"
@@ -40,7 +51,7 @@ class Settings(BaseSettings):
     azure_openai_api_version: str = "2024-02-15-preview"
 
     # Storage Settings
-    storage_backend: str = "local" # "local", "s3"
+    storage_backend: str = "local"  # "local", "s3"
     local_storage_path: str = "./data"
     s3_bucket: str = "agentic-document-platform-bucket"
 
@@ -49,5 +60,6 @@ class Settings(BaseSettings):
 
     class Config:
         env_file = ".env"
+
 
 settings = Settings()

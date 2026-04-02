@@ -14,17 +14,23 @@ def get_document_extraction_service() -> DocumentExtractionService:
 def get_llm_runtime() -> LlmRuntimeAdapter:
     """
     Dependency Factory to fetch the configured LLM runtime adapter.
-    Resolves to AWS Bedrock, Azure OpenAI, GCP Vertex AI, or Local Ollama.
+    Resolves to AWS Bedrock, Azure OpenAI, GCP Vertex AI, Local Ollama, or Gemini.
     """
-    # If the cloud environment is strictly local, force Ollama usage overrides
-    if settings.cloud.lower() == "local" or settings.llm_backend.lower() == "local_ollama":
+    backend = settings.llm_backend.lower()
+    
+    # Check if local overrides
+    if backend == "local_ollama" or (settings.cloud.lower() == "local" and backend not in ["gemini"]):
         from app.adapters.impls.local.llm_runtime import LocalOllamaLlmRuntime
         return LocalOllamaLlmRuntime(
             model_name=settings.llm_model_name,
             endpoint=settings.ollama_endpoint
         )
-
-    backend = settings.llm_backend.lower()
+    elif backend == "gemini":
+        from app.adapters.impls.local.gemini_runtime import GeminiLlmRuntime
+        return GeminiLlmRuntime(
+            api_key=settings.gemini_api_key,
+            model_name=settings.llm_model_name if settings.llm_model_name != "llama3" else "gemini-1.5-pro"
+        )
 
     if backend == "aws_bedrock":
         from app.adapters.impls.aws.llm_runtime import AwsBedrockLlmRuntime
