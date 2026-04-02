@@ -3,11 +3,13 @@ from enum import Enum
 
 class AssetStatus(str, Enum):
     DRAFT = "draft"
-    UNDER_REVIEW = "under_review"
-    APPROVED = "approved"
-    REJECTED = "rejected"
-    PUBLISHED = "published"
-    RETIRED = "retired"
+    ACTIVE = "active"
+    ARCHIVED = "archived"
+
+
+class ExecutionMode(str, Enum):
+    RECRUITER_RUNTIME = "recruiter_runtime"
+    ADMIN_TEMPLATE_TEST = "admin_template_test"
 
 
 class JobStatus(str, Enum):

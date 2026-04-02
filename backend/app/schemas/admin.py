@@ -12,6 +12,9 @@ class AssetUploadRequestMetadata(BaseModel):
     language: str = "en"
     tags: List[str] = Field(default_factory=list)
     version: str = "1.0.0"
+    notes: Optional[str] = None
+    selection_weight: int = 50
+    is_default_for_industry: bool = False
 
 class AssetUploadResponse(BaseModel):
     asset_id: str

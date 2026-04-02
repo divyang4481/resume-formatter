@@ -1,5 +1,6 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { Router } from '@angular/router';
 import { MatTableModule } from '@angular/material/table';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
@@ -103,6 +104,15 @@ import { TemplateUploadDialogComponent } from './template-upload-dialog/template
             </td>
           </ng-container>
 
+          <ng-container matColumnDef="actions">
+            <th mat-header-cell *matHeaderCellDef> Actions </th>
+            <td mat-cell *matCellDef="let element">
+               <button mat-icon-button color="primary" title="Edit/Test" (click)="viewTemplate(element.id)">
+                 <mat-icon>edit</mat-icon>
+               </button>
+            </td>
+          </ng-container>
+
           <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
           <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
         </table>
@@ -179,12 +189,12 @@ import { TemplateUploadDialogComponent } from './template-upload-dialog/template
 })
 export class TemplatesComponent implements OnInit {
   templates: TemplateAsset[] = [];
-  displayedColumns: string[] = ['id', 'name', 'industry', 'role_family', 'region', 'version', 'status'];
+  displayedColumns: string[] = ['id', 'name', 'industry', 'role_family', 'region', 'version', 'status', 'actions'];
 
   totalActive = 0;
   draftsPending = 0;
 
-  constructor(private adminService: AdminService, private dialog: MatDialog) {}
+  constructor(private adminService: AdminService, private dialog: MatDialog, private router: Router) {}
 
   ngOnInit() {
     this.loadTemplates();
@@ -228,5 +238,9 @@ export class TemplatesComponent implements OnInit {
         this.loadTemplates();
       }
     });
+  }
+
+  viewTemplate(id: string) {
+    this.router.navigate(['/admin/templates', id]);
   }
 }

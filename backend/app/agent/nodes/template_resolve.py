@@ -1,7 +1,9 @@
+import asyncio
 from app.agent.state import AgentState
 from app.adapters.base import LlmRuntimeAdapter
 from app.db.session import SessionLocal
 from app.adapters.repositories.template_repository import SqlAlchemyTemplateRepository
+from app.services.template_resolution_service import TemplateResolutionService
 
 def create_template_resolve_node(llm_runtime: LlmRuntimeAdapter):
     """
@@ -12,55 +14,34 @@ def create_template_resolve_node(llm_runtime: LlmRuntimeAdapter):
         print("Executing Template Resolution Node...")
 
         extracted_text = state.get("extracted_text", "")
+        mode = state.get("intent", "recruiter_runtime")
 
         # We can use the LLM to classify the document and choose the best template if not provided
         if state.get("selected_template_id"):
              print(f"Template already selected: {state['selected_template_id']}")
              return {"status": "template_resolved"}
 
-        # Fetch available templates from DB
+        # Use the shared TemplateResolutionService
         db = SessionLocal()
         try:
             repo = SqlAlchemyTemplateRepository(db)
-            available_templates = repo.list_templates({})
+            service = TemplateResolutionService(llm_runtime, repo)
 
-            if not available_templates:
-                template_options_str = "No templates available in database."
-                default_template = "general_cv_v1"
-            else:
-                options = []
-                for idx, t in enumerate(available_templates, 1):
-                    desc = f"for {t.industry} / {t.role_family}" if t.industry else (t.description or "general template")
-                    options.append(f"{idx}. {t.id} ({desc})")
-                template_options_str = "\n        ".join(options)
-                default_template = available_templates[0].id
-        finally:
-            db.close()
+            # Since LangGraph node is synchronous in our current implementation (using `def` not `async def` wrapper usually called by graph executor),
+            # but our service method is async.
+            # However `recommend_template` only does CPU blocking or synchronous requests if the adapter is sync.
+            # Let's run the async function
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                import nest_asyncio
+                nest_asyncio.apply()
 
-        prompt = f"""
-        Based on the following resume or document text, identify the industry and recommend
-        the best template ID for formatting it.
+            result = asyncio.run(service.recommend_template(
+                extracted_text=extracted_text,
+                mode=mode
+            ))
 
-        Available templates:
-        {template_options_str}
-
-        Document Text:
-        {extracted_text[:1500]} ... (truncated)
-
-        Respond ONLY with the exact Template ID from the list above that best fits this document.
-        """
-
-        try:
-            response_text = llm_runtime.generate(prompt=prompt, temperature=0.0).strip()
-
-            chosen_template = default_template
-            # Try to find a matching ID from the available templates
-            if available_templates:
-                for t in available_templates:
-                    if t.id in response_text:
-                        chosen_template = t.id
-                        break
-
+            chosen_template = result.suggested_template_id or "general_cv_v1"
             print(f"Resolved Template ID: {chosen_template}")
 
             return {
@@ -70,8 +51,10 @@ def create_template_resolve_node(llm_runtime: LlmRuntimeAdapter):
         except Exception as e:
             print(f"Error during template resolution: {e}")
             return {
-                "selected_template_id": default_template, # fallback
+                "selected_template_id": "general_cv_v1", # fallback
                 "status": "template_resolved_fallback"
             }
+        finally:
+            db.close()
 
     return template_resolve_node

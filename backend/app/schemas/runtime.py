@@ -1,6 +1,12 @@
 from pydantic import BaseModel, Field
-from typing import Optional
-from app.schemas.enums import JobStatus
+from typing import Optional, Literal
+from app.schemas.enums import JobStatus, ExecutionMode
+
+class ExecutionContext(BaseModel):
+    mode: ExecutionMode = ExecutionMode.RECRUITER_RUNTIME
+    actor_role: str = "recruiter"
+    template_id: Optional[str] = None
+    test_run_id: Optional[str] = None
 
 class SubmitDocumentResponse(BaseModel):
     document_id: str

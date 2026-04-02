@@ -6,9 +6,10 @@ from app.dependencies import (
     job_repository_dependency,
     llm_runtime_dependency,
     document_extraction_service_dependency,
-    message_queue_dependency
+    message_queue_dependency,
+    template_repository_dependency
 )
-from app.domain.interfaces import StorageProvider, JobRepository, DocumentExtractionService, ExtractionContext, MessageQueue
+from app.domain.interfaces import StorageProvider, JobRepository, DocumentExtractionService, MessageQueue, TemplateRepository
 from app.schemas.job import ProcessingJob
 from app.adapters.base import LlmRuntimeAdapter
 from app.agent.graph import build_workflow_graph
@@ -140,33 +141,41 @@ async def async_process_document_task(job_id: str, llm: LlmRuntimeAdapter, parse
         job.error_message = str(e)
         job_repo.save_job(job)
 
+from app.schemas.runtime import ExecutionContext
+from app.schemas.enums import ExecutionMode
+from app.services.template_resolution_service import TemplateResolutionService
+from app.domain.interfaces import ExtractionContext
+from app.db.session import SessionLocal
+from app.db.models import TemplateTestRun
+
 @router.post("/documents/submit", response_model=SubmitDocumentResponse)
 async def submit_document(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     industry_id: Optional[str] = Form(None),
     template_id: Optional[str] = Form(None),
-    x_processing_intent: str = Header("candidate_runtime", alias="X-Processing-Intent"),
-    x_admin_token: Optional[str] = Header(None, alias="X-Admin-Token"),
+    x_execution_mode: str = Header(ExecutionMode.RECRUITER_RUNTIME.value, alias="X-Execution-Mode"),
+    x_actor_role: str = Header("recruiter", alias="X-Actor-Role"),
     storage_provider: StorageProvider = Depends(storage_provider_dependency),
     job_repository: JobRepository = Depends(job_repository_dependency),
     llm_runtime: LlmRuntimeAdapter = Depends(llm_runtime_dependency),
     doc_parser_service: DocumentExtractionService = Depends(document_extraction_service_dependency),
-    message_queue: MessageQueue = Depends(message_queue_dependency)
+    message_queue: MessageQueue = Depends(message_queue_dependency),
+    template_repository: TemplateRepository = Depends(template_repository_dependency)
 ):
     """
     Accepts multipart upload for resume processing.
-    Supports intent-based processing (candidate_runtime vs admin_sample_resume).
+    Supports execution modes (recruiter_runtime vs admin_template_test).
     """
-    # Enforce role logic based on mock admin token
-    actor_role = "recruiter"
-    if x_admin_token == "admin-secret-token":
-        actor_role = "admin"
+    try:
+        execution_mode = ExecutionMode(x_execution_mode)
+    except ValueError:
+        raise HTTPException(status_code=400, detail=f"Invalid execution mode: {x_execution_mode}")
 
-    if x_processing_intent == "admin_sample_resume" and actor_role != "admin":
+    if execution_mode == ExecutionMode.ADMIN_TEMPLATE_TEST and template_id is None:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Forbidden: Admin access required for admin_sample_resume intent"
+            status_code=400,
+            detail="templateId is mandatory for admin_template_test mode"
         )
 
     if not file.filename:
@@ -200,7 +209,13 @@ async def submit_document(
 
     job_id = str(uuid.uuid4())
     filename = os.path.basename(file.filename)
-    storage_key = f"jobs/{job_id}/input/{filename}"
+
+    test_run_id = None
+    if execution_mode == ExecutionMode.ADMIN_TEMPLATE_TEST:
+        test_run_id = str(uuid.uuid4())
+        storage_key = f"templates/{template_id}/tests/{test_run_id}/input/{filename}"
+    else:
+        storage_key = f"jobs/{job_id}/input/{filename}"
 
     # Store file via storage provider
     storage_ref = storage_provider.put_bytes(storage_key, file_bytes)
@@ -215,29 +230,68 @@ async def submit_document(
         requires_confirmation = False
         job_status = JobStatus.CONFIRMED
     else:
-        # Suggest if not provided
-        suggested_industry_id = "it"
-        suggested_template_id = "tech-standard"
-        allowed_template_ids = ["tech-standard", "tech-executive"]
+        # Suggest if not provided using shared service
+        try:
+            # Synchronous extraction
+            extracted = await doc_parser_service.extract(
+                file_bytes=file_bytes,
+                filename=filename,
+                content_type=file.content_type,
+                context=ExtractionContext(intent=execution_mode.value, actor_role=x_actor_role)
+            )
+
+            # Use TemplateResolutionService
+            resolution_service = TemplateResolutionService(llm_runtime, template_repository)
+            rec_result = await resolution_service.recommend_template(
+                extracted_text=extracted.extracted_text,
+                industry_id=industry_id,
+                mode=execution_mode.value
+            )
+
+            suggested_industry_id = rec_result.suggested_industry_id
+            suggested_template_id = rec_result.suggested_template_id
+            allowed_template_ids = rec_result.allowed_template_ids
+        except Exception as e:
+            print(f"Failed to get LLM template recommendation: {e}")
+            # Fallback
+            suggested_industry_id = "it"
+            suggested_template_id = "general_cv_v1"
+            allowed_template_ids = ["general_cv_v1"]
 
     # Create job record
     job = ProcessingJob(
         id=job_id,
         status=job_status,
         original_file_ref=storage_ref,
-        created_by=actor_role,
+        created_by=x_actor_role,
         selected_template_id=template_id if not requires_confirmation else None,
         extension_metadata={
             "industry_id": industry_id if not requires_confirmation else None,
-            "intent": x_processing_intent,
-            "actor_role": actor_role,
+            "intent": execution_mode.value,
+            "actor_role": x_actor_role,
             "filename": filename,
-            "content_type": file.content_type
+            "content_type": file.content_type,
+            "test_run_id": test_run_id
         }
     )
 
     # Save job record
     job_repository.save_job(job)
+
+    # Create TemplateTestRun if in test mode
+    if execution_mode == ExecutionMode.ADMIN_TEMPLATE_TEST:
+        db = SessionLocal()
+        try:
+            test_run = TemplateTestRun(
+                id=test_run_id,
+                template_id=template_id,
+                processing_job_id=job_id,
+                created_by=x_actor_role
+            )
+            db.add(test_run)
+            db.commit()
+        finally:
+            db.close()
 
     if not requires_confirmation:
         # Enqueue job to the message queue instead of using BackgroundTasks in-memory

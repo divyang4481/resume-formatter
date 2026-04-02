@@ -86,17 +86,189 @@ async def pull_templates(
     templates = template_repository.list_templates({})
     return {"templates": [t.model_dump() for t in templates]}
 
+from typing import Optional
+from pydantic import BaseModel
+from sqlalchemy.orm import Session
+from app.db.session import SessionLocal
+from app.db.models import TemplateAsset, TemplateTestRun
+from app.services.template_publish_guard import TemplatePublishGuard
+
+class TemplateUpdateRequest(BaseModel):
+    name: Optional[str] = None
+    industry: Optional[str] = None
+    role_family: Optional[str] = None
+    language: Optional[str] = None
+    notes: Optional[str] = None
+    selection_weight: Optional[int] = None
+    is_default_for_industry: Optional[bool] = None
+
 @router.patch("/templates/{id}")
-async def update_template(id: str):
-    return {"message": "Template updated."}
+async def update_template(
+    id: str,
+    payload: TemplateUpdateRequest,
+    is_admin: bool = Depends(mock_is_admin)
+):
+    db = SessionLocal()
+    try:
+        template = db.query(TemplateAsset).filter(TemplateAsset.id == id).first()
+        if not template:
+            raise HTTPException(status_code=404, detail="Template not found")
+
+        update_data = payload.model_dump(exclude_unset=True)
+        for key, value in update_data.items():
+            setattr(template, key, value)
+
+        db.commit()
+        return {"message": "Template updated successfully"}
+    finally:
+        db.close()
+
+@router.get("/templates/{id}")
+async def get_template_detail(
+    id: str,
+    is_admin: bool = Depends(mock_is_admin)
+):
+    db = SessionLocal()
+    try:
+        template = db.query(TemplateAsset).filter(TemplateAsset.id == id).first()
+        if not template:
+            raise HTTPException(status_code=404, detail="Template not found")
+
+        latest_test_run = db.query(TemplateTestRun).filter(
+            TemplateTestRun.template_id == id
+        ).order_by(TemplateTestRun.created_at.desc()).first()
+
+        validation_result = {}
+        if latest_test_run and latest_test_run.validation_result_json:
+            validation_result = json.loads(latest_test_run.validation_result_json)
+
+        publish_check = TemplatePublishGuard.can_publish(template, latest_test_run, validation_result)
+
+        return {
+            "template": {
+                "id": template.id,
+                "name": template.name,
+                "status": template.status,
+                "notes": template.notes,
+                "selection_weight": template.selection_weight,
+                "industry": template.industry,
+                "language": template.language,
+                "role_family": template.role_family,
+                "updated_at": template.updated_at
+            },
+            "latest_test_run": {
+                "id": latest_test_run.id,
+                "decision": latest_test_run.decision,
+                "created_at": latest_test_run.created_at
+            } if latest_test_run else None,
+            "publish_eligibility": {
+                "can_publish": publish_check.can_publish,
+                "reason": publish_check.reason
+            }
+        }
+    finally:
+        db.close()
+
+@router.get("/templates/{id}/test-runs")
+async def list_template_test_runs(
+    id: str,
+    is_admin: bool = Depends(mock_is_admin)
+):
+    db = SessionLocal()
+    try:
+        runs = db.query(TemplateTestRun).filter(TemplateTestRun.template_id == id).order_by(TemplateTestRun.created_at.desc()).all()
+        return {"test_runs": [
+            {
+                "id": r.id,
+                "job_id": r.processing_job_id,
+                "decision": r.decision,
+                "created_at": r.created_at,
+                "reviewed_at": r.reviewed_at
+            } for r in runs
+        ]}
+    finally:
+        db.close()
+
+class TestRunReviewRequest(BaseModel):
+    decision: str
+    review_notes: Optional[str] = None
+    update_template_notes: bool = False
+    template_notes: Optional[str] = None
+
+@router.post("/templates/{templateId}/test-runs/{testRunId}/review")
+async def review_test_run(
+    templateId: str,
+    testRunId: str,
+    payload: TestRunReviewRequest,
+    is_admin: bool = Depends(mock_is_admin)
+):
+    from datetime import datetime
+    db = SessionLocal()
+    try:
+        test_run = db.query(TemplateTestRun).filter(TemplateTestRun.id == testRunId, TemplateTestRun.template_id == templateId).first()
+        if not test_run:
+            raise HTTPException(status_code=404, detail="Test run not found")
+
+        test_run.decision = payload.decision
+        test_run.review_notes = payload.review_notes
+        test_run.reviewed_at = datetime.utcnow()
+
+        if payload.update_template_notes and payload.template_notes:
+            template = db.query(TemplateAsset).filter(TemplateAsset.id == templateId).first()
+            if template:
+                template.notes = payload.template_notes
+
+        db.commit()
+        return {"message": "Review saved successfully"}
+    finally:
+        db.close()
 
 @router.post("/templates/{id}/publish")
-async def publish_template(id: str):
-    return {"message": f"Template {id} published."}
+async def publish_template(
+    id: str,
+    is_admin: bool = Depends(mock_is_admin)
+):
+    db = SessionLocal()
+    try:
+        template = db.query(TemplateAsset).filter(TemplateAsset.id == id).first()
+        if not template:
+            raise HTTPException(status_code=404, detail="Template not found")
 
-@router.post("/templates/{id}/deprecate")
-async def deprecate_template(id: str):
-    return {"message": f"Template {id} deprecated."}
+        latest_test_run = db.query(TemplateTestRun).filter(
+            TemplateTestRun.template_id == id
+        ).order_by(TemplateTestRun.created_at.desc()).first()
+
+        validation_result = {}
+        if latest_test_run and latest_test_run.validation_result_json:
+            validation_result = json.loads(latest_test_run.validation_result_json)
+
+        publish_check = TemplatePublishGuard.can_publish(template, latest_test_run, validation_result)
+
+        if not publish_check.can_publish:
+            raise HTTPException(status_code=400, detail=publish_check.reason)
+
+        template.status = AssetStatus.ACTIVE.value
+        db.commit()
+        return {"message": f"Template {id} published.", "status": template.status}
+    finally:
+        db.close()
+
+@router.post("/templates/{id}/archive")
+async def archive_template(
+    id: str,
+    is_admin: bool = Depends(mock_is_admin)
+):
+    db = SessionLocal()
+    try:
+        template = db.query(TemplateAsset).filter(TemplateAsset.id == id).first()
+        if not template:
+            raise HTTPException(status_code=404, detail="Template not found")
+
+        template.status = AssetStatus.ARCHIVED.value
+        db.commit()
+        return {"message": f"Template {id} archived.", "status": template.status}
+    finally:
+        db.close()
 
 @router.post("/knowledge")
 async def manage_knowledge():
