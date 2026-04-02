@@ -11,8 +11,21 @@ def create_app() -> FastAPI:
     Bootstraps the FastAPI application.
     Integrates all API routes and core configurations.
     """
+    from contextlib import asynccontextmanager
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        if settings.cloud == "local":
+            from app.db.session import engine
+            from app.db.models import Base
+            # Initialize DB tables locally
+            Base.metadata.create_all(bind=engine)
+            print("Local database initialized")
+        yield
+
     from fastapi.middleware.cors import CORSMiddleware
     app = FastAPI(
+        lifespan=lifespan,
         title=settings.project_name,
         description="A Template-aware, privacy-governed, agentic document processing platform",
         version="1.0.0",
