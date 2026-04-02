@@ -122,9 +122,15 @@
       <mat-card>
         <mat-card-content>
           <div *ngIf="testRuns.length === 0">No test runs found.</div>
-          <div *ngFor="let run of testRuns" class="run-item">
-            <strong>Date:</strong> {{ run.created_at | date }} |
-            <strong>Decision:</strong> {{ run.decision || 'PENDING' }}
+          <div *ngFor="let run of testRuns" class="run-item" style="margin-bottom: 12px; display: flex; align-items: center; gap: 12px;">
+            <div>
+              <strong>Date:</strong> {{ run.created_at | date }} |
+              <strong>Decision:</strong> {{ run.decision || 'PENDING' }}
+            </div>
+            <div *ngIf="!run.decision" class="review-actions" style="display: flex; gap: 8px;">
+              <button mat-stroked-button color="primary" (click)="reviewTestRun(run.id, 'PASS')">Mark as PASS</button>
+              <button mat-stroked-button color="warn" (click)="reviewTestRun(run.id, 'FAIL')">Mark as FAIL</button>
+            </div>
           </div>
         </mat-card-content>
       </mat-card>

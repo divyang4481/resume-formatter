@@ -170,6 +170,18 @@ export class TemplateDetailComponent implements OnInit {
     });
   }
 
+  reviewTestRun(testRunId: string, decision: string) {
+    const payload = {
+      decision: decision,
+      review_notes: '',
+      update_template_notes: false
+    };
+    this.templateApi.saveTestReview(this.templateId, testRunId, payload).subscribe(() => {
+      this.loadTestRuns();
+      this.loadTemplate(); // reload template to update publish eligibility
+    });
+  }
+
   publish() {
     this.templateApi.publishTemplate(this.templateId).subscribe(() => {
       this.loadTemplate();
