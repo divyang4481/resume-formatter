@@ -8,11 +8,18 @@ class Settings(BaseSettings):
 
     # Cloud and Adapter Selection
     cloud: str = "local"  # "aws", "azure", "gcp", "ibm", "local"
-    document_extractor_backend: str = "local_parser"
-    document_extractor_fallback: str = "tika"
-    ocr_backend: str = "local"
-    docx_parser_backend: str = "local"
-    enable_multi_backend_routing: bool = False
+
+    # Document Parsing Routing & Thresholds
+    document_parser_primary_pdf: str = "docling"
+    document_parser_fallback_pdf: str = "tika"
+    document_parser_primary_docx: str = "docling"
+    document_parser_fallback_docx: str = "tika"
+
+    # Thresholds for parsing confidence & routing
+    parser_min_text_chars: int = 300
+    parser_min_section_count: int = 3
+    parser_min_confidence: float = 0.65
+    parser_timeout_seconds: int = 45
 
     # LLM Settings
     llm_backend: str = "local_ollama" # "aws_bedrock", "gcp_vertex", "azure_openai", "local_ollama"
