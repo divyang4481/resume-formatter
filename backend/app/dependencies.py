@@ -117,12 +117,6 @@ def llm_runtime_dependency() -> LlmRuntimeAdapter:
 from app.domain.interfaces import StorageProvider, JobRepository
 from app.adapters.storage.local_storage import LocalStorageProvider
 
-def get_storage_provider() -> StorageProvider:
-    # Factory to get storage provider. Defaulting to local storage for now.
-    return LocalStorageProvider(base_path=settings.data_dir if hasattr(settings, 'data_dir') else "./data")
-
-def storage_provider_dependency() -> StorageProvider:
-    return get_storage_provider()
 
 
 from app.domain.interfaces import KnowledgeIndex
@@ -172,6 +166,15 @@ def get_validation_repository(db: Session = Depends(get_db_session)):
 
 def storage_provider_dependency() -> StorageProvider:
     return get_storage_provider()
+
+from app.domain.interfaces import MessageQueue
+def get_message_queue(db: Session = Depends(get_db_session)) -> MessageQueue:
+    from app.adapters.impls.local.local_queue import SqlAlchemyMessageQueue
+    return SqlAlchemyMessageQueue(db=db)
+
+def message_queue_dependency(queue: MessageQueue = Depends(get_message_queue)) -> MessageQueue:
+    return queue
+
 
 _local_event_bus = None
 def get_event_bus() -> EventBus:

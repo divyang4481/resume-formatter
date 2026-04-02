@@ -119,6 +119,16 @@ class TemplateKnowledgeBinding(Base):
     binding_reason = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
+class LocalQueueMessage(Base):
+    __tablename__ = "local_queue_messages"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    queue_name = Column(String, index=True, nullable=False)
+    payload_json = Column(Text, nullable=False)
+    status = Column(String, default="pending", index=True) # pending, processing, completed, failed
+    created_at = Column(DateTime, default=datetime.utcnow)
+    processed_at = Column(DateTime, nullable=True)
+
 class AuditEvent(Base):
     __tablename__ = "audit_events"
 
