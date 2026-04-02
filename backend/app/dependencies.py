@@ -29,7 +29,7 @@ def get_llm_runtime() -> LlmRuntimeAdapter:
         from app.adapters.impls.local.gemini_runtime import GeminiLlmRuntime
         return GeminiLlmRuntime(
             api_key=settings.gemini_api_key,
-            model_name=settings.llm_model_name if settings.llm_model_name != "llama3" else "gemini-1.5-pro"
+            model_name=settings.llm_model_name if settings.llm_model_name != "llama3" else "gemini-2.0-flash"
         )
 
     if backend == "aws_bedrock":

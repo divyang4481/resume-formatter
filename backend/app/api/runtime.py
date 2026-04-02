@@ -257,6 +257,12 @@ async def submit_document(
             suggested_industry_id = "it"
             suggested_template_id = "general_cv_v1"
             allowed_template_ids = ["general_cv_v1"]
+        
+        # FORCET: Automatically accept suggestions and move to processing
+        requires_confirmation = False
+        job_status = JobStatus.CONFIRMED
+        template_id = suggested_template_id
+        industry_id = suggested_industry_id
 
     # Create job record
     job = ProcessingJob(
@@ -325,7 +331,7 @@ async def get_job_status(
     return RuntimeJobStatusResponse(
         job_id=job.id,
         status=job.status,
-        original_file_ref="unknown" # Simplistic stub since original_file_ref is not on ProcessingJob model directly
+        original_file_ref=getattr(job, "original_file_ref", "unknown")
     )
 
 @router.post("/documents/{id}/confirm")

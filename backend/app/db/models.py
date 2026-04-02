@@ -57,6 +57,7 @@ class ProcessingJob(Base):
 
     id = Column(String, primary_key=True, index=True)
     candidate_resume_id = Column(String, ForeignKey("candidate_resumes.id"), nullable=False)
+    original_file_ref = Column(String, nullable=True)
     template_asset_id = Column(String, ForeignKey("template_assets.id"), nullable=True)
     template_version = Column(String, nullable=True)
     status = Column(String, nullable=False)

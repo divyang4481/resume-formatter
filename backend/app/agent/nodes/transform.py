@@ -11,6 +11,8 @@ def create_transform_node(llm_runtime: LlmRuntimeAdapter):
 
         extracted_text = state.get("extracted_text", "")
         template_id = state.get("selected_template_id", "default")
+        
+        print(f"Transforming text (Length: {len(extracted_text)} chars) using template: {template_id}")
 
         # In a real app, you'd fetch the schema/template rules from a database/registry
         # Here we mock it.
@@ -45,18 +47,28 @@ def create_transform_node(llm_runtime: LlmRuntimeAdapter):
         try:
             # Call the injected LLM runtime adapter
             response_text = llm_runtime.generate(prompt=prompt, temperature=0.1)
+            
+            if not response_text.strip():
+                print("LLM returned empty response!")
 
-            # Simple cleanup to remove potential markdown fences
-            if response_text.startswith("```json"):
-                response_text = response_text[7:]
-            if response_text.endswith("```"):
-                response_text = response_text[:-3]
+            # Smarter cleanup for JSON blocks
+            cleaned_text = response_text.strip()
+            if "```json" in cleaned_text:
+                cleaned_text = cleaned_text.split("```json")[1].split("```")[0].strip()
+            elif "```" in cleaned_text:
+                cleaned_text = cleaned_text.split("```")[1].split("```")[0].strip()
+            
+            # Remove any leading/trailing text outside the first { and last }
+            start_index = cleaned_text.find('{')
+            end_index = cleaned_text.rfind('}')
+            if start_index != -1 and end_index != -1:
+                cleaned_text = cleaned_text[start_index:end_index+1]
 
             # Validate it's actually JSON
-            json.loads(response_text)
+            json.loads(cleaned_text)
 
             return {
-                "transformed_document_json": response_text.strip(),
+                "transformed_document_json": cleaned_text.strip(),
                 "status": "transformed"
             }
         except Exception as e:

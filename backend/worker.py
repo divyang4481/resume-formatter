@@ -33,6 +33,11 @@ async def run_worker():
                     print(f"Worker successfully processed job_id: {job_id}")
                 except Exception as e:
                     print(f"Worker failed processing job_id: {job_id} with error: {e}")
+                    job = job_repository.get_job(job_id)
+                    if job:
+                        job.status = "failed"
+                        job.error_message = str(e)
+                        job_repository.save_job(job)
             else:
                 # Sleep briefly if queue is empty
                 await asyncio.sleep(2)

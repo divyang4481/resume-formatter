@@ -34,10 +34,17 @@ class LocalOllamaLlmRuntime(LlmRuntimeAdapter):
 
         try:
             with httpx.Client() as client:
-                response = client.post(self.endpoint, json=payload, timeout=120.0)
-                response.raise_for_status()
+                response = client.post(self.endpoint, json=payload, timeout=180.0)
+                
+                if response.status_code != 200:
+                    raise RuntimeError(f"Ollama returned status code {response.status_code}: {response.text}")
+
                 data = response.json()
-                return data.get("response", "").strip()
+                result_text = data.get("response", "").strip()
+                return result_text
 
         except httpx.RequestError as exc:
              raise RuntimeError(f"An error occurred while requesting {exc.request.url!r}. Ensure Ollama is running.") from exc
+        except Exception as e:
+             print(f"Exception during Ollama generation: {e}")
+             raise e

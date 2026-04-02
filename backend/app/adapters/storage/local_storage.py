@@ -11,6 +11,10 @@ class LocalStorageProvider(StorageProvider):
 
     def _get_full_path(self, key: str) -> Path:
         """Helper to resolve the key into a local file path."""
+        # Handle URIs by stripping protocol
+        if key.startswith("local://"):
+            key = key[8:]
+        
         path = self.base_path / key
         path.parent.mkdir(parents=True, exist_ok=True)
         return path

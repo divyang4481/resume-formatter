@@ -14,11 +14,14 @@ class DoclingParser(DocumentParser):
             from docling.document_converter import DocumentConverter
             self.converter = DocumentConverter()
 
-        # Docling primarily works with files on disk, so we use a temp file
         ext = os.path.splitext(file_name)[1]
+        # On Windows, we must close the file before Docling can open it
         with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tmp:
             tmp.write(file_bytes)
+            tmp.flush()
             tmp_path = tmp.name
+        
+        # Now that it's closed and flushed, Docling can open it safely
 
         try:
             # Note: Docling processing is CPU bound, might want to run in an executor in real production
