@@ -34,14 +34,34 @@ export class RuntimeApiService {
     return this.http.get<{ templates: Template[] }>(`${this.apiUrl}/lookups/templates`, { params });
   }
 
-  submitDocument(file: File, industry: string, templateId: string, candidateName: string): Observable<{ job_id: string, session_id: string, message: string }> {
+  submitDocument(
+    file: File,
+    industry?: string | null,
+    templateId?: string | null
+  ): Observable<{
+    documentId: string,
+    jobId: string,
+    status: string,
+    requiresConfirmation: boolean,
+    suggestedIndustryId?: string,
+    suggestedTemplateId?: string,
+    providedIndustryId?: string,
+    providedTemplateId?: string,
+    message: string
+  }> {
     const formData = new FormData();
     formData.append('file', file);
-    formData.append('industry', industry);
-    formData.append('template_id', templateId);
-    formData.append('candidate_name', candidateName);
+    if (industry) formData.append('industry', industry);
+    if (templateId) formData.append('template_id', templateId);
 
-    return this.http.post<{ job_id: string, session_id: string, message: string }>(`${this.apiUrl}/documents/submit`, formData);
+    return this.http.post<any>(`${this.apiUrl}/documents/submit`, formData);
+  }
+
+  confirmDocument(documentId: string, industry: string, templateId: string): Observable<any> {
+    return this.http.post<any>(`${this.apiUrl}/documents/${documentId}/confirm`, {
+      industry,
+      template_id: templateId
+    });
   }
 
   getJobStatus(jobId: string): Observable<any> {

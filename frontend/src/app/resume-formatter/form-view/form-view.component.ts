@@ -1,5 +1,5 @@
-import { Component, OnInit, ViewChild, ElementRef } from '@angular/core';
-import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
+import { Component, OnInit, ViewChild, ElementRef, effect } from '@angular/core';
+import { FormBuilder, FormGroup, ReactiveFormsModule } from '@angular/forms';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatButtonModule } from '@angular/material/button';
@@ -39,9 +39,17 @@ export class FormViewComponent implements OnInit {
     public docService: DocumentProcessingService
   ) {
     this.form = this.fb.group({
-      candidateName: ['', Validators.required],
-      industry: ['', Validators.required],
-      templateId: ['', Validators.required]
+      industry: [{ value: '', disabled: true }],
+      templateId: [{ value: '', disabled: true }]
+    });
+
+    effect(() => {
+      if (this.docService.status() === 'waiting_for_confirmation') {
+        this.form.patchValue({
+          industry: this.docService.suggestedIndustryId(),
+          templateId: this.docService.suggestedTemplateId()
+        });
+      }
     });
   }
 
@@ -50,7 +58,9 @@ export class FormViewComponent implements OnInit {
     this.docService.loadTemplates();
 
     this.form.get('industry')?.valueChanges.subscribe(industryId => {
-      this.docService.loadTemplates(industryId);
+      if (industryId) {
+        this.docService.loadTemplates(industryId);
+      }
     });
   }
 
@@ -58,6 +68,8 @@ export class FormViewComponent implements OnInit {
     const file = event.target.files[0];
     if (file) {
       this.selectedFile = file;
+      this.form.get('industry')?.enable();
+      this.form.get('templateId')?.enable();
     }
   }
 
@@ -66,14 +78,22 @@ export class FormViewComponent implements OnInit {
   }
 
   processCV(): void {
-    if (this.form.valid && this.selectedFile) {
-      const vals = this.form.value;
-      this.docService.submitDocument(
-        this.selectedFile,
-        vals.industry,
-        vals.templateId,
-        vals.candidateName
-      );
+    if (this.selectedFile) {
+      const vals = this.form.getRawValue(); // gets values even if disabled/enabled
+
+      if (this.docService.status() === 'waiting_for_confirmation') {
+        // User confirming the suggested or modified values
+        if (vals.industry && vals.templateId) {
+          this.docService.confirmDocument(vals.industry, vals.templateId);
+        }
+      } else {
+        // Initial submission
+        this.docService.submitDocument(
+          this.selectedFile,
+          vals.industry || null,
+          vals.templateId || null
+        );
+      }
     }
   }
 

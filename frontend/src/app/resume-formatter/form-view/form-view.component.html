@@ -8,12 +8,7 @@
 
     <form class="cv-form" [formGroup]="form">
       <mat-form-field appearance="outline" class="full-width">
-        <mat-label>Candidate Name</mat-label>
-        <input matInput placeholder="John Doe" formControlName="candidateName">
-      </mat-form-field>
-
-      <mat-form-field appearance="outline" class="full-width">
-        <mat-label>Target Industry</mat-label>
+        <mat-label>Target Industry (Optional)</mat-label>
         <mat-select formControlName="industry">
           <mat-option *ngFor="let ind of docService.industries()" [value]="ind.id">
             {{ind.name}}
@@ -22,7 +17,7 @@
       </mat-form-field>
 
       <mat-form-field appearance="outline" class="full-width">
-        <mat-label>Template</mat-label>
+        <mat-label>Template (Optional)</mat-label>
         <mat-select formControlName="templateId">
           <mat-option *ngFor="let tpl of docService.templates()" [value]="tpl.id">
             {{tpl.name}}
@@ -39,7 +34,11 @@
       </div>
 
       <div class="action-buttons">
-        <button type="button" mat-raised-button color="primary" [disabled]="form.invalid || !selectedFile || docService.status() === 'uploading' || docService.status() === 'processing'" (click)="processCV()">Process CV</button>
+        <button type="button" mat-raised-button color="primary"
+          [disabled]="!selectedFile || docService.status() === 'uploading' || docService.status() === 'processing' || (docService.status() === 'waiting_for_confirmation' && (!form.getRawValue().industry || !form.getRawValue().templateId))"
+          (click)="processCV()">
+          {{ docService.status() === 'waiting_for_confirmation' ? 'Confirm & Process' : 'Process CV' }}
+        </button>
         <button type="button" mat-button (click)="resetForm()">Reset</button>
       </div>
     </form>
@@ -57,6 +56,11 @@
       <mat-spinner diameter="48"></mat-spinner>
       <p *ngIf="docService.status() === 'uploading'">Uploading document...</p>
       <p *ngIf="docService.status() === 'processing'">Processing document with selected template...</p>
+    </div>
+
+    <div *ngIf="docService.status() === 'waiting_for_confirmation'" class="processing-state">
+      <mat-icon class="large-icon" color="accent">help_outline</mat-icon>
+      <p>We've analyzed your document and suggested an industry and template. Please confirm or adjust the selections on the left, then click <strong>Confirm & Process</strong>.</p>
     </div>
 
     <div *ngIf="docService.status() === 'completed'" class="completed-state">
