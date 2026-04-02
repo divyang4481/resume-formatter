@@ -358,7 +358,9 @@ async def get_job_status(
     return RuntimeJobStatusResponse(
         job_id=job.id,
         status=job.status,
-        original_file_ref=getattr(job, "original_file_ref", "unknown")
+        original_file_ref=getattr(job, "original_file_ref", "unknown"),
+        stage=getattr(job, "stage", None),
+        error_message=getattr(job, "error_message", None)
     )
 
 @router.post("/documents/{id}/confirm")
