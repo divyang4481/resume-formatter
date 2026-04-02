@@ -95,15 +95,26 @@ The Template/Knowledge plane acts as the governor. It publishes approved assets 
 
 ## 6. Document Processing Model
 
-### 6.1 Template Asset Processing Flow
-1. Upload asset via admin API.
-2. Validate and classify asset type.
-3. Extract structure and text.
-4. Enrich metadata (industry, role, region).
-5. Derive or attach explicit rendering rules.
-6. Chunk and index KB/guidance content.
-7. Submit for human or automated approval.
-8. Publish approved assets to the runtime registry.
+### 6.1 Template Asset Processing Flow (Admin Pipeline)
+Template creation is governed by a strict, state-saving linear pipeline to ensure validity before impacting runtime operations:
+
+1. **Ingest & Metadata:**
+   * Upload asset via admin API (DOCX/PDF).
+   * Enrich preliminary metadata (industry, role, region, language).
+   * Record is created in `Draft` state.
+2. **Extraction & Classification:**
+   * Extract structure and text via DocumentParserAdapter.
+   * Admin reviews extraction output and corrects any auto-classification fallbacks.
+3. **Intelligence & Rules Configuration:**
+   * Derive or explicitly attach target section rules (e.g., `TemplateRule` for max bullets, tone).
+   * Chunk and index KB/guidance content associated with the template into the semantic vector index.
+4. **Validation & Pre-flight Simulation:**
+   * Run simulation using test candidate resumes against the configured rules.
+   * System generates a validation report enforcing mandatory sections, PII leakage prevention, and render conformance.
+5. **Governance & Publishing:**
+   * Submit for human review (changes state to `Pending Review`).
+   * Authorized User (Reviewer) examines audit trail and triggers transition to `Approved`.
+   * Publish approved assets to the read-only runtime Template Registry (`Published` state).
 
 ### 6.2 Candidate Document Processing Flow
 1. Upload candidate document.
