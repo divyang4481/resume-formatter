@@ -17,3 +17,4 @@ htmlcov/
 .data/
 data/jobs/
 data/*.pdf
+data/*.docx
