@@ -45,16 +45,16 @@ export class DocumentProcessingService {
 
     this.api.submitDocument(file, industry, templateId).subscribe({
       next: (res) => {
-        this.currentDocumentId.set(res.documentId || res.jobId);
-        this.currentJobId.set(res.jobId);
+        this.currentDocumentId.set(res.document_id || res.job_id);
+        this.currentJobId.set(res.job_id);
 
-        if (res.requiresConfirmation) {
-          this.suggestedIndustryId.set(res.suggestedIndustryId || null);
-          this.suggestedTemplateId.set(res.suggestedTemplateId || null);
+        if (res.requires_confirmation) {
+          this.suggestedIndustryId.set(res.suggested_industry_id || null);
+          this.suggestedTemplateId.set(res.suggested_template_id || null);
           this.status.set('waiting_for_confirmation');
         } else {
           this.status.set('processing');
-          this.pollJobStatus(res.jobId);
+          this.pollJobStatus(res.job_id);
         }
       },
       error: (err) => {
