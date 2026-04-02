@@ -33,6 +33,7 @@ class AgentState(TypedDict):
     # Output Artifacts
     summary_uri: Optional[str]
     render_uri: Optional[str]
+    render_docx_uri: Optional[str]
 
     # Orchestration control variables
     requires_human_review: bool
@@ -43,3 +44,6 @@ class AgentState(TypedDict):
     actor_role: Optional[str]
     filename: Optional[str]
     content_type: Optional[str]
+
+    # Additional contextual metadata
+    runtime_metadata: Optional[Dict[str, Any]]

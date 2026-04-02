@@ -18,26 +18,39 @@ def create_transform_node(llm_runtime: LlmRuntimeAdapter):
         # Here we mock it.
         prompt = f"""
         You are an expert document transformer. Your job is to extract and transform the provided
-        resume/CV text into a structured JSON format according to the requested template ID.
+        resume/CV text into a canonical structured JSON format.
+
+        CRITICAL INSTRUCTIONS:
+        1. Extract the facts ONLY from the "Document Text" below.
+        2. NEVER invent, hallucinate, or use placeholders (e.g., "<<FullName>>", "<<Skill1>>", "...", or similar).
+        3. If information for a field is missing from the document, leave it empty (use "" for strings, [] for arrays).
+        4. Do not output anything other than the JSON itself.
 
         Template ID: {template_id}
 
-        Please output ONLY valid JSON matching this structure:
+        Please output ONLY valid JSON matching exactly this structure:
         {{
             "personal_info": {{
-                "name": "...",
-                "email": "..."
+                "name": "",
+                "email": ""
             }},
-            "summary": "Professional summary...",
             "experience": [
                 {{
-                    "title": "...",
-                    "company": "...",
-                    "dates": "...",
-                    "description": "..."
+                    "title": "",
+                    "company": "",
+                    "dates": "",
+                    "description": ""
                 }}
             ],
-            "skills": ["...", "..."]
+            "education": [
+                {{
+                    "degree": "",
+                    "school": "",
+                    "dates": ""
+                }}
+            ],
+            "skills": [],
+            "certifications": []
         }}
 
         Document Text:
@@ -65,10 +78,31 @@ def create_transform_node(llm_runtime: LlmRuntimeAdapter):
                 cleaned_text = cleaned_text[start_index:end_index+1]
 
             # Validate it's actually JSON
-            json.loads(cleaned_text)
+            parsed_json = json.loads(cleaned_text)
+
+            # Reject placeholders
+            validation_errors = []
+            if "<<" in cleaned_text or ">>" in cleaned_text:
+                validation_errors.append("Output contains unresolved placeholders (<<...>>).")
+            if '"..."' in cleaned_text or '...' in cleaned_text:
+                validation_errors.append("Output contains generic string placeholders ('...').")
+
+            # Additional structural checks on parsed JSON
+            if isinstance(parsed_json, dict):
+                # We can do deeper validation here if needed
+                pass
+
+            if validation_errors:
+                return {
+                    "transformed_document_json": cleaned_text.strip(),
+                    "validation_passed": False,
+                    "validation_errors": validation_errors,
+                    "status": "transformation_failed"
+                }
 
             return {
                 "transformed_document_json": cleaned_text.strip(),
+                "validation_passed": True,
                 "status": "transformed"
             }
         except Exception as e:
