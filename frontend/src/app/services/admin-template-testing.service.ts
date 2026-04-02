@@ -25,14 +25,23 @@ export class AdminTemplateTestingService {
   }
 
   getJob(jobId: string): Observable<any> {
-    return this.http.get(`${this.runtimeUrl}/jobs/${jobId}`);
+    const headers = new HttpHeaders({
+      'X-Actor-Role': 'admin'
+    });
+    return this.http.get(`${this.runtimeUrl}/jobs/${jobId}`, { headers });
   }
 
   getJobOutputs(jobId: string): Observable<any> {
-    return this.http.get(`${this.runtimeUrl}/jobs/${jobId}/output`);
+    const headers = new HttpHeaders({
+      'X-Actor-Role': 'admin'
+    });
+    return this.http.get(`${this.runtimeUrl}/jobs/${jobId}/output`, { headers });
   }
 
   getJobSummary(jobId: string): Observable<any> {
-      return this.http.get(`${this.runtimeUrl}/jobs/${jobId}/summary`);
+    const headers = new HttpHeaders({
+      'X-Actor-Role': 'admin'
+    });
+    return this.http.get(`${this.runtimeUrl}/jobs/${jobId}/summary`, { headers });
   }
 }

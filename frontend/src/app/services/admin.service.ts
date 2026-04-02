@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { HttpClient, HttpHeaders } from '@angular/common/http';
+import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 
 export interface TemplateAsset {
@@ -36,14 +36,8 @@ export class AdminService {
 
   constructor(private http: HttpClient) { }
 
-  private getHeaders(): HttpHeaders {
-    return new HttpHeaders({
-      'X-Admin-Token': 'admin-secret-token'
-    });
-  }
-
   getTemplates(): Observable<TemplateListResponse> {
-    return this.http.get<TemplateListResponse>(`${this.apiUrl}/templates`, { headers: this.getHeaders() });
+    return this.http.get<TemplateListResponse>(`${this.apiUrl}/templates`);
   }
 
   uploadTemplate(file: File, metadata: any): Observable<any> {
@@ -51,6 +45,6 @@ export class AdminService {
     formData.append('file', file);
     formData.append('metadata', JSON.stringify(metadata));
 
-    return this.http.post(`${this.apiUrl}/templates/upload`, formData, { headers: this.getHeaders() });
+    return this.http.post(`${this.apiUrl}/templates/upload`, formData);
   }
 }
