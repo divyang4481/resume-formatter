@@ -32,3 +32,5 @@ class RuntimeJobStatusResponse(BaseModel):
     original_file_ref: str
     stage: Optional[str] = None
     error_message: Optional[str] = None
+    extraction_quality_score: Optional[float] = None
+    missing_fields: Optional[List[str]] = None

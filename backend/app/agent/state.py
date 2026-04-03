@@ -38,6 +38,10 @@ class AgentState(TypedDict):
     # LLM Transformation results
     transformed_document_json: Optional[str]
     
+    # Extraction Quality
+    extraction_quality_score: Optional[float]
+    missing_fields: Optional[list]
+
     # Validation
     validation_passed: bool
     validation_errors: Optional[list]

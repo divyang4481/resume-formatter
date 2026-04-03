@@ -62,7 +62,7 @@ def create_context_aware_extraction_node(llm_runtime: LlmRuntimeAdapter):
                 structured_context += f"\nDETECTED TABLES: {len(tables)} tables found. Use table content for precise facts like dates and roles."
 
         prompt = f"""
-        TASK: Transform the resume into the target structured format.
+        TASK: Transform the resume into the target structured format and evaluate extraction quality.
         
         TARGET SCHEMA:
         {json.dumps(dynamic_schema, indent=2)}
@@ -83,7 +83,14 @@ def create_context_aware_extraction_node(llm_runtime: LlmRuntimeAdapter):
         1. Fill the TARGET SCHEMA using only facts from the document.
         2. Prioritize accuracy for names, dates, and companies.
         3. Maintain original technical terminology.
-        4. Output ONLY valid JSON.
+        4. Provide an 'extraction_quality_score' (0-100) indicating how well the TARGET SCHEMA was filled.
+        5. Provide a 'missing_fields' list containing the keys from TARGET SCHEMA that could not be filled with extracted information.
+        6. Output ONLY valid JSON with the following structure:
+           {{
+               "data": {{ ... the filled TARGET SCHEMA ... }},
+               "extraction_quality_score": 85,
+               "missing_fields": ["skills", "certifications"]
+           }}
         """
         
         try:
@@ -102,8 +109,22 @@ def create_context_aware_extraction_node(llm_runtime: LlmRuntimeAdapter):
             if start != -1 and end != -1:
                 cleaned = cleaned[start:end+1]
                 
+            parsed_result = json.loads(cleaned)
+
+            # Handle cases where LLM might just return the data or nest it
+            if "data" in parsed_result:
+                transformed_data = parsed_result.get("data", {})
+                quality_score = parsed_result.get("extraction_quality_score", 100.0)
+                missing_fields = parsed_result.get("missing_fields", [])
+            else:
+                transformed_data = parsed_result
+                quality_score = 100.0
+                missing_fields = []
+
             return {
-                "transformed_document_json": cleaned,
+                "transformed_document_json": json.dumps(transformed_data),
+                "extraction_quality_score": float(quality_score),
+                "missing_fields": missing_fields,
                 "status": "extracted"
             }
         except Exception as e:

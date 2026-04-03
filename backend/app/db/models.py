@@ -75,6 +75,9 @@ class ProcessingJob(Base):
     render_docx_uri = Column(String, nullable=True)
     error_message = Column(Text, nullable=True)
 
+    extraction_quality_score = Column(Integer, nullable=True)
+    missing_fields = Column(Text, nullable=True)
+
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

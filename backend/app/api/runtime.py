@@ -289,12 +289,22 @@ async def get_job_status(
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
 
+    import json
+    missing_fields = getattr(job, "missing_fields", None)
+    if isinstance(missing_fields, str):
+        try:
+            missing_fields = json.loads(missing_fields)
+        except json.JSONDecodeError:
+            missing_fields = []
+
     return RuntimeJobStatusResponse(
         job_id=job.id,
         status=job.status,
         original_file_ref=getattr(job, "original_file_ref", "unknown"),
         stage=getattr(job, "stage", None),
-        error_message=getattr(job, "error_message", None)
+        error_message=getattr(job, "error_message", None),
+        extraction_quality_score=getattr(job, "extraction_quality_score", None),
+        missing_fields=missing_fields
     )
 
 @router.post("/documents/{id}/confirm")

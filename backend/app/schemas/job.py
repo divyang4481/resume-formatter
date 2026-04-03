@@ -42,6 +42,10 @@ class ProcessingJob(BaseModel):
     summary_uri: Optional[str] = None
     render_docx_uri: Optional[str] = None
 
+    # Extraction Quality
+    extraction_quality_score: Optional[float] = None
+    missing_fields: Optional[List[str]] = None
+
     # Template and Context selection
     selected_template_id: Optional[str] = None
     template_version: Optional[str] = None

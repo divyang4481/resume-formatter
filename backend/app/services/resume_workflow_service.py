@@ -94,6 +94,8 @@ class ResumeWorkflowService:
             "industry": industry,
             "language": language,
             "transformed_document_json": None,
+            "extraction_quality_score": None,
+            "missing_fields": [],
             "validation_passed": True,
             "validation_errors": [],
             "summary_uri": None,
@@ -119,6 +121,10 @@ class ResumeWorkflowService:
                 job.generated_summary = final_state["summary_text"]
             if final_state.get("render_docx_uri"):
                 job.render_docx_uri = final_state["render_docx_uri"]
+            if final_state.get("extraction_quality_score") is not None:
+                job.extraction_quality_score = final_state["extraction_quality_score"]
+            if final_state.get("missing_fields") is not None:
+                job.missing_fields = final_state["missing_fields"]
 
             
             # If it's a governance audit run, update the audit record

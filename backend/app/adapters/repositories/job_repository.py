@@ -36,7 +36,11 @@ class SqlAlchemyJobRepository(JobRepository):
             model.error_message = job.error_message
         if hasattr(job, 'selected_template_id'):
             model.template_asset_id = job.selected_template_id
-
+        if hasattr(job, 'extraction_quality_score'):
+            model.extraction_quality_score = job.extraction_quality_score
+        if hasattr(job, 'missing_fields'):
+            import json
+            model.missing_fields = json.dumps(job.missing_fields) if job.missing_fields is not None else None
 
         self.db.commit()
         return model.id
