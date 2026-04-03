@@ -3,6 +3,7 @@ from typing import Any, Dict, List, Optional
 
 
 from .document_extraction import DocumentExtractionService, ExtractionContext, ExtractedDocument
+from .embedding import EmbeddingProvider
 
 class TemplateRepository(ABC):
     @abstractmethod

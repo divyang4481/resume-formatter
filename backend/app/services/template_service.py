@@ -64,9 +64,25 @@ class TemplateService:
             extracted_text = extracted_doc.extracted_text
             backend_used = extracted_doc.backend_used
 
-            # Simple indexing stub
+            # Simple indexing stub, add correct chunk metadata
+            # Important: The template ID must be the actual template_id provided in metadata.
+            # If a knowledge asset is uploaded without a template_id, we fall back to asset_id
+            # but ideally it should always be provided by the caller to tie to the Template parent.
+            actual_template_id = metadata.template_id or asset_id
+
+            chunk_metadata = {
+                "template_id": actual_template_id,
+                "asset_id": asset_id,
+                "asset_type": metadata.asset_type,
+                "status": "draft",  # Starts as DRAFT
+                "industry": metadata.industry,
+                "role_family": metadata.role_family,
+                "language": metadata.language,
+                "source_kind": metadata.asset_type
+            }
+
             self.knowledge_index.index_chunks(
-                chunks=[{"text": extracted_text}],
+                chunks=[{"text": extracted_text, **chunk_metadata}],
                 asset_id=asset_id
             )
 

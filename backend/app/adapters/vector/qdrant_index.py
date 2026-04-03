@@ -1,12 +1,13 @@
 from typing import List, Dict, Any, Optional
 from qdrant_client import QdrantClient
 from qdrant_client.http.models import Distance, VectorParams, PointStruct
-from app.domain.interfaces import KnowledgeIndex
+from app.domain.interfaces import KnowledgeIndex, EmbeddingProvider
 
 class QdrantKnowledgeIndex(KnowledgeIndex):
-    def __init__(self, collection_name: str = "knowledge_base", location: str = ":memory:"):
+    def __init__(self, embedding_provider: Optional[EmbeddingProvider] = None, collection_name: str = "knowledge_base", location: str = ":memory:"):
         self.client = QdrantClient(location=location)
         self.collection_name = collection_name
+        self.embedding_provider = embedding_provider
         self._ensure_collection_exists()
 
     def _ensure_collection_exists(self):
@@ -21,10 +22,36 @@ class QdrantKnowledgeIndex(KnowledgeIndex):
     def index_chunks(self, chunks: List[Dict[str, Any]], asset_id: str) -> None:
         """Stores knowledge chunks into the Qdrant index."""
         points = []
+
+        # Determine embeddings if we have a provider and chunks have text but no vector
+        texts_to_embed = []
+        indices_to_embed = []
+
         for i, chunk in enumerate(chunks):
-            # Assumes chunk dict has a 'vector' or 'embedding' key.
-            # In a real app we'd compute this if not present.
-            vector = chunk.get("vector", [0.0] * 384) # Placeholder
+            if "vector" not in chunk and "text" in chunk and self.embedding_provider:
+                texts_to_embed.append(chunk["text"])
+                indices_to_embed.append(i)
+
+        embeddings = []
+        if texts_to_embed:
+            try:
+                from app.config import settings
+                if settings.vector_search_enabled:
+                    embeddings = self.embedding_provider.embed_texts(texts_to_embed)
+                else:
+                    embeddings = [[0.0] * 384 for _ in texts_to_embed]
+            except Exception as e:
+                print(f"Error embedding texts: {e}")
+                embeddings = [[0.0] * 384 for _ in texts_to_embed]
+
+        for i, chunk in enumerate(chunks):
+            vector = chunk.get("vector")
+            if not vector:
+                if i in indices_to_embed and len(embeddings) > indices_to_embed.index(i):
+                    vector = embeddings[indices_to_embed.index(i)]
+                else:
+                    vector = [0.0] * 384  # Fallback Placeholder
+
             points.append(
                 PointStruct(
                     id=f"{asset_id}-{i}",
@@ -40,9 +67,14 @@ class QdrantKnowledgeIndex(KnowledgeIndex):
 
     def search(self, query: str, filters: Optional[Dict[str, Any]] = None, top_k: int = 5) -> List[Dict[str, Any]]:
         """Searches the Qdrant index."""
-        # Note: Query requires a vector, so in practice we'd need to embed 'query' here.
-        # For the mock/adapter interface, we'll do a placeholder zero-vector search.
         query_vector = [0.0] * 384
+        if query and self.embedding_provider:
+            try:
+                from app.config import settings
+                if settings.vector_search_enabled:
+                    query_vector = self.embedding_provider.embed_texts([query])[0]
+            except Exception as e:
+                print(f"Error embedding search query: {e}")
 
         # Build Qdrant filter from simple dict if provided
         qdrant_filter = None
