@@ -1,7 +1,54 @@
 from typing import Optional
+from fastapi import Header, HTTPException, status, Depends
+from sqlalchemy.orm import Session
+
 from app.config import settings
+from app.db.session import SessionLocal
+
+# Interface definitions
+from app.domain.interfaces import (
+    StorageProvider,
+    TemplateRepository,
+    EventBus,
+    DocumentExtractionService,
+    KnowledgeIndex,
+    JobRepository,
+    MessageQueue
+)
 from app.adapters.base import LlmRuntimeAdapter
-from app.domain.interfaces import StorageProvider, TemplateRepository, EventBus, DocumentExtractionService
+
+# Adapter Implementations
+from app.adapters.repositories.template_repository import SqlAlchemyTemplateRepository
+from app.adapters.repositories.job_repository import SqlAlchemyJobRepository
+from app.adapters.impls.local.local_queue import SqlAlchemyMessageQueue
+from app.adapters.impls.local.event_bus import LocalEventBus
+
+
+def get_db_session():
+    """Dependency to get SQLAlchemy DB Session."""
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+def mock_is_admin(x_admin_token: Optional[str] = Header(None, description="Mock admin token for RBAC")) -> bool:
+    """
+    Mock dependency to simulate RBAC for admin endpoints.
+    Requires a valid X-Admin-Token header.
+    """
+    if x_admin_token != "admin-secret-token":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Forbidden: Admin access required"
+        )
+    return True
+
+
+# =====================================================================
+# Factory Methods (Resolve dependencies based on configuration)
+# =====================================================================
 
 def get_document_extraction_service() -> DocumentExtractionService:
     """
@@ -10,6 +57,7 @@ def get_document_extraction_service() -> DocumentExtractionService:
     """
     from app.services.extraction_service_adapter import RouterBasedExtractionService
     return RouterBasedExtractionService()
+
 
 def get_llm_runtime() -> LlmRuntimeAdapter:
     """
@@ -31,8 +79,7 @@ def get_llm_runtime() -> LlmRuntimeAdapter:
             api_key=settings.gemini_api_key,
             model_name=settings.llm_model_name if settings.llm_model_name != "llama3" else "gemini-2.0-flash"
         )
-
-    if backend == "aws_bedrock":
+    elif backend == "aws_bedrock":
         from app.adapters.impls.aws.llm_runtime import AwsBedrockLlmRuntime
         return AwsBedrockLlmRuntime(
             model_id=settings.llm_model_name,
@@ -61,6 +108,7 @@ def get_llm_runtime() -> LlmRuntimeAdapter:
             endpoint=settings.ollama_endpoint
         )
 
+
 def get_storage_provider() -> StorageProvider:
     """
     Dependency Factory to fetch the configured storage provider adapter.
@@ -73,59 +121,15 @@ def get_storage_provider() -> StorageProvider:
         return S3StorageProvider(bucket=settings.s3_bucket, region=settings.aws_region)
     elif backend == "gcp":
         from app.adapters.storage.gcp_storage import GcpCloudStorageProvider
-        # You'd normally add a setting for GCP bucket, reusing s3_bucket as generic bucket for now or hardcoding
         return GcpCloudStorageProvider(bucket=settings.s3_bucket, project_id=settings.gcp_project_id)
     elif backend == "azure":
         from app.adapters.storage.azure_storage import AzureBlobStorageProvider
         return AzureBlobStorageProvider(container=settings.s3_bucket)
-    elif backend == "local":
-        from app.adapters.storage.local_storage import LocalStorageProvider
-        return LocalStorageProvider(base_path=settings.local_storage_path)
     else:
         # Fallback to local
         from app.adapters.storage.local_storage import LocalStorageProvider
         return LocalStorageProvider(base_path=settings.local_storage_path)
 
-
-from fastapi import Header, HTTPException, status, Depends
-from sqlalchemy.orm import Session
-from app.db.session import SessionLocal
-
-def get_db_session():
-    """Dependency to get SQLAlchemy DB Session."""
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
-
-def mock_is_admin(x_admin_token: Optional[str] = Header(None, description="Mock admin token for RBAC")) -> bool:
-    """
-    Mock dependency to simulate RBAC for admin endpoints.
-    Requires a valid X-Admin-Token header.
-    """
-    if x_admin_token != "admin-secret-token":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Forbidden: Admin access required"
-        )
-    return True
-
-# Fast API dependency injection wrappers
-def document_extraction_service_dependency() -> DocumentExtractionService:
-    return get_document_extraction_service()
-
-def llm_runtime_dependency() -> LlmRuntimeAdapter:
-    return get_llm_runtime()
-
-
-from app.domain.interfaces import StorageProvider, JobRepository
-from app.adapters.storage.local_storage import LocalStorageProvider
-
-
-
-from app.domain.interfaces import KnowledgeIndex
 
 def get_knowledge_index() -> KnowledgeIndex:
     """
@@ -145,10 +149,51 @@ def get_knowledge_index() -> KnowledgeIndex:
             from app.adapters.vector.in_memory_index import InMemoryKnowledgeIndex
             return InMemoryKnowledgeIndex()
 
+
 def get_template_repository(db: Session = Depends(get_db_session)) -> TemplateRepository:
     """Dependency Factory to fetch Template Repository"""
-    from app.adapters.repositories.template_repository import SqlAlchemyTemplateRepository
     return SqlAlchemyTemplateRepository(db=db)
+
+
+def get_knowledge_repository(db: Session = Depends(get_db_session)):
+    """Dependency Factory to fetch Knowledge Repository (Stubbed)"""
+    pass
+
+
+def get_job_repository(db: Session = Depends(get_db_session)) -> JobRepository:
+    """Dependency Factory to fetch Job Repository"""
+    return SqlAlchemyJobRepository(db=db)
+
+
+def get_validation_repository(db: Session = Depends(get_db_session)):
+    """Dependency Factory to fetch Validation Repository (Stubbed)"""
+    pass
+
+
+def get_message_queue(db: Session = Depends(get_db_session)) -> MessageQueue:
+    return SqlAlchemyMessageQueue(db=db)
+
+
+_local_event_bus = None
+def get_event_bus() -> EventBus:
+    global _local_event_bus
+    if _local_event_bus is None:
+        _local_event_bus = LocalEventBus()
+    return _local_event_bus
+
+
+# =====================================================================
+# FastAPI Dependency Injection Wrappers (For routing)
+# =====================================================================
+
+def document_extraction_service_dependency() -> DocumentExtractionService:
+    return get_document_extraction_service()
+
+def llm_runtime_dependency() -> LlmRuntimeAdapter:
+    return get_llm_runtime()
+
+def storage_provider_dependency() -> StorageProvider:
+    return get_storage_provider()
 
 def template_repository_dependency(repo: TemplateRepository = Depends(get_template_repository)) -> TemplateRepository:
     return repo
@@ -157,33 +202,14 @@ def template_lookup_service_dependency(template_repository: TemplateRepository =
     from app.services.template_lookup_service import TemplateLookupService
     return TemplateLookupService(template_repository)
 
-def get_knowledge_repository(db: Session = Depends(get_db_session)):
-    """Dependency Factory to fetch Knowledge Repository (Stubbed)"""
-    # A real implementation would go here similar to SqlAlchemyTemplateRepository
-    pass
-
-def get_job_repository(db: Session = Depends(get_db_session)) -> JobRepository:
-    """Dependency Factory to fetch Job Repository"""
-    from app.adapters.repositories.job_repository import SqlAlchemyJobRepository
-    return SqlAlchemyJobRepository(db=db)
-
 def job_repository_dependency(repo: JobRepository = Depends(get_job_repository)) -> JobRepository:
     return repo
 
-def get_validation_repository(db: Session = Depends(get_db_session)):
-    """Dependency Factory to fetch Validation Repository (Stubbed)"""
-    pass
-
-def storage_provider_dependency() -> StorageProvider:
-    return get_storage_provider()
-
-from app.domain.interfaces import MessageQueue
-def get_message_queue(db: Session = Depends(get_db_session)) -> MessageQueue:
-    from app.adapters.impls.local.local_queue import SqlAlchemyMessageQueue
-    return SqlAlchemyMessageQueue(db=db)
-
 def message_queue_dependency(queue: MessageQueue = Depends(get_message_queue)) -> MessageQueue:
     return queue
+
+def event_bus_dependency() -> EventBus:
+    return get_event_bus()
 
 def resume_workflow_service_dependency(
     llm: LlmRuntimeAdapter = Depends(llm_runtime_dependency),
@@ -200,15 +226,3 @@ def resume_workflow_service_dependency(
         template_repo=template_repo,
         storage=storage
     )
-
-
-_local_event_bus = None
-def get_event_bus() -> EventBus:
-    global _local_event_bus
-    if _local_event_bus is None:
-        from app.adapters.impls.local.event_bus import LocalEventBus
-        _local_event_bus = LocalEventBus()
-    return _local_event_bus
-
-def event_bus_dependency() -> EventBus:
-    return get_event_bus()
