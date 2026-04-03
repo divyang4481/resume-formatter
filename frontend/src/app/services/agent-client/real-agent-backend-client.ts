@@ -12,6 +12,11 @@ export class RealAgentBackendClient implements AgentBackendClient {
 
   constructor(private runtimeApi: RuntimeApiService) {}
 
+  getJobIdFromSession(session: AgentSession | null): string | null {
+    if (!session || !session.artifacts) return null;
+    return session.artifacts['jobId'] as string || null;
+  }
+
   async createSession(): Promise<AgentSession> {
     const session: AgentSession = {
       sessionId: 'session-' + Date.now(),
@@ -185,6 +190,9 @@ export class RealAgentBackendClient implements AgentBackendClient {
                 content: `Processing complete! Summary: ${summaryRes.summary}`,
                 timestamp: new Date().toISOString()
             });
+
+        if (!this.currentSession.artifacts) this.currentSession.artifacts = {};
+        this.currentSession.artifacts['jobId'] = sessionId;
 
             const outputRes = await firstValueFrom(this.runtimeApi.getJobOutput(sessionId));
             this.currentSession.pendingActions = [

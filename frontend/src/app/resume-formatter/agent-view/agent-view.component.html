@@ -118,10 +118,16 @@
                   {{ action.label }}
                 </button>
 
-                <a *ngIf="action.type === 'download_output' && action.payload && $any(action.payload)['url']" mat-stroked-button color="primary" [href]="$any(action.payload)['url']" target="_blank">
-                  <mat-icon>download</mat-icon>
-                  {{ action.label }}
-                </a>
+                <ng-container *ngIf="action.type === 'download_output' && action.payload && $any(action.payload)['url']">
+                  <a mat-stroked-button color="primary" [href]="$any(action.payload)['url']" target="_blank">
+                    <mat-icon>download</mat-icon>
+                    {{ action.label }}
+                  </a>
+                  <!-- We can extract jobId from the url if payload url exists or from session artifacts -->
+                  <a mat-stroked-button color="primary" [routerLink]="['/view-document', agentClient.getJobIdFromSession(session)]" target="_blank" *ngIf="agentClient.getJobIdFromSession(session)">
+                    <mat-icon>visibility</mat-icon> View
+                  </a>
+                </ng-container>
 
                 <button *ngIf="action.type === 'start_over'" mat-stroked-button color="primary" (click)="startOver()">
                   <mat-icon>refresh</mat-icon>

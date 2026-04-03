@@ -6,6 +6,7 @@ import { MatCardModule } from '@angular/material/card';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MatInputModule } from '@angular/material/input';
+import { RouterModule } from '@angular/router';
 import { AGENT_BACKEND_CLIENT, AgentBackendClient } from '../../services/agent-client/agent-backend-client';
 import { AgentSession } from '../../services/agent-client/contracts';
 import { DocumentProcessingService } from '../../services/form-view/document-processing.service';
@@ -21,7 +22,8 @@ import { DocumentProcessingService } from '../../services/form-view/document-pro
     MatCardModule,
     CommonModule,
     FormsModule,
-    MatInputModule
+    MatInputModule,
+    RouterModule
   ],
   templateUrl: './agent-view.component.html',
   styleUrl: './agent-view.component.scss'
@@ -35,7 +37,7 @@ export class AgentViewComponent implements OnInit {
   @ViewChild('chatContainer') chatContainer!: ElementRef;
 
   constructor(
-    @Inject(AGENT_BACKEND_CLIENT) private agentClient: AgentBackendClient,
+    @Inject(AGENT_BACKEND_CLIENT) public agentClient: AgentBackendClient,
     public docService: DocumentProcessingService
   ) {}
 

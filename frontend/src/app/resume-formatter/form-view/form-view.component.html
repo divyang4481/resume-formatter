@@ -80,7 +80,12 @@
         </mat-card-header>
         <mat-card-content>
           <p>Your CV has been successfully formatted.</p>
-          <a *ngIf="docService.outputUrl()" mat-raised-button color="primary" [href]="docService.outputUrl()" target="_blank">Download Formatted CV</a>
+          <div class="flex-row gap-8" *ngIf="docService.outputUrl()">
+            <a mat-raised-button color="primary" [href]="docService.outputUrl()" target="_blank">Download Formatted CV</a>
+            <a mat-stroked-button color="primary" [routerLink]="['/view-document', docService.currentJobId()]" target="_blank" *ngIf="docService.currentJobId()">
+              <mat-icon>visibility</mat-icon> View
+            </a>
+          </div>
         </mat-card-content>
       </mat-card>
 

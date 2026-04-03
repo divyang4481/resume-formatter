@@ -10,6 +10,7 @@ import { PublishRegistryComponent } from './admin/pipeline-shell/publish-registr
 import { ResumeFormatterComponent } from './resume-formatter/resume-formatter.component';
 import { AgentViewComponent } from './resume-formatter/agent-view/agent-view.component';
 import { FormViewComponent } from './resume-formatter/form-view/form-view.component';
+import { DocumentViewerComponent } from './document-viewer/document-viewer.component';
 
 export const routes: Routes = [
   { path: '', redirectTo: '/resumeformatter', pathMatch: 'full' },
@@ -30,5 +31,9 @@ export const routes: Routes = [
       { path: 'agentview', component: AgentViewComponent },
       { path: 'formview', component: FormViewComponent }
     ]
+  },
+  {
+    path: 'view-document/:id',
+    component: DocumentViewerComponent
   }
 ];

@@ -142,13 +142,29 @@ def create_render_node(ai_service: ResumeAiService, storage):
             doc.save(out_stream)
             out_stream.seek(0)
 
+            # Read bytes and validate
+            docx_bytes = out_stream.read()
+            if len(docx_bytes) == 0:
+                print("WARNING: Rendered DOCX bytes are empty! Template rendering may have failed silently.")
+
             render_key = f"jobs/{session_id}/output/formatted_resume.docx"
-            render_docx_uri = storage.put_bytes(render_key, out_stream.read())
+            render_docx_uri = storage.put_bytes(render_key, docx_bytes)
         except Exception as e:
             print(f"Failed to load or render template {template_id} from storage: {e}")
+            # Instead of saving a text file with .docx extension which causes corruption/unreadable errors in Word,
+            # we create a valid minimal DOCX containing the error message.
+            from docx import Document
+            error_doc = Document()
+            error_doc.add_heading("TEMPLATE RENDERING ERROR", level=1)
+            error_doc.add_paragraph(f"Template: {template_id}")
+            error_doc.add_paragraph(f"Error: {str(e)}")
+
+            error_stream = io.BytesIO()
+            error_doc.save(error_stream)
+            error_stream.seek(0)
+
             render_key = f"jobs/{session_id}/output/formatted_resume.docx"
-            fallback_text = f"TEMPLATE RENDERING ERROR\n\nTemplate: {template_id}\nError: {str(e)}"
-            render_docx_uri = storage.put_bytes(render_key, fallback_text.encode("utf-8"))
+            render_docx_uri = storage.put_bytes(render_key, error_stream.read())
 
         final_status = "rendered"
         if not state.get("validation_passed", True):
