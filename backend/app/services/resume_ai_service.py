@@ -1,7 +1,10 @@
 from typing import Dict, Any, Optional, List
 import json
+import logging
 from app.domain.interfaces import DocumentExtractionService
 from app.adapters.base import LlmRuntimeAdapter
+
+logger = logging.getLogger(__name__)
 
 class ResumeAiService:
     def __init__(self, llm: LlmRuntimeAdapter, extraction_service: Optional[DocumentExtractionService] = None):
@@ -38,7 +41,14 @@ class ResumeAiService:
         - Ensure NO template placeholders (like <<Name>>) are present in the output.
         """
         
+        logger.info("Sending prompt to LLM for summary generation.")
+        logger.debug(f"Prompt content:\n{prompt}")
+
         response = self.llm.generate(prompt)
+
+        logger.info("Received response from LLM for summary generation.")
+        logger.debug(f"LLM Response:\n{response}")
+
         return response.strip()
 
     async def analyze_template(self, content: bytes, filename: str) -> Dict[str, str]:
@@ -54,6 +64,8 @@ class ResumeAiService:
         extracted_doc = await self.extraction_service.extract(content, filename, "application/vnd.openxmlformats-officedocument.wordprocessingml.document", context=context)
 
         template_text = extracted_doc.extracted_text
+        logger.info(f"Extracted template text length: {len(template_text)}")
+        logger.debug(f"Extracted template text excerpt:\n{template_text[:1000]}")
 
         # 1.5 Extract placeholders programmatically if it's a docx
         detected_placeholders = []
@@ -62,15 +74,15 @@ class ResumeAiService:
             import io
             doc = DocxTemplate(io.BytesIO(content))
             detected_placeholders = list(doc.get_undeclared_template_variables())
-            print(f"Programmatically detected {len(detected_placeholders)} Jinja2 placeholders in template.")
+            logger.info(f"Programmatically detected {len(detected_placeholders)} Jinja2 placeholders in template.")
         except Exception as e:
-            print(f"Warning: Failed to extract Jinja2 placeholders: {e}")
+            logger.warning(f"Warning: Failed to extract Jinja2 placeholders: {e}")
 
         # 1.6 Additional regex for alternative placeholders (e.g. << Field Name >>)
         import re
         alt_placeholders = re.findall(r'<<\s*(.*?)\s*>>', template_text)
         if alt_placeholders:
-             print(f"Detected {len(alt_placeholders)} angle-bracket placeholders via regex.")
+             logger.info(f"Detected {len(alt_placeholders)} angle-bracket placeholders via regex.")
              detected_placeholders.extend(alt_placeholders)
         
         # Deduplicate and clean
@@ -109,9 +121,14 @@ class ResumeAiService:
 
         """
 
-
+        logger.info("Sending prompt to LLM for template analysis.")
+        logger.debug(f"Prompt content:\n{prompt}")
         
         response = self.llm.generate(prompt)
+
+        logger.info("Received response from LLM for template analysis.")
+        logger.debug(f"LLM Response:\n{response}")
+
         try:
             # Clean up potential markdown formatting if LLM ignores instructions
             cleaned_response = response.strip()
@@ -123,7 +140,7 @@ class ResumeAiService:
             return json.loads(cleaned_response)
         except Exception as e:
             # Fallback to empty suggestions if JSON parsing fails
-            print(f"Error during template analysis AI extraction: {e}")
+            logger.error(f"Error during template analysis AI extraction: {e}", exc_info=True)
             return {
                 "purpose": "General Professional CV Template",
                 "expected_sections": "Summary, Experience, Education, Skills",
@@ -157,14 +174,21 @@ class ResumeAiService:
         Return ONLY the JSON object.
         """
 
+        logger.info("Sending prompt to LLM for output validation.")
+        logger.debug(f"Prompt content:\n{prompt}")
+
         response = self.llm.generate(prompt)
+
+        logger.info("Received response from LLM for output validation.")
+        logger.debug(f"LLM Response:\n{response}")
+
         try:
             cleaned_response = response.strip()
             if "```json" in cleaned_response:
                 cleaned_response = cleaned_response.split("```json")[1].split("```")[0].strip()
             return json.loads(cleaned_response)
         except Exception as e:
-            print(f"Error during AI output validation: {e}")
+            logger.error(f"Error during AI output validation: {e}", exc_info=True)
             return {"status": "FAIL", "errors": [f"Validation engine failure: {e}"], "warnings": [], "confidence_score": 0}
 
 
