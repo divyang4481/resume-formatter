@@ -4,6 +4,7 @@ from app.schemas.enums import AssetStatus
 
 class AssetUploadRequestMetadata(BaseModel):
     asset_type: str = Field(..., description="template, kb, policy, formatting, example")
+    template_id: Optional[str] = Field(default=None, description="The ID of the template this asset belongs to")
     name: str
     description: Optional[str] = None
     industry: Optional[str] = None
