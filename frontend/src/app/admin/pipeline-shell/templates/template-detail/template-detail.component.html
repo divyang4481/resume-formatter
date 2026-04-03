@@ -305,13 +305,16 @@
           <ng-container matColumnDef="actions">
             <th mat-header-cell *matHeaderCellDef> Actions </th>
             <td mat-cell *matCellDef="let element">
-              <div class="flex-gap-8">
-                <button mat-stroked-button color="primary" *ngIf="!element.decision" (click)="reviewTestRun(element.id, 'PASS')">PASS</button>
-                <button mat-stroked-button color="warn" *ngIf="!element.decision" (click)="reviewTestRun(element.id, 'FAIL')">FAIL</button>
+              <div class="flex-gap-8 align-items-center">
+                <button mat-icon-button color="primary" (click)="$event.stopPropagation(); openRunResults(runResultsDialog, element)" title="View Results">
+                  <mat-icon>visibility</mat-icon>
+                </button>
+                <button mat-stroked-button color="primary" class="btn-sm" *ngIf="!element.decision" (click)="$event.stopPropagation(); reviewTestRun(element.id, 'PASS')">PASS</button>
+                <button mat-stroked-button color="warn" class="btn-sm" *ngIf="!element.decision" (click)="$event.stopPropagation(); reviewTestRun(element.id, 'FAIL')">FAIL</button>
               </div>
             </td>
-
           </ng-container>
+
 
           <ng-container matColumnDef="expandedDetail">
             <td mat-cell *matCellDef="let element" [attr.colspan]="displayedColumns.length">
@@ -350,26 +353,108 @@
       </div>
     </mat-tab>
 
-    <!-- Publish Tab -->
-    <mat-tab label="Publish">
-      <mat-card>
-        <mat-card-header>
-          <mat-card-title>Publishing Status</mat-card-title>
-        </mat-card-header>
-        <mat-card-content>
-          <div *ngIf="publishEligibility?.can_publish" class="success-msg">
-            <mat-icon>check_circle</mat-icon> Template is eligible for publishing.
-          </div>
-          <div *ngIf="!publishEligibility?.can_publish" class="error-msg">
-            <mat-icon>error</mat-icon> Cannot publish: {{ publishEligibility?.reason }}
-          </div>
+    <!-- Publish / Status Management Tab -->
+    <mat-tab label="Publishing & Status">
+      <div class="publish-status-container p-3">
+        <mat-card>
+          <mat-card-header>
+            <mat-card-title>Status Lifecycle Management</mat-card-title>
+          </mat-card-header>
+          <mat-card-content>
+            <div class="status-overview mb-4 d-flex align-items-center gap-16">
+               <div class="status-label">Current Status:</div>
+               <span class="status-badge large" [ngClass]="template?.status">{{ template?.status | uppercase }}</span>
+            </div>
 
-          <div class="actions mt-3">
-            <button mat-raised-button color="primary" [disabled]="!publishEligibility?.can_publish" (click)="publish()">Publish to Active</button>
-            <button mat-button color="warn" (click)="archive()">Archive Template</button>
-          </div>
-        </mat-card-content>
-      </mat-card>
+            <hr class="mb-4" />
+
+            <!-- Case: DRAFT -->
+            <div *ngIf="template?.status === 'DRAFT'">
+              <div *ngIf="publishEligibility?.can_publish" class="success-msg mb-3 p-3 bg-light-success rounded d-flex align-items-center gap-8">
+                <mat-icon color="primary">check_circle</mat-icon> 
+                <span>Template is eligible for production publishing.</span>
+              </div>
+              <div *ngIf="!publishEligibility?.can_publish" class="error-msg mb-3 p-3 bg-light-warn rounded d-flex align-items-center gap-8">
+                <mat-icon color="warn">error</mat-icon> 
+                <span>Cannot publish yet: {{ publishEligibility?.reason }}</span>
+              </div>
+
+              <div class="actions mt-3 d-flex gap-16">
+                <button mat-raised-button color="primary" [disabled]="!publishEligibility?.can_publish" (click)="publish()">
+                  <mat-icon>publish</mat-icon> Publish to ACTIVE
+                </button>
+                <button mat-stroked-button color="warn" (click)="archive()">
+                  <mat-icon>archive</mat-icon> Archive Template
+                </button>
+              </div>
+            </div>
+
+            <!-- Case: ACTIVE -->
+            <div *ngIf="template?.status === 'ACTIVE'">
+              <div class="info-msg mb-4 p-3 bg-light-info rounded d-flex align-items-center gap-8">
+                <mat-icon>info</mat-icon> 
+                <span>This template is currently <strong>Live</strong> and being used by agents and candidates.</span>
+              </div>
+              
+              <div class="actions mt-3 d-flex gap-16">
+                <button mat-raised-button color="accent" (click)="revertToDraft()">
+                  <mat-icon>history_edu</mat-icon> Revert to DRAFT
+                </button>
+                <button mat-stroked-button color="warn" (click)="archive()">
+                  <mat-icon>archive</mat-icon> Archive Template
+                </button>
+              </div>
+            </div>
+
+            <!-- Case: ARCHIVED -->
+            <div *ngIf="template?.status === 'ARCHIVED'">
+              <div class="info-msg mb-4 p-3 bg-light-info rounded d-flex align-items-center gap-8">
+                <mat-icon>inventory_2</mat-icon> 
+                <span>This template is <strong>Archived</strong> and is no longer available for selection.</span>
+              </div>
+              
+              <div class="actions mt-3 d-flex gap-16">
+                <button mat-raised-button color="primary" (click)="revertToDraft()">
+                  <mat-icon>restore</mat-icon> Restore to DRAFT
+                </button>
+              </div>
+            </div>
+
+          </mat-card-content>
+        </mat-card>
+      </div>
     </mat-tab>
+
   </mat-tab-group>
 </div>
+
+<!-- Test Run Results Dialog Template -->
+<ng-template #runResultsDialog let-data>
+  <h2 mat-dialog-title class="flex-align-center flex-gap-8">
+    <mat-icon color="primary">fact_check</mat-icon>
+    Test Run Results: {{ data.run.created_at | date:'short' }}
+  </h2>
+  
+  <mat-dialog-content class="mat-typography">
+    <div class="mb-4">
+      <h3 class="mb-2"><strong>AI Summary Output:</strong></h3>
+      <div class="p-3 bg-light border rounded summary-box-dialog">
+        {{ data.run.generated_summary || 'No summary was generated for this run.' }}
+      </div>
+    </div>
+
+    <div class="flex-column gap-16 mt-4">
+      <h4><strong>Formatted Artifact</strong></h4>
+      <a mat-raised-button color="primary" class="w-100 py-2" 
+         [href]="'http://localhost:8000/v1/runtime/documents/' + data.run.job_id + '/download'" 
+         target="_blank">
+        <mat-icon>download</mat-icon> Download Formatted DOCX
+      </a>
+    </div>
+  </mat-dialog-content>
+
+  <mat-dialog-actions align="end">
+    <button mat-button mat-dialog-close>Close</button>
+  </mat-dialog-actions>
+</ng-template>
+

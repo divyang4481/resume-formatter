@@ -362,6 +362,12 @@ async def get_job_summary(
 
     status_val = job.status.value if hasattr(job.status, 'value') else job.status
     if status_val == JobStatus.COMPLETED.value or status_val == JobStatus.COMPLETED:
+        # 1. Try to get summary text directly from DB
+        generated_summary = getattr(job, "generated_summary", None)
+        if generated_summary:
+            return {"summary": generated_summary}
+
+        # 2. Fallback to reading from summary_uri in storage
         summary_uri = getattr(job, "summary_uri", None)
         if summary_uri:
             try:
@@ -372,6 +378,7 @@ async def get_job_summary(
                 return {"summary": "Summary file exists but could not be read."}
 
         return {"summary": "Summary missing from completed job."}
+
     return {"summary": "Summary not available yet."}
 
 @router.post("/documents/{id}/feedback")

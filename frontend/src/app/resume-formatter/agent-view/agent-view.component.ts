@@ -8,6 +8,8 @@ import { FormsModule } from '@angular/forms';
 import { MatInputModule } from '@angular/material/input';
 import { AGENT_BACKEND_CLIENT, AgentBackendClient } from '../../services/agent-client/agent-backend-client';
 import { AgentSession } from '../../services/agent-client/contracts';
+import { DocumentProcessingService } from '../../services/form-view/document-processing.service';
+
 
 @Component({
   selector: 'app-agent-view',
@@ -33,11 +35,21 @@ export class AgentViewComponent implements OnInit {
   @ViewChild('chatContainer') chatContainer!: ElementRef;
 
   constructor(
-    @Inject(AGENT_BACKEND_CLIENT) private agentClient: AgentBackendClient
+    @Inject(AGENT_BACKEND_CLIENT) private agentClient: AgentBackendClient,
+    public docService: DocumentProcessingService
   ) {}
 
   async ngOnInit(): Promise<void> {
+    // Ensure we check for availability
+    if (this.docService.industries().length === 0) {
+      this.docService.loadIndustries();
+    }
+    if (this.docService.templates().length === 0) {
+      this.docService.loadTemplates();
+    }
+
     this.loading = true;
+
     try {
       this.session = await this.agentClient.createSession();
     } catch (e) {

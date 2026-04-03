@@ -34,6 +34,11 @@ export class AdminTemplateApiService {
     return this.http.post(`${this.apiUrl}/${templateId}/archive`, {});
   }
 
+  revertTemplateToDraft(templateId: string): Observable<any> {
+    return this.http.post(`${this.apiUrl}/${templateId}/revert-to-draft`, {});
+  }
+
+
   listTestRuns(templateId: string): Observable<any> {
     return this.http.get(`${this.apiUrl}/${templateId}/test-runs`);
   }

@@ -233,6 +233,7 @@ async def list_template_test_runs(
     id: str,
     is_admin: bool = Depends(mock_is_admin)
 ):
+    from app.db.models import ProcessingJob
     db = SessionLocal()
     try:
         runs = db.query(TemplateTestRun).filter(TemplateTestRun.template_id == id).order_by(TemplateTestRun.created_at.desc()).all()
@@ -245,6 +246,14 @@ async def list_template_test_runs(
                     val_json = json.loads(r.validation_result_json)
                 except Exception:
                     pass
+            
+            # Direct query fallback to ensure we get the job summary if missing on test run
+            summary = r.generated_summary
+            if not summary:
+                job = db.query(ProcessingJob).filter(ProcessingJob.id == r.processing_job_id).first()
+                if job:
+                    summary = job.generated_summary
+
             result.append({
                 "id": r.id,
                 "job_id": r.processing_job_id,
@@ -252,10 +261,12 @@ async def list_template_test_runs(
                 "created_at": r.created_at,
                 "reviewed_at": r.reviewed_at,
                 "sample_resume_asset_id": r.sample_resume_asset_id,
-                "generated_summary": r.generated_summary,
+                "generated_summary": summary,
                 "validation_result": val_json
             })
         return {"test_runs": result}
+
+
     finally:
         db.close()
 
@@ -339,6 +350,24 @@ async def archive_template(
         return {"message": f"Template {id} archived.", "status": template.status}
     finally:
         db.close()
+
+@router.post("/templates/{id}/revert-to-draft")
+async def revert_to_draft(
+    id: str,
+    is_admin: bool = Depends(mock_is_admin)
+):
+    db = SessionLocal()
+    try:
+        template = db.query(TemplateAsset).filter(TemplateAsset.id == id).first()
+        if not template:
+            raise HTTPException(status_code=404, detail="Template not found")
+
+        template.status = AssetStatus.DRAFT.value
+        db.commit()
+        return {"message": f"Template {id} reverted to draft.", "status": template.status}
+    finally:
+        db.close()
+
 
 @router.post("/knowledge")
 async def manage_knowledge():

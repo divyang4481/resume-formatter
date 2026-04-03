@@ -26,7 +26,7 @@ export const routes: Routes = [
     path: 'resumeformatter',
     component: ResumeFormatterComponent,
     children: [
-      { path: '', redirectTo: 'agentview', pathMatch: 'full' },
+      { path: '', redirectTo: 'formview', pathMatch: 'full' },
       { path: 'agentview', component: AgentViewComponent },
       { path: 'formview', component: FormViewComponent }
     ]

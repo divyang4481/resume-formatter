@@ -1,150 +1,161 @@
-<div class="agent-view-container" *ngIf="session">
-  <!-- Left Side: Stepper -->
-  <div class="stepper-panel">
-    <div class="stepper-header">
-      <h2>Resume formatter</h2>
-      <p>AI agent • 5 steps</p>
+<div class="agent-view-container">
+  <!-- No Templates Available Warning -->
+  <div *ngIf="docService.noTemplatesAvailable()" class="no-templates-alert-agent">
+    <mat-icon color="warn">warning</mat-icon>
+    <div class="alert-content">
+      <strong>Registry Empty: System Not Ready</strong>
+      <p>There are no active resume templates in the registry. The AI agent cannot provide structured formatting or industry detection without them. Please go to the <strong>Admin Panel</strong> to publish a template first.</p>
     </div>
-
-    <mat-stepper orientation="vertical" [linear]="true" [selectedIndex]="getStepIndex(session.currentStep)" #stepper>
-      <mat-step [state]="getStepIndex(session.currentStep) > 0 ? 'done' : 'number'">
-        <ng-template matStepLabel>
-          <div class="step-label" [class.active]="session.currentStep === 'upload_resume'">
-            <strong>Upload resume</strong>
-            <span>PDF, DOCX, text</span>
-          </div>
-        </ng-template>
-      </mat-step>
-
-      <mat-step [state]="getStepIndex(session.currentStep) > 1 ? 'done' : 'number'">
-        <ng-template matStepLabel>
-          <div class="step-label" [class.active]="session.currentStep === 'detect_industry'">
-            <strong>Detect industry</strong>
-            <span>AI-guessed + confirmed</span>
-          </div>
-        </ng-template>
-      </mat-step>
-
-      <mat-step [state]="getStepIndex(session.currentStep) > 2 ? 'done' : 'number'">
-        <ng-template matStepLabel>
-          <div class="step-label" [class.active]="session.currentStep === 'choose_template'">
-            <strong>Choose template</strong>
-            <span>Industry-specific</span>
-          </div>
-        </ng-template>
-      </mat-step>
-
-      <mat-step [state]="getStepIndex(session.currentStep) > 3 ? 'done' : 'number'">
-        <ng-template matStepLabel>
-          <div class="step-label" [class.active]="session.currentStep === 'review_resume'">
-            <strong>Review generated resume</strong>
-            <span>Review output before export</span>
-          </div>
-        </ng-template>
-      </mat-step>
-
-      <mat-step [state]="getStepIndex(session.currentStep) > 4 ? 'done' : 'number'">
-        <ng-template matStepLabel>
-          <div class="step-label" [class.active]="session.currentStep === 'export'">
-            <strong>Export</strong>
-            <span>PDF / DOCX / JSON</span>
-          </div>
-        </ng-template>
-      </mat-step>
-
-      <ng-template matStepperIcon="edit">
-        <mat-icon>check</mat-icon>
-      </ng-template>
-      <ng-template matStepperIcon="done">
-        <mat-icon>check</mat-icon>
-      </ng-template>
-    </mat-stepper>
   </div>
 
-  <!-- Right Side: Chat -->
-  <div class="chat-panel">
-    <!-- Hidden file input for real uploads -->
-    <input type="file" #fileInput style="display: none" (change)="onFileSelected($event)" accept=".pdf,.doc,.docx,.txt" />
+  <ng-container *ngIf="session && !docService.noTemplatesAvailable()">
+    <!-- Left Side: Stepper -->
+    <div class="stepper-panel">
+      <div class="stepper-header">
+        <h2>Resume formatter</h2>
+        <p>AI agent • 5 steps</p>
+      </div>
 
-    <div class="chat-header">
-      <h3 *ngIf="session.currentStep === 'upload_resume'">Upload Resume</h3>
-      <h3 *ngIf="session.currentStep === 'detect_industry'">Detecting Industry</h3>
-      <h3 *ngIf="session.currentStep === 'choose_template'">Choose Template</h3>
-      <h3 *ngIf="session.currentStep === 'review_resume'">Review generated resume</h3>
-      <h3 *ngIf="session.currentStep === 'export'">Export</h3>
-      <span class="step-badge">Step {{ getStepIndex(session.currentStep) + 1 }} of 5</span>
+      <mat-stepper orientation="vertical" [linear]="true" [selectedIndex]="getStepIndex(session.currentStep)" #stepper>
+        <mat-step [state]="getStepIndex(session.currentStep) > 0 ? 'done' : 'number'">
+          <ng-template matStepLabel>
+            <div class="step-label" [class.active]="session.currentStep === 'upload_resume'">
+              <strong>Upload resume</strong>
+              <span>PDF, DOCX, text</span>
+            </div>
+          </ng-template>
+        </mat-step>
+
+        <mat-step [state]="getStepIndex(session.currentStep) > 1 ? 'done' : 'number'">
+          <ng-template matStepLabel>
+            <div class="step-label" [class.active]="session.currentStep === 'detect_industry'">
+              <strong>Detect industry</strong>
+              <span>AI-guessed + confirmed</span>
+            </div>
+          </ng-template>
+        </mat-step>
+
+        <mat-step [state]="getStepIndex(session.currentStep) > 2 ? 'done' : 'number'">
+          <ng-template matStepLabel>
+            <div class="step-label" [class.active]="session.currentStep === 'choose_template'">
+              <strong>Choose template</strong>
+              <span>Industry-specific</span>
+            </div>
+          </ng-template>
+        </mat-step>
+
+        <mat-step [state]="getStepIndex(session.currentStep) > 3 ? 'done' : 'number'">
+          <ng-template matStepLabel>
+            <div class="step-label" [class.active]="session.currentStep === 'review_resume'">
+              <strong>Review generated resume</strong>
+              <span>Review output before export</span>
+            </div>
+          </ng-template>
+        </mat-step>
+
+        <mat-step [state]="getStepIndex(session.currentStep) > 4 ? 'done' : 'number'">
+          <ng-template matStepLabel>
+            <div class="step-label" [class.active]="session.currentStep === 'export'">
+              <strong>Export</strong>
+              <span>PDF / DOCX / JSON</span>
+            </div>
+          </ng-template>
+        </mat-step>
+
+        <ng-template matStepperIcon="edit">
+          <mat-icon>check</mat-icon>
+        </ng-template>
+        <ng-template matStepperIcon="done">
+          <mat-icon>check</mat-icon>
+        </ng-template>
+      </mat-stepper>
     </div>
 
-    <div class="chat-messages" #chatContainer>
-      <ng-container *ngFor="let msg of session.messages">
-        <!-- Agent Message -->
-        <div *ngIf="msg.role === 'assistant'" class="message-group agent">
-          <div class="message-label">Agent</div>
-          <div class="message-bubble agent-bubble">
-            <span [innerHTML]="msg.content"></span>
+    <!-- Right Side: Chat -->
+    <div class="chat-panel">
+      <!-- Hidden file input for real uploads -->
+      <input type="file" #fileInput style="display: none" (change)="onFileSelected($event)" accept=".pdf,.doc,.docx,.txt" />
+
+      <div class="chat-header">
+        <h3 *ngIf="session.currentStep === 'upload_resume'">Upload Resume</h3>
+        <h3 *ngIf="session.currentStep === 'detect_industry'">Detecting Industry</h3>
+        <h3 *ngIf="session.currentStep === 'choose_template'">Choose Template</h3>
+        <h3 *ngIf="session.currentStep === 'review_resume'">Review generated resume</h3>
+        <h3 *ngIf="session.currentStep === 'export'">Export</h3>
+        <span class="step-badge">Step {{ getStepIndex(session.currentStep) + 1 }} of 5</span>
+      </div>
+
+      <div class="chat-messages" #chatContainer>
+        <ng-container *ngFor="let msg of session.messages">
+          <!-- Agent Message -->
+          <div *ngIf="msg.role === 'assistant'" class="message-group agent">
+            <div class="message-label">Agent</div>
+            <div class="message-bubble agent-bubble">
+              <span [innerHTML]="msg.content"></span>
+            </div>
           </div>
-        </div>
 
-        <!-- User Message -->
-        <div *ngIf="msg.role === 'user'" class="message-group user">
-          <div class="message-label">You</div>
-          <div class="message-bubble user-bubble">
-            <span [innerHTML]="msg.content"></span>
+          <!-- User Message -->
+          <div *ngIf="msg.role === 'user'" class="message-group user">
+            <div class="message-label">You</div>
+            <div class="message-bubble user-bubble">
+              <span [innerHTML]="msg.content"></span>
+            </div>
           </div>
-        </div>
-      </ng-container>
+        </ng-container>
 
-      <div class="actions-container" *ngIf="session.pendingActions && session.pendingActions.length > 0 && !loading">
-        <div class="message-group agent">
-          <div class="options-grid">
-            <ng-container *ngFor="let action of session.pendingActions">
-              <button *ngIf="action.type === 'upload_document'" mat-stroked-button color="primary" (click)="triggerUpload()">
-                <mat-icon>upload_file</mat-icon>
-                {{ action.label }}
-              </button>
+        <div class="actions-container" *ngIf="session.pendingActions && session.pendingActions.length > 0 && !loading">
+          <div class="message-group agent">
+            <div class="options-grid">
+              <ng-container *ngFor="let action of session.pendingActions">
+                <button *ngIf="action.type === 'upload_document'" mat-stroked-button color="primary" (click)="triggerUpload()">
+                  <mat-icon>upload_file</mat-icon>
+                  {{ action.label }}
+                </button>
 
-              <ng-container *ngIf="action.type === 'select_template' && action.payload && $any(action.payload)['templates']">
-                  <button *ngFor="let tpl of $any(action.payload)['templates']" mat-stroked-button color="primary" (click)="answerQuestion({template_id: tpl.id, industry_id: $any(action.payload)['industry_id']})">
-                    <mat-icon>description</mat-icon>
-                    {{ tpl.name }}
-                  </button>
+                <ng-container *ngIf="action.type === 'select_template' && action.payload && $any(action.payload)['templates']">
+                    <button *ngFor="let tpl of $any(action.payload)['templates']" mat-stroked-button color="primary" (click)="answerQuestion({template_id: tpl.id, industry_id: $any(action.payload)['industry_id']})">
+                      <mat-icon>description</mat-icon>
+                      {{ tpl.name }}
+                    </button>
+                </ng-container>
+
+                <button *ngIf="action.type === 'confirm_review'" mat-stroked-button color="primary" (click)="answerQuestion('Confirmed')">
+                  <mat-icon>check_circle</mat-icon>
+                  {{ action.label }}
+                </button>
+
+                <a *ngIf="action.type === 'download_output' && action.payload && $any(action.payload)['url']" mat-stroked-button color="primary" [href]="$any(action.payload)['url']" target="_blank">
+                  <mat-icon>download</mat-icon>
+                  {{ action.label }}
+                </a>
+
+                <button *ngIf="action.type === 'start_over'" mat-stroked-button color="primary" (click)="startOver()">
+                  <mat-icon>refresh</mat-icon>
+                  {{ action.label }}
+                </button>
               </ng-container>
+            </div>
+          </div>
+        </div>
 
-              <button *ngIf="action.type === 'confirm_review'" mat-stroked-button color="primary" (click)="answerQuestion('Confirmed')">
-                <mat-icon>check_circle</mat-icon>
-                {{ action.label }}
-              </button>
-
-              <a *ngIf="action.type === 'download_output' && action.payload && $any(action.payload)['url']" mat-stroked-button color="primary" [href]="$any(action.payload)['url']" target="_blank">
-                <mat-icon>download</mat-icon>
-                {{ action.label }}
-              </a>
-
-              <button *ngIf="action.type === 'start_over'" mat-stroked-button color="primary" (click)="startOver()">
-                <mat-icon>refresh</mat-icon>
-                {{ action.label }}
-              </button>
-            </ng-container>
+        <!-- Loading Indicator -->
+        <div *ngIf="loading" class="message-group agent">
+          <div class="message-label">Agent</div>
+          <div class="message-bubble agent-bubble loading">
+            <span>Typing...</span>
           </div>
         </div>
       </div>
 
-      <!-- Loading Indicator -->
-      <div *ngIf="loading" class="message-group agent">
-        <div class="message-label">Agent</div>
-        <div class="message-bubble agent-bubble loading">
-          <span>Typing...</span>
-        </div>
+      <div class="chat-input-container">
+        <mat-form-field appearance="outline" class="chat-input">
+          <input matInput placeholder="Type a message..." [(ngModel)]="chatInput" (keyup.enter)="sendChatMessage()" [disabled]="loading" />
+        </mat-form-field>
+        <button mat-icon-button color="primary" (click)="sendChatMessage()" [disabled]="!chatInput.trim() || loading">
+          <mat-icon>send</mat-icon>
+        </button>
       </div>
     </div>
-
-    <div class="chat-input-container">
-      <mat-form-field appearance="outline" class="chat-input">
-        <input matInput placeholder="Type a message..." [(ngModel)]="chatInput" (keyup.enter)="sendChatMessage()" [disabled]="loading" />
-      </mat-form-field>
-      <button mat-icon-button color="primary" (click)="sendChatMessage()" [disabled]="!chatInput.trim() || loading">
-        <mat-icon>send</mat-icon>
-      </button>
-    </div>
-  </div>
+  </ng-container>
 </div>

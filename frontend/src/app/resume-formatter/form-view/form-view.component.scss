@@ -45,7 +45,41 @@
     }
   }
 
+  .no-templates-alert {
+    background-color: #fff9c4;
+    border: 1px solid #fbc02d;
+    border-radius: 8px;
+    padding: 16px;
+    display: flex;
+    gap: 12px;
+    margin-bottom: 24px;
+    align-items: flex-start;
+
+    mat-icon {
+      margin-top: 2px;
+      font-size: 24px;
+      width: 24px;
+      height: 24px;
+    }
+
+    .alert-content {
+      strong {
+        display: block;
+        color: #7b1fa2;
+        margin-bottom: 4px;
+        font-size: 1rem;
+      }
+      p {
+        margin: 0;
+        font-size: 0.9rem;
+        color: #5d4037;
+        line-height: 1.4;
+      }
+    }
+  }
+
   .cv-form {
+
     display: flex;
     flex-direction: column;
     gap: 16px;

@@ -12,7 +12,9 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatTableModule } from '@angular/material/table';
 import { MatChipsModule } from '@angular/material/chips';
 import { MatExpansionModule } from '@angular/material/expansion';
+import { MatDialogModule, MatDialog } from '@angular/material/dialog';
 import { ReactiveFormsModule, FormBuilder, FormGroup } from '@angular/forms';
+
 import { animate, state, style, transition, trigger } from '@angular/animations';
 import { AdminTemplateApiService } from '../../../../services/admin-template-api.service';
 import { AdminTemplateTestingService } from '../../../../services/admin-template-testing.service';
@@ -33,11 +35,13 @@ import { AdminTemplateTestingService } from '../../../../services/admin-template
     MatTableModule,
     MatChipsModule,
     MatExpansionModule,
-    ReactiveFormsModule
+    ReactiveFormsModule,
+    MatDialogModule
   ],
   templateUrl: './template-detail.component.html',
   styleUrls: ['./template-detail.component.scss'],
   animations: [
+
     trigger('detailExpand', [
       state('collapsed', style({height: '0px', minHeight: '0', display: 'none'})),
       state('expanded', style({height: '*'})),
@@ -84,8 +88,10 @@ export class TemplateDetailComponent implements OnInit, OnDestroy {
     private router: Router,
     private fb: FormBuilder,
     private templateApi: AdminTemplateApiService,
-    private testApi: AdminTemplateTestingService
+    private testApi: AdminTemplateTestingService,
+    private dialog: MatDialog
   ) {
+
     this.metadataForm = this.fb.group({
       name: [''],
       industry: [''],
@@ -352,9 +358,24 @@ export class TemplateDetailComponent implements OnInit, OnDestroy {
     });
   }
 
+  revertToDraft() {
+    this.templateApi.revertTemplateToDraft(this.templateId).subscribe(() => {
+      this.loadTemplate();
+    });
+  }
+
   archive() {
     this.templateApi.archiveTemplate(this.templateId).subscribe(() => {
-      this.router.navigate(['/admin/templates']);
+      this.loadTemplate(); // Refresh locally instead of navigating away if we want to stay on the page
+    });
+  }
+
+  openRunResults(dialogRef: any, run: any) {
+    this.dialog.open(dialogRef, {
+      width: '600px',
+      data: { run }
     });
   }
 }
+
+

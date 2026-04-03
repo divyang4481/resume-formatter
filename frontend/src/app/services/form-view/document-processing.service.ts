@@ -9,8 +9,10 @@ export type ProcessingStatus = 'idle' | 'uploading' | 'waiting_for_confirmation'
 export class DocumentProcessingService {
   public industries = signal<Industry[]>([]);
   public templates = signal<Template[]>([]);
+  public noTemplatesAvailable = signal<boolean>(false);
 
   public status = signal<ProcessingStatus>('idle');
+
   public currentJobId = signal<string | null>(null);
   public currentDocumentId = signal<string | null>(null);
 
@@ -24,17 +26,29 @@ export class DocumentProcessingService {
 
   loadIndustries() {
     this.api.getIndustries().subscribe({
-      next: (res) => this.industries.set(res.industries),
+      next: (res) => {
+        this.industries.set(res.industries);
+        this.updateAvailabilityFlag();
+      },
       error: (err) => console.error('Failed to load industries', err)
     });
+  }
+  
+  private updateAvailabilityFlag() {
+      const showMissing = this.industries().length === 0 && this.templates().length === 0;
+      this.noTemplatesAvailable.set(showMissing);
   }
 
   loadTemplates(industryId?: string) {
     this.api.getTemplates(industryId).subscribe({
-      next: (res) => this.templates.set(res.templates),
+      next: (res) => {
+        this.templates.set(res.templates);
+        this.updateAvailabilityFlag();
+      },
       error: (err) => console.error('Failed to load templates', err)
     });
   }
+
 
   submitDocument(file: File, industry?: string | null, templateId?: string | null) {
     this.status.set('uploading');

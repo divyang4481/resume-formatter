@@ -115,8 +115,11 @@ class ResumeWorkflowService:
             job.status = JobStatus.COMPLETED
             if final_state.get("summary_uri"):
                 job.summary_uri = final_state["summary_uri"]
+            if final_state.get("summary_text"):
+                job.generated_summary = final_state["summary_text"]
             if final_state.get("render_docx_uri"):
                 job.render_docx_uri = final_state["render_docx_uri"]
+
             
             # If it's a governance audit run, update the audit record
             test_run_id = ext_meta.get("test_run_id")
