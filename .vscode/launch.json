@@ -21,7 +21,7 @@
       "type": "debugpy",
       "request": "launch",
       "python": "C:/Users/dpanc/miniconda3/envs/cv-architect/python.exe",
-      "program": "${workspaceFolder}/backend/worker.py",
+      "program": "${workspaceFolder}/backend/app/core/worker.py",
       "cwd": "${workspaceFolder}/backend",
       "console": "integratedTerminal",
       "justMyCode": true
