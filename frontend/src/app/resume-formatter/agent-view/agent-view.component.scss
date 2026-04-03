@@ -81,6 +81,10 @@
   flex-direction: column;
   background: #ffffff;
 
+  .hidden-file-input {
+    display: none;
+  }
+
   .chat-header {
     display: flex;
     justify-content: space-between;
@@ -101,6 +105,10 @@
       border-radius: 12px;
       font-size: 0.85rem;
       font-weight: 500;
+    }
+
+    .start-over-btn {
+      margin-left: auto;
     }
   }
 
