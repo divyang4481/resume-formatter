@@ -43,8 +43,11 @@ def create_app() -> FastAPI:
 
     app.include_router(runtime_router, prefix="/v1/runtime", tags=["Runtime"])
     app.include_router(admin_router, prefix="/admin", tags=["Admin"])
-    app.include_router(a2a_router, prefix="/a2a", tags=["A2A Discoverability"])
-    app.include_router(mcp_router, prefix="/mcp", tags=["MCP Tools"])
+    # Expose at root to match `.well-known` discovery path correctly
+    app.include_router(a2a_router, tags=["A2A Discoverability"])
+
+    # mcp_router is a Starlette app from FastMCP, so we mount it
+    app.mount("/mcp", mcp_router)
 
     @app.get("/health")
     async def health_check():
