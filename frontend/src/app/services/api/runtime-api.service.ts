@@ -18,9 +18,17 @@ export interface Template {
 })
 export class RuntimeApiService {
   // We'll hardcode to the local backend if environment doesn't exist yet
-  private apiUrl = 'http://localhost:8000/v1/runtime';
+  // We change this to a relative URL so it goes through the Angular dev server proxy or same origin.
+  // Wait, I need to check if proxy is configured. If not, maybe use relative url for now?
+  // Let's use relative '/v1/runtime' and if proxy.conf.json isn't there, we'll create it, OR we'll just proxy the specific request.
+  // Let's just create proxy.conf.json.
+  private apiUrl = '/v1/runtime';
 
   constructor(private http: HttpClient) {}
+
+  getApiUrl(): string {
+    return this.apiUrl;
+  }
 
   getIndustries(): Observable<{ industries: Industry[] }> {
     return this.http.get<{ industries: Industry[] }>(`${this.apiUrl}/lookups/industries`);

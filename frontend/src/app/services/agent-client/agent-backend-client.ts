@@ -8,6 +8,7 @@ export interface AgentBackendClient {
   answerQuestion(sessionId: string, answer: unknown): Promise<AgentSession>;
   submitCorrection(sessionId: string, correction: unknown): Promise<AgentSession>;
   rerunSession(sessionId: string): Promise<AgentSession>;
+  getJobIdFromSession(session: AgentSession | null): string | null;
 }
 
 export const AGENT_BACKEND_CLIENT = new InjectionToken<AgentBackendClient>('AgentBackendClient');

@@ -10,6 +10,7 @@ import { MatInputModule } from '@angular/material/input';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatTableModule } from '@angular/material/table';
+import { RouterModule } from '@angular/router';
 import { MatChipsModule } from '@angular/material/chips';
 import { MatExpansionModule } from '@angular/material/expansion';
 import { MatDialogModule, MatDialog } from '@angular/material/dialog';
@@ -33,6 +34,7 @@ import { AdminTemplateTestingService } from '../../../../services/admin-template
     MatSlideToggleModule,
     MatProgressSpinnerModule,
     MatTableModule,
+    RouterModule,
     MatChipsModule,
     MatExpansionModule,
     ReactiveFormsModule,

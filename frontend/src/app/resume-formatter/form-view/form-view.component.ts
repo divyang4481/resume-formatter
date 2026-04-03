@@ -3,6 +3,7 @@ import { FormBuilder, FormGroup, ReactiveFormsModule } from '@angular/forms';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatButtonModule } from '@angular/material/button';
+import { RouterModule } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
 import { MatSelectModule } from '@angular/material/select';
 import { MatCardModule } from '@angular/material/card';
@@ -22,7 +23,8 @@ import { DocumentProcessingService } from '../../services/form-view/document-pro
     MatSelectModule,
     MatCardModule,
     MatProgressSpinnerModule,
-    CommonModule
+    CommonModule,
+    RouterModule
   ],
   templateUrl: './form-view.component.html',
   styleUrl: './form-view.component.scss'
