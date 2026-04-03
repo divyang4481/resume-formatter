@@ -16,13 +16,15 @@ class TemplateService:
         template_repository: TemplateRepository,
         event_bus: EventBus,
         extraction_service: Optional[DocumentExtractionService] = None,
-        knowledge_index: Optional[KnowledgeIndex] = None
+        knowledge_index: Optional[KnowledgeIndex] = None,
+        template_analysis_service: Optional['TemplateAnalysisService'] = None
     ):
         self.storage_provider = storage_provider
         self.template_repository = template_repository
         self.event_bus = event_bus
         self.extraction_service = extraction_service
         self.knowledge_index = knowledge_index
+        self.template_analysis_service = template_analysis_service
 
     async def upload_asset(self, filename: str, content: bytes, metadata: AssetUploadRequestMetadata, content_type: str, uploaded_by: str = "system") -> str:
         """
@@ -68,11 +70,28 @@ class TemplateService:
                 asset_id=asset_id
             )
 
+        # 4b. If it is a template, analyze it for suggestions to pre-fill draft
+        suggestions = {}
+        if metadata.asset_type == "template_docx" and self.template_analysis_service:
+            try:
+                print(f"Triggering automatic AI analysis for template: {filename}")
+                suggestions = await self.template_analysis_service.analyze_template(content, filename)
+            except Exception as analysis_err:
+                print(f"Auto-analysis failed during upload, but continuing with default draft: {analysis_err}")
+
+        def ensure_str(val):
+            if val is None:
+                return None
+            if isinstance(val, (dict, list)):
+                import json
+                return json.dumps(val)
+            return str(val)
+
         # 5. Save metadata record (draft)
         template_asset = TemplateAsset(
             id=asset_id,
             asset_type=metadata.asset_type,
-            name=metadata.name,
+            name=suggestions.get("purpose", metadata.name or filename),
             description=metadata.description,
             industry=metadata.industry,
             role_family=metadata.role_family,
@@ -81,11 +100,19 @@ class TemplateService:
             tags=metadata.tags,
             version=metadata.version,
             status=AssetStatus.DRAFT,
+            purpose=ensure_str(suggestions.get("purpose")),
+            expected_sections=ensure_str(suggestions.get("expected_sections")),
+            expected_fields=ensure_str(suggestions.get("expected_fields")),
+            summary_guidance=ensure_str(suggestions.get("summary_guidance")),
+            formatting_guidance=ensure_str(suggestions.get("formatting_guidance")),
+            validation_guidance=ensure_str(suggestions.get("validation_guidance")),
+            pii_guidance=ensure_str(suggestions.get("pii_guidance")),
             original_file_ref=storage_uri,
             checksum=checksum,
             created_by=uploaded_by,
             extension_metadata={"document_extractor_backend": backend_used} if backend_used else {}
         )
+
         self.template_repository.save_template(template_asset)
 
         # 6. Emit Audit Event

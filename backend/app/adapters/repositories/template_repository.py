@@ -30,6 +30,16 @@ class SqlAlchemyTemplateRepository(TemplateRepository):
             role_family=model.role_family,
             region=model.region,
             language=model.language or "en",
+            notes=model.notes,
+            purpose=model.purpose,
+            expected_sections=model.expected_sections,
+            expected_fields=model.expected_fields,
+            summary_guidance=model.summary_guidance,
+
+            formatting_guidance=model.formatting_guidance,
+            validation_guidance=model.validation_guidance,
+            pii_guidance=model.pii_guidance,
+            selection_weight=model.selection_weight or 50,
             original_file_ref=model.storage_uri or "",
             checksum=model.checksum_sha256 or "",
             extraction_artifact_ref=model.extraction_uri,
@@ -51,6 +61,15 @@ class SqlAlchemyTemplateRepository(TemplateRepository):
         model.role_family = template_asset.role_family
         model.region = template_asset.region
         model.language = template_asset.language
+        model.notes = template_asset.notes
+        model.purpose = template_asset.purpose
+        model.expected_sections = template_asset.expected_sections
+        model.expected_fields = template_asset.expected_fields
+        model.summary_guidance = template_asset.summary_guidance
+
+        model.formatting_guidance = template_asset.formatting_guidance
+        model.validation_guidance = template_asset.validation_guidance
+        model.pii_guidance = template_asset.pii_guidance
         model.storage_uri = template_asset.original_file_ref
         model.checksum_sha256 = template_asset.checksum
         model.extraction_uri = template_asset.extraction_artifact_ref
@@ -86,6 +105,16 @@ class SqlAlchemyTemplateRepository(TemplateRepository):
                     role_family=model.role_family,
                     region=model.region,
                     language=model.language or "en",
+                    notes=model.notes,
+                    purpose=model.purpose,
+                    expected_sections=model.expected_sections,
+                    expected_fields=model.expected_fields,
+                    summary_guidance=model.summary_guidance,
+
+                    formatting_guidance=model.formatting_guidance,
+                    validation_guidance=model.validation_guidance,
+                    pii_guidance=model.pii_guidance,
+                    selection_weight=model.selection_weight or 50,
                     original_file_ref=model.storage_uri or "",
                     checksum=model.checksum_sha256 or "",
                     extraction_artifact_ref=model.extraction_uri,

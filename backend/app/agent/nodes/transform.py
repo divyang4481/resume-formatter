@@ -10,48 +10,59 @@ def create_transform_node(llm_runtime: LlmRuntimeAdapter):
         print("Executing Transform Node...")
 
         extracted_text = state.get("extracted_text", "")
-        template_id = state.get("selected_template_id", "default")
+        template_id = state.get("selected_template_id") or "default"
         
-        print(f"Transforming text (Length: {len(extracted_text)} chars) using template: {template_id}")
+        formatting_guidance = state.get("formatting_guidance") or ""
+        pii_guidance = state.get("pii_guidance") or ""
+        expected_sections = state.get("expected_sections") or "Summary, Experience, Education, Skills"
+        expected_fields = state.get("expected_fields") or ""
+        template_text = state.get("template_text") or "Not provided"
 
-        # In a real app, you'd fetch the schema/template rules from a database/registry
-        # Here we mock it.
+        # Build a dynamic JSON structure based on the current template's requirements
+
+        # Fallback to standard info if no requirements are specified
+        dynamic_schema = {
+            "personal_info": {"name": "", "email": ""},
+            "summary": ""
+        }
+        
+        if expected_fields:
+            fields = [f.strip() for f in expected_fields.split(",") if f.strip()]
+            for f in fields:
+                # Merge into root or nested structure? Keeping it flat for simplicity in generic templates
+                dynamic_schema[f] = ""
+
+        if expected_sections:
+            sections = [s.strip() for s in expected_sections.split(",") if s.strip()]
+            for s in sections:
+                if s.lower() not in ["summary", "personal_info"]:
+                     dynamic_schema[s.lower().replace(" ", "_")] = [] # Sections are usually arrays of objects or strings
+
         prompt = f"""
         You are an expert document transformer. Your job is to extract and transform the provided
-        resume/CV text into a canonical structured JSON format.
+        resume/CV text into a canonical structured JSON format that will be rendered INTO a specific template.
+
+        TARGET TEMPLATE STRUCTURE (EXTRACTED TEXT):
+        {template_text[:4000]}
+
+        TEMPLATE EXPECTATIONS:
+        Mandatory Sections to Identify: {expected_sections}
+        Required Specific Fields to Extract: {expected_fields}
+
+        TEMPLATE GUIDANCE & POLICIES:
+        {formatting_guidance}
+        {pii_guidance}
 
         CRITICAL INSTRUCTIONS:
-        1. Extract the facts ONLY from the "Document Text" below.
-        2. NEVER invent, hallucinate, or use placeholders (e.g., "<<FullName>>", "<<Skill1>>", "...", or similar).
-        3. If information for a field is missing from the document, leave it empty (use "" for strings, [] for arrays).
-        4. Do not output anything other than the JSON itself.
+        1. Extract facts ONLY from the "Resume Document Text" below.
+        2. Output ONLY the JSON structure defined below.
+        3. Use the structural layout of the TARGET TEMPLATE above to decide how to best map and summarize the candidate's data.
+        4. If a field is missing, leave it as "" or [].
+        5. DO NOT invent data or use placeholders.
 
-        Template ID: {template_id}
+        Please output ONLY valid JSON matching exactly this dynamic structure:
+        {json.dumps(dynamic_schema, indent=2)}
 
-        Please output ONLY valid JSON matching exactly this structure:
-        {{
-            "personal_info": {{
-                "name": "",
-                "email": ""
-            }},
-            "experience": [
-                {{
-                    "title": "",
-                    "company": "",
-                    "dates": "",
-                    "description": ""
-                }}
-            ],
-            "education": [
-                {{
-                    "degree": "",
-                    "school": "",
-                    "dates": ""
-                }}
-            ],
-            "skills": [],
-            "certifications": []
-        }}
 
         Document Text:
         {extracted_text}

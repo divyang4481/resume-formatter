@@ -1,0 +1,25 @@
+from typing import Dict, Any, Optional
+from app.services.resume_ai_service import ResumeAiService
+
+class TemplateAnalysisService:
+    def __init__(self, ai_service: ResumeAiService):
+        self.ai_service = ai_service
+
+    async def analyze_template(self, file_bytes: bytes, filename: str) -> Dict[str, Any]:
+        """
+        Delegates the AI analysis logic to the centralized ResumeAiService.
+        """
+        try:
+            return await self.ai_service.analyze_template(file_bytes, filename)
+        except Exception as e:
+            print(f"Template analysis delegation failed: {e}")
+            return {
+                "purpose": "General Professional Template",
+                "expected_sections": "Summary, Experience, Education, Skills",
+                "expected_fields": "summary, experience, education, skills",
+                "summary_guidance": "Standard executive summary focusing on career progression.",
+                "formatting_guidance": "Clear, bulleted lists and consistent date formatting (Jan 2024).",
+                "pii_guidance": "Redact specific details like full home address and non-essential contact data.",
+                "validation_guidance": "Ensure all core sections have data; check for valid date ranges."
+            }
+

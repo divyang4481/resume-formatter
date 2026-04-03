@@ -54,17 +54,22 @@ export class TemplateDetailComponent implements OnInit, OnDestroy {
   expandedElement: any | null = null;
 
   pipelineStages = [
-    { id: 'upload', name: 'Sample Uploaded', icon: 'cloud_upload' },
-    { id: 'extraction', name: 'Parsing / Extraction', icon: 'document_scanner' },
-    { id: 'mapping', name: 'Structure Mapping', icon: 'schema' },
-    { id: 'render', name: 'Template Rendering', icon: 'picture_as_pdf' },
-    { id: 'validation', name: 'Validation', icon: 'fact_check' },
-    { id: 'result', name: 'Final Result', icon: 'done_all' }
+    { id: 'ingest', name: 'Ingestion', icon: 'cloud_upload' },
+    { id: 'parse', name: 'Extraction', icon: 'document_scanner' },
+    { id: 'classify', name: 'Classification', icon: 'category' },
+    { id: 'normalize', name: 'Normalization', icon: 'schema' },
+    { id: 'privacy', name: 'PII Privacy', icon: 'security' },
+    { id: 'transform', name: 'AI Transformation', icon: 'auto_awesome' },
+    { id: 'validate', name: 'Quality Check', icon: 'fact_check' },
+    { id: 'render', name: 'Rendering', icon: 'picture_as_pdf' }
   ];
 
+
   metadataForm: FormGroup;
+  requirementsForm: FormGroup;
   notesForm: FormGroup;
   testForm: FormGroup;
+
 
   selectedFile: File | null = null;
   currentJobId: string | null = null;
@@ -87,12 +92,23 @@ export class TemplateDetailComponent implements OnInit, OnDestroy {
       role_family: [''],
       language: ['en'],
       selection_weight: [50],
-      is_default_for_industry: [false]
+      is_default_for_industry: [false],
+      purpose: ['']
+    });
+
+    this.requirementsForm = this.fb.group({
+      expected_sections: [''],
+      expected_fields: ['']
     });
 
     this.notesForm = this.fb.group({
-      notes: ['']
+      notes: [''],
+      summary_guidance: [''],
+      formatting_guidance: [''],
+      validation_guidance: [''],
+      pii_guidance: ['']
     });
+
 
     this.testForm = this.fb.group({
       industry_id: [''],
@@ -101,6 +117,8 @@ export class TemplateDetailComponent implements OnInit, OnDestroy {
       generate_summary: [true]
     });
   }
+
+  isAnalyzing: boolean = false;
 
   ngOnInit(): void {
     this.templateId = this.route.snapshot.paramMap.get('id') || '';
@@ -116,9 +134,54 @@ export class TemplateDetailComponent implements OnInit, OnDestroy {
       this.publishEligibility = res.publish_eligibility;
 
       this.metadataForm.patchValue(this.template);
-      this.notesForm.patchValue({ notes: this.template.notes });
+      this.requirementsForm.patchValue({
+        expected_sections: this.template.expected_sections,
+        expected_fields: this.template.expected_fields
+      });
+      this.notesForm.patchValue({
+        notes: this.template.notes,
+        summary_guidance: this.template.summary_guidance,
+        formatting_guidance: this.template.formatting_guidance,
+        validation_guidance: this.template.validation_guidance,
+        pii_guidance: this.template.pii_guidance
+      });
     });
   }
+
+  analyzeTemplate() {
+    this.isAnalyzing = true;
+    this.templateApi.analyzeTemplate(this.templateId).subscribe({
+      next: (res) => {
+        this.isAnalyzing = false;
+        if (res.suggestions) {
+          // Pre-fill the forms with suggestions
+          this.metadataForm.patchValue({
+            purpose: res.suggestions.purpose
+          });
+          this.requirementsForm.patchValue({
+            expected_sections: res.suggestions.expected_sections,
+            expected_fields: res.suggestions.expected_fields
+          });
+          this.notesForm.patchValue({
+            summary_guidance: res.suggestions.summary_guidance,
+            formatting_guidance: res.suggestions.formatting_guidance,
+            validation_guidance: res.suggestions.validation_guidance,
+            pii_guidance: res.suggestions.pii_guidance
+          });
+        }
+      },
+      error: () => {
+        this.isAnalyzing = false;
+      }
+    });
+  }
+
+  saveRequirements() {
+    this.templateApi.updateTemplate(this.templateId, this.requirementsForm.value).subscribe(() => {
+      this.loadTemplate();
+    });
+  }
+
 
   loadTestRuns() {
     this.templateApi.listTestRuns(this.templateId).subscribe(res => {
@@ -158,7 +221,7 @@ export class TemplateDetailComponent implements OnInit, OnDestroy {
     if (status === 'completed') return 'completed';
 
     if (stageIndex < currentIndex) return 'completed';
-    if (stageIndex === currentIndex && this.isRunningTest) return 'running';
+    if (stageIndex === currentIndex) return 'running';
 
     return 'pending';
   }
@@ -237,11 +300,16 @@ export class TemplateDetailComponent implements OnInit, OnDestroy {
     this.testApi.getJobOutputs(this.currentJobId).subscribe(res => {
       this.jobOutputs = res;
     });
-    this.testApi.getJobSummary(this.currentJobId).subscribe(res => {
-      if(this.jobOutputs) {
-        this.jobOutputs.summary = res.summary;
-      } else {
-        this.jobOutputs = { summary: res.summary };
+    this.testApi.getJobSummary(this.currentJobId).subscribe({
+      next: (res) => {
+        if(this.jobOutputs) {
+          this.jobOutputs.summary = res.summary;
+        } else {
+          this.jobOutputs = { summary: res.summary };
+        }
+      },
+      error: () => {
+         if(this.jobOutputs) this.jobOutputs.summary = "Internal: Could not load generated summary string.";
       }
     });
   }

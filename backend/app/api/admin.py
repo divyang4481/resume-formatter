@@ -11,11 +11,13 @@ from app.dependencies import (
     template_repository_dependency,
     event_bus_dependency,
     document_extraction_service_dependency,
-    get_knowledge_index
+    get_knowledge_index,
+    llm_runtime_dependency
 )
 from app.utils import validate_uploaded_file
 from app.services.template_service import TemplateService
 from app.domain.interfaces import StorageProvider, TemplateRepository, EventBus, DocumentExtractionService, KnowledgeIndex
+from app.adapters.base import LlmRuntimeAdapter
 
 router = APIRouter()
 
@@ -32,7 +34,8 @@ async def upload_asset(
     template_repository: TemplateRepository = Depends(template_repository_dependency),
     event_bus: EventBus = Depends(event_bus_dependency),
     extraction_service: DocumentExtractionService = Depends(document_extraction_service_dependency),
-    knowledge_index: KnowledgeIndex = Depends(get_knowledge_index)
+    knowledge_index: KnowledgeIndex = Depends(get_knowledge_index),
+    llm: LlmRuntimeAdapter = Depends(llm_runtime_dependency)
 ):
     try:
         # Validate metadata JSON
@@ -56,12 +59,17 @@ async def upload_asset(
     content = await file.read()
 
     # Run the template service
+    from app.services.resume_ai_service import ResumeAiService
+    from app.services.template_analysis_service import TemplateAnalysisService
+    ai_service = ResumeAiService(llm, extraction_service)
+
     template_service = TemplateService(
         storage_provider=storage_provider,
         template_repository=template_repository,
         event_bus=event_bus,
         extraction_service=extraction_service,
-        knowledge_index=knowledge_index
+        knowledge_index=knowledge_index,
+        template_analysis_service=TemplateAnalysisService(ai_service)
     )
 
     asset_id = await template_service.upload_asset(
@@ -99,6 +107,14 @@ class TemplateUpdateRequest(BaseModel):
     role_family: Optional[str] = None
     language: Optional[str] = None
     notes: Optional[str] = None
+    purpose: Optional[str] = None
+    expected_sections: Optional[str] = None
+    expected_fields: Optional[str] = None
+
+    summary_guidance: Optional[str] = None
+    formatting_guidance: Optional[str] = None
+    validation_guidance: Optional[str] = None
+    pii_guidance: Optional[str] = None
     selection_weight: Optional[int] = None
     is_default_for_industry: Optional[bool] = None
 
@@ -120,6 +136,41 @@ async def update_template(
 
         db.commit()
         return {"message": "Template updated successfully"}
+    finally:
+        db.close()
+
+from app.services.template_analysis_service import TemplateAnalysisService
+
+@router.post("/templates/{id}/analyze")
+async def analyze_template(
+    id: str,
+    is_admin: bool = Depends(mock_is_admin),
+    storage_provider: StorageProvider = Depends(storage_provider_dependency),
+    extraction_service: DocumentExtractionService = Depends(document_extraction_service_dependency),
+    llm: LlmRuntimeAdapter = Depends(llm_runtime_dependency)
+):
+    db = SessionLocal()
+    try:
+        template = db.query(TemplateAsset).filter(TemplateAsset.id == id).first()
+        if not template:
+            raise HTTPException(status_code=404, detail="Template not found")
+
+        if not template.storage_uri:
+            raise HTTPException(status_code=400, detail="Template file not found in storage")
+
+        # Fetch template bytes
+        template_key = template.storage_uri.replace("local://", "")
+        template_bytes = storage_provider.get_bytes(template_key)
+
+        from app.services.resume_ai_service import ResumeAiService
+        ai_service = ResumeAiService(llm, extraction_service)
+        analyzer = TemplateAnalysisService(ai_service=ai_service)
+        suggestions = await analyzer.analyze_template(template_bytes, template.file_name or "template.docx")
+
+        return {
+            "template_id": id,
+            "suggestions": suggestions
+        }
     finally:
         db.close()
 
@@ -150,7 +201,15 @@ async def get_template_detail(
                 "name": template.name,
                 "status": template.status,
                 "notes": template.notes,
+                "purpose": template.purpose,
+                "expected_sections": template.expected_sections,
+                "expected_fields": template.expected_fields,
+                "summary_guidance": template.summary_guidance,
+                "formatting_guidance": template.formatting_guidance,
+                "validation_guidance": template.validation_guidance,
+                "pii_guidance": template.pii_guidance,
                 "selection_weight": template.selection_weight,
+
                 "industry": template.industry,
                 "language": template.language,
                 "role_family": template.role_family,

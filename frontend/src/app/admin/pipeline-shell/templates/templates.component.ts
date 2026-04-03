@@ -234,7 +234,10 @@ export class TemplatesComponent implements OnInit {
     });
 
     dialogRef.afterClosed().subscribe(result => {
-      if (result) {
+      if (typeof result === 'string') {
+        // AI Analysis initiated, navigate to detail to review suggestions
+        this.router.navigate(['/admin/templates', result]);
+      } else if (result) {
         this.loadTemplates();
       }
     });

@@ -41,4 +41,8 @@ export class AdminTemplateApiService {
   saveTestReview(templateId: string, testRunId: string, payload: any): Observable<any> {
     return this.http.post(`${this.apiUrl}/${templateId}/test-runs/${testRunId}/review`, payload);
   }
+
+  analyzeTemplate(templateId: string): Observable<any> {
+    return this.http.post(`${this.apiUrl}/${templateId}/analyze`, {});
+  }
 }

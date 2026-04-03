@@ -5,6 +5,12 @@
     </button>
     <h1>{{ template?.name || 'Template Detail' }}</h1>
     <span class="status-badge" [ngClass]="template?.status">{{ template?.status | uppercase }}</span>
+    <div class="spacer"></div>
+    <button mat-flat-button color="accent" (click)="analyzeTemplate()" [disabled]="isAnalyzing">
+      <mat-icon *ngIf="!isAnalyzing">psychology</mat-icon>
+      <mat-spinner diameter="20" *ngIf="isAnalyzing"></mat-spinner>
+      {{ isAnalyzing ? 'Analyzing...' : 'Analyze Template (AI)' }}
+    </button>
   </div>
 
   <mat-tab-group>
@@ -15,30 +21,37 @@
           <form [formGroup]="metadataForm" (ngSubmit)="saveMetadata()">
             <mat-form-field appearance="outline" class="full-width">
               <mat-label>Name</mat-label>
-              <input matInput formControlName="name">
+              <input matInput formControlName="name" id="templateName" title="Template Name" placeholder="e.g. Senior Java Engineer Template">
             </mat-form-field>
+
+            <mat-form-field appearance="outline" class="full-width">
+              <mat-label>Template Purpose / Narrative Style</mat-label>
+              <input matInput formControlName="purpose" id="templatePurpose" title="Template Purpose" placeholder="e.g. Senior Professional with concise style">
+            </mat-form-field>
+
+
 
             <div class="row">
               <mat-form-field appearance="outline">
                 <mat-label>Industry</mat-label>
-                <input matInput formControlName="industry">
+                <input matInput formControlName="industry" id="templateIndustry" title="Industry" placeholder="e.g. Information Technology">
               </mat-form-field>
 
               <mat-form-field appearance="outline">
                 <mat-label>Role Family</mat-label>
-                <input matInput formControlName="role_family">
+                <input matInput formControlName="role_family" id="templateRoleFamily" title="Role Family" placeholder="e.g. Engineering">
               </mat-form-field>
             </div>
 
             <div class="row">
               <mat-form-field appearance="outline">
                 <mat-label>Language</mat-label>
-                <input matInput formControlName="language">
+                <input matInput formControlName="language" id="templateLanguage" title="Language" placeholder="e.g. en">
               </mat-form-field>
 
               <mat-form-field appearance="outline">
                 <mat-label>Selection Weight</mat-label>
-                <input matInput type="number" formControlName="selection_weight">
+                <input matInput type="number" formControlName="selection_weight" id="templateWeight" title="Selection Weight" placeholder="1-100">
               </mat-form-field>
             </div>
 
@@ -55,20 +68,59 @@
     </mat-tab>
 
     <!-- Notes / Guidance Tab -->
-    <mat-tab label="Notes & Guidance">
-      <mat-card>
-        <mat-card-content>
-          <form [formGroup]="notesForm" (ngSubmit)="saveNotes()">
-            <mat-form-field appearance="outline" class="full-width">
-              <mat-label>Template Notes / Guidance</mat-label>
-              <textarea matInput formControlName="notes" rows="6"></textarea>
-            </mat-form-field>
-            <div class="actions">
-              <button mat-raised-button color="primary" type="submit">Save Notes</button>
-            </div>
-          </form>
-        </mat-card-content>
-      </mat-card>
+    <mat-tab label="Guidance & Policies (KB)">
+      <div class="guidance-container">
+        <mat-card class="guidance-card">
+          <mat-card-content>
+            <form [formGroup]="notesForm" (ngSubmit)="saveNotes()">
+              
+              <div class="guidance-section">
+                <h3><mat-icon>auto_awesome</mat-icon> Summary Guidance</h3>
+                <mat-form-field appearance="outline" class="full-width">
+                  <mat-label>Instructions for professional summary generation</mat-label>
+                  <textarea matInput formControlName="summary_guidance" id="summaryGuidance" title="Summary Generation Rules" rows="3" placeholder="Enter instructions for summary generation..."></textarea>
+                </mat-form-field>
+              </div>
+
+              <div class="guidance-section">
+                <h3><mat-icon>format_paint</mat-icon> Formatting Guidance</h3>
+                <mat-form-field appearance="outline" class="full-width">
+                  <mat-label>Instructions for detail extraction and mapping</mat-label>
+                  <textarea matInput formControlName="formatting_guidance" id="formattingGuidance" title="Formatting Extraction Rules" rows="3" placeholder="Enter extraction mapping rules..."></textarea>
+                </mat-form-field>
+              </div>
+
+              <div class="guidance-section">
+                <h3><mat-icon>security</mat-icon> Privacy & Redaction</h3>
+                <mat-form-field appearance="outline" class="full-width">
+                  <mat-label>PII policies and specific redaction rules</mat-label>
+                  <textarea matInput formControlName="pii_guidance" id="piiGuidance" title="Privacy Policies" rows="3" placeholder="Enter privacy and redaction rules..."></textarea>
+                </mat-form-field>
+              </div>
+
+              <div class="guidance-section">
+                <h3><mat-icon>fact_check</mat-icon> Validation Rules</h3>
+                <mat-form-field appearance="outline" class="full-width">
+                  <mat-label>Quality checks and mandatory field logic</mat-label>
+                  <textarea matInput formControlName="validation_guidance" id="validationGuidance" title="Validation Rules" rows="3" placeholder="Enter validation and quality rules..."></textarea>
+                </mat-form-field>
+              </div>
+
+              <div class="guidance-section">
+                <h3><mat-icon>notes</mat-icon> Administrative Notes</h3>
+                <mat-form-field appearance="outline" class="full-width">
+                  <mat-label>Internal notes or applicability hints</mat-label>
+                  <textarea matInput formControlName="notes" id="adminNotes" title="Administrative Notes" rows="4" placeholder="Enter administrative notes..."></textarea>
+                </mat-form-field>
+              </div>
+
+              <div class="actions">
+                <button mat-raised-button color="primary" type="submit">Save Guidance & Rules</button>
+              </div>
+            </form>
+          </mat-card-content>
+        </mat-card>
+      </div>
     </mat-tab>
 
     <!-- Sample Resume Test Tab -->
@@ -80,21 +132,21 @@
           <mat-card-content>
             <form [formGroup]="testForm" (ngSubmit)="runTest()">
               <div>
-                <input type="file" (change)="onFileSelected($event)">
+                <input type="file" id="fileUpload" title="Upload Resume for Testing" (change)="onFileSelected($event)">
               </div>
 
-              <mat-form-field appearance="outline" class="full-width" style="margin-top: 16px;">
+              <mat-form-field appearance="outline" class="full-width mt-2">
                 <mat-label>Industry (Override)</mat-label>
-                <input matInput formControlName="industry_id">
+                <input matInput formControlName="industry_id" id="industryOverride" title="Industry Override" placeholder="Optional industry override">
               </mat-form-field>
 
               <mat-slide-toggle formControlName="redact_pii">Redact PII</mat-slide-toggle>
               <mat-slide-toggle formControlName="generate_summary">Generate Summary</mat-slide-toggle>
 
-              <div class="actions" style="margin-top: 16px; display: flex; align-items: center; gap: 8px;">
+              <div class="actions mt-2 flex-align-center flex-gap-8">
                 <button mat-raised-button color="primary" type="submit" [disabled]="!selectedFile || isRunningTest">
                   <span *ngIf="!isRunningTest">Run Test</span>
-                  <span *ngIf="isRunningTest" style="display: flex; align-items: center; gap: 8px;">
+                  <span *ngIf="isRunningTest" class="flex-align-center flex-gap-8">
                     <mat-spinner diameter="20"></mat-spinner>
                     Processing...
                   </span>
@@ -113,18 +165,21 @@
             <div class="pipeline-stepper">
               <div class="pipeline-stage" *ngFor="let stage of pipelineStages; let isLast = last"
                    [ngClass]="getStageStatus(stage.id)">
-                <div class="stage-icon">
-                  <mat-icon *ngIf="getStageStatus(stage.id) === 'completed'">check_circle</mat-icon>
-                  <mat-spinner diameter="24" *ngIf="getStageStatus(stage.id) === 'running'"></mat-spinner>
-                  <mat-icon *ngIf="getStageStatus(stage.id) === 'failed'">error</mat-icon>
-                  <mat-icon *ngIf="getStageStatus(stage.id) === 'pending'">{{ stage.icon }}</mat-icon>
+                <div class="stage-icon-container">
+                  <div class="stage-icon">
+                    <mat-icon *ngIf="getStageStatus(stage.id) === 'completed'">check_circle</mat-icon>
+                    <mat-spinner diameter="24" *ngIf="getStageStatus(stage.id) === 'running'"></mat-spinner>
+                    <mat-icon *ngIf="getStageStatus(stage.id) === 'failed'">error</mat-icon>
+                    <mat-icon *ngIf="getStageStatus(stage.id) === 'pending'">{{ stage.icon }}</mat-icon>
+                  </div>
+                  <div class="stage-label">{{ stage.name }}</div>
                 </div>
-                <div class="stage-label">{{ stage.name }}</div>
                 <div class="stage-connector" *ngIf="!isLast"></div>
               </div>
+
             </div>
 
-            <div *ngIf="jobStatus.error_message" class="error-msg" style="margin-top: 16px;">
+            <div *ngIf="jobStatus.error_message" class="error-msg mt-2">
               <mat-icon>error</mat-icon> {{ jobStatus.error_message }}
             </div>
           </mat-card-content>
@@ -138,7 +193,7 @@
           <mat-card-content>
             <h3>Summary Output</h3>
             <pre class="summary-box">{{ jobOutputs.summary }}</pre>
-            <div style="margin-top: 16px;">
+            <div class="mt-2">
               <p *ngIf="jobOutputs.url">
                 <a mat-stroked-button color="primary" [href]="jobOutputs.url" target="_blank">
                   <mat-icon>open_in_new</mat-icon> Download Rendered Artifact
@@ -146,15 +201,16 @@
               </p>
             </div>
 
-            <div class="current-run-actions" *ngIf="getCurrentTestRunId() as testRunId">
+            <div class="current-run-actions" *ngIf="getCurrentTestRunId()">
+
                <hr/>
                <ng-container *ngIf="!getCurrentTestRunDecision()">
                  <h4>Review Decision</h4>
-                 <div style="display: flex; gap: 8px;">
-                   <button mat-raised-button color="primary" (click)="reviewTestRun(testRunId, 'PASS')">
+                 <div class="flex-gap-8">
+                   <button mat-raised-button color="primary" (click)="reviewTestRun(getCurrentTestRunId()!, 'PASS')">
                      <mat-icon>check</mat-icon> Mark as PASS
                    </button>
-                   <button mat-raised-button color="warn" (click)="reviewTestRun(testRunId, 'FAIL')">
+                   <button mat-raised-button color="warn" (click)="reviewTestRun(getCurrentTestRunId()!, 'FAIL')">
                      <mat-icon>close</mat-icon> Mark as FAIL
                    </button>
                  </div>
@@ -163,6 +219,46 @@
                  <h4>Review Decision: <span [ngClass]="getCurrentTestRunDecision() === 'PASS' ? 'text-primary' : 'text-warn'">{{ getCurrentTestRunDecision() }}</span></h4>
                </ng-container>
             </div>
+
+
+          </mat-card-content>
+        </mat-card>
+      </div>
+    </mat-tab>
+
+    <!-- Requirements Tab -->
+    <mat-tab label="Requirements">
+      <div class="governance-container p-3">
+        <mat-card appearance="outlined">
+          <mat-card-header class="mb-3">
+            <mat-card-title>Data Extraction Requirements</mat-card-title>
+
+          </mat-card-header>
+          <mat-card-content>
+            <p class="text-muted mb-4">
+              Specify the sections and fields that must be successfully extracted and identified on a candidate's resume to correctly populate this template's placeholders.
+            </p>
+
+            <form [formGroup]="requirementsForm" class="flex-column gap-16">
+              <mat-form-field appearance="outline" class="w-100 mb-3">
+                <mat-label>Logical Sections Expected</mat-label>
+                <textarea matInput formControlName="expected_sections" placeholder="Summary, Experience, Skills, Education..." rows="3"></textarea>
+                <mat-hint>Key sections the system will prioritize during its parsing and classifying stages.</mat-hint>
+              </mat-form-field>
+
+              <mat-form-field appearance="outline" class="w-100 mb-n1">
+                <mat-label>Mandatory Data Fields (Placeholders)</mat-label>
+                <textarea matInput formControlName="expected_fields" placeholder="name, email, current_role, total_years_xp, tech_stack, certifications..." rows="6"></textarea>
+                <mat-hint>A comma-separated list of core data points to be extracted from the resume and mapped to the template.</mat-hint>
+              </mat-form-field>
+
+              <div class="mt-4 pt-3 flex-justify-end d-flex gap-2">
+                <button mat-raised-button color="primary" type="button" [disabled]="!requirementsForm.dirty || requirementsForm.invalid" (click)="saveRequirements()">
+                  <mat-icon>save</mat-icon> Save Requirements
+                </button>
+              </div>
+            </form>
+
           </mat-card-content>
         </mat-card>
       </div>
@@ -209,23 +305,43 @@
           <ng-container matColumnDef="actions">
             <th mat-header-cell *matHeaderCellDef> Actions </th>
             <td mat-cell *matCellDef="let element">
-              <div style="display: flex; gap: 8px;">
+              <div class="flex-gap-8">
                 <button mat-stroked-button color="primary" *ngIf="!element.decision" (click)="reviewTestRun(element.id, 'PASS')">PASS</button>
                 <button mat-stroked-button color="warn" *ngIf="!element.decision" (click)="reviewTestRun(element.id, 'FAIL')">FAIL</button>
               </div>
             </td>
+
           </ng-container>
 
           <ng-container matColumnDef="expandedDetail">
             <td mat-cell *matCellDef="let element" [attr.colspan]="displayedColumns.length">
-              <div class="example-element-detail" [@detailExpand]="element === expandedElement ? 'expanded' : 'collapsed'">
-                 <div style="padding: 16px;">
-                    <strong>Summary:</strong>
-                    <p>{{ element.generated_summary || 'No summary available' }}</p>
+              <div class="test-run-detail-container" [@detailExpand]="element === expandedElement ? 'expanded' : 'collapsed'">
+                 <div class="p-3 bg-light rounded m-2 border">
+                    <div class="mb-3">
+                        <h4 class="mb-2"><strong>AI Summary Output:</strong></h4>
+                        <div class="p-2 bg-white border rounded">
+                            {{ element.generated_summary || 'No summary was generated.' }}
+                        </div>
+                    </div>
+                    
+                    <div class="flex-gap-8 mt-2">
+                        <a mat-raised-button color="primary" [href]="'http://localhost:8000/v1/runtime/documents/' + element.job_id + '/download'" target="_blank">
+                            <mat-icon>download</mat-icon> Download Formatted DOCX
+                        </a>
+                        
+                        <ng-container *ngIf="!element.decision">
+                            <button mat-stroked-button color="primary" (click)="reviewTestRun(element.id, 'PASS')">APPROVE</button>
+                            <button mat-stroked-button color="warn" (click)="reviewTestRun(element.id, 'FAIL')">REJECT</button>
+                        </ng-container>
+                        <span *ngIf="element.decision" class="p-2 border rounded">
+                            Decision Recorded: <strong>{{ element.decision }}</strong>
+                        </span>
+                    </div>
                  </div>
               </div>
             </td>
           </ng-container>
+
 
           <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
           <tr mat-row *matRowDef="let row; columns: displayedColumns;" class="example-element-row" [class.example-expanded-row]="expandedElement === row" (click)="expandedElement = expandedElement === row ? null : row"></tr>
@@ -248,7 +364,7 @@
             <mat-icon>error</mat-icon> Cannot publish: {{ publishEligibility?.reason }}
           </div>
 
-          <div class="actions" style="margin-top: 24px;">
+          <div class="actions mt-3">
             <button mat-raised-button color="primary" [disabled]="!publishEligibility?.can_publish" (click)="publish()">Publish to Active</button>
             <button mat-button color="warn" (click)="archive()">Archive Template</button>
           </div>

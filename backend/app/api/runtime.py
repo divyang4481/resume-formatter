@@ -8,15 +8,17 @@ from app.dependencies import (
     document_extraction_service_dependency,
     message_queue_dependency,
     template_repository_dependency,
-    template_lookup_service_dependency
+    template_lookup_service_dependency,
+    resume_workflow_service_dependency
 )
 from app.domain.interfaces import StorageProvider, JobRepository, DocumentExtractionService, MessageQueue, TemplateRepository
 from app.schemas.job import ProcessingJob
 from app.adapters.base import LlmRuntimeAdapter
-from app.agent.graph import build_workflow_graph
+from app.agent.graph import AgentState
 from app.schemas.enums import JobStatus
 from app.schemas.runtime import SubmitDocumentResponse, RuntimeJobStatusResponse, ConfirmDocumentRequest
 from app.services.resume_ingestion_service import ResumeIngestionService
+from app.services.resume_workflow_service import ResumeWorkflowService
 
 router = APIRouter()
 
@@ -57,80 +59,10 @@ def process_document_task(job_id: str, llm: LlmRuntimeAdapter, parser_service: D
     # We will let fastapi run the async function.
     pass
 
-from app.dependencies import get_storage_provider
+# Workflow migrated to ResumeWorkflowService
 
-async def async_process_document_task(job_id: str, llm: LlmRuntimeAdapter, parser_service: DocumentExtractionService, job_repo: JobRepository):
-    # Build the graph injecting our adapters
-    storage = get_storage_provider()
-    graph = build_workflow_graph(llm_runtime=llm, doc_parser=parser_service, storage=storage)
+# End of migrated workflow
 
-    job = job_repo.get_job(job_id)
-    if not job:
-        return
-    job.status = JobStatus.PROCESSING
-    job_repo.save_job(job)
-
-    # Reconstruct intent from job metadata
-    ext_meta = getattr(job, 'extension_metadata', {})
-    if not isinstance(ext_meta, dict):
-        ext_meta = {}
-
-    intent = ext_meta.get("intent", "candidate_runtime")
-    actor_role = ext_meta.get("actor_role", "system")
-    filename = ext_meta.get("filename", "mock_file.pdf")
-    content_type = ext_meta.get("content_type", "application/pdf")
-
-    # Actually, let's fetch original_file_ref
-    file_ref = getattr(job, 'original_file_ref', "unknown")
-    if file_ref == "unknown":
-        if hasattr(job, 'candidate_resume_id'):
-            file_ref = f"jobs/{job_id}/input/{filename}"
-
-    selected_template_id = getattr(job, 'selected_template_id', getattr(job, 'template_asset_id', None))
-
-    # Initial state
-    initial_state = {
-        "session_id": job_id,
-        "file_path": file_ref,
-        "file_type": "pdf",
-        "extracted_text": None,
-        "extraction_confidence": None,
-        "canonical_model": None,
-        "privacy_transformed_model": None,
-        "selected_template_id": selected_template_id,
-        "formatting_rules": None,
-        "transformed_document_json": None,
-        "validation_passed": False,
-        "validation_errors": None,
-        "summary_uri": None,
-        "render_docx_uri": None,
-        "requires_human_review": False,
-        "status": "ingested",
-        # Custom state to pass down
-        "intent": intent,
-        "actor_role": actor_role,
-        "filename": filename,
-        "content_type": content_type
-    }
-
-    try:
-        # Execute the workflow
-        final_state = await graph.ainvoke(initial_state)
-
-        # Persist final state back to job
-        job.status = JobStatus.COMPLETED
-        if final_state.get("summary_uri"):
-            job.summary_uri = final_state["summary_uri"]
-        if final_state.get("render_docx_uri"):
-            job.render_docx_uri = final_state["render_docx_uri"]
-
-        job_repo.save_job(job)
-
-    except Exception as e:
-        print(f"Error executing graph: {e}")
-        job.status = JobStatus.FAILED
-        job.error_message = str(e)
-        job_repo.save_job(job)
 
 from app.schemas.runtime import ExecutionContext
 from app.schemas.enums import ExecutionMode

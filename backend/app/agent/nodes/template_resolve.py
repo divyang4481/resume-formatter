@@ -5,53 +5,97 @@ from app.db.session import SessionLocal
 from app.adapters.repositories.template_repository import SqlAlchemyTemplateRepository
 from app.services.template_resolution_service import TemplateResolutionService
 
-def create_template_resolve_node(llm_runtime: LlmRuntimeAdapter):
+def create_template_resolve_node(llm_runtime, storage_provider, doc_parser):
     """
     Creates the LangGraph node for resolving the appropriate template based on the
     document content or user request.
     """
-    def template_resolve_node(state: AgentState) -> dict:
+    async def template_resolve_node(state: AgentState) -> dict:
         print("Executing Template Resolution Node...")
-
+        
+        from app.domain.interfaces import ExtractionContext
+        
         extracted_text = state.get("extracted_text", "")
         mode = state.get("intent", "recruiter_runtime")
 
-        # We can use the LLM to classify the document and choose the best template if not provided
-        if state.get("selected_template_id"):
-             print(f"Template already selected: {state['selected_template_id']}")
-             return {"status": "template_resolved"}
-
-        # Use the shared TemplateResolutionService
+        # Try to resolve or validate the template selection
         db = SessionLocal()
         try:
             repo = SqlAlchemyTemplateRepository(db)
             service = TemplateResolutionService(llm_runtime, repo)
 
-            # Since LangGraph node is synchronous in our current implementation (using `def` not `async def` wrapper usually called by graph executor),
-            # but our service method is async.
-            # However `recommend_template` only does CPU blocking or synchronous requests if the adapter is sync.
-            # Let's run the async function
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                import nest_asyncio
-                nest_asyncio.apply()
+            chosen_template_id = state.get("selected_template_id")
+            
+            if not chosen_template_id:
+                # Use the shared TemplateResolutionService for classification-based recommendation
+                result = await service.recommend_template(
+                    extracted_text=extracted_text,
+                    mode=mode
+                )
 
-            result = asyncio.run(service.recommend_template(
-                extracted_text=extracted_text,
-                mode=mode
-            ))
+                chosen_template_id = result.suggested_template_id or "general_cv_v1"
+                print(f"Resolved Template ID: {chosen_template_id}")
 
-            chosen_template = result.suggested_template_id or "general_cv_v1"
-            print(f"Resolved Template ID: {chosen_template}")
+            # Fetch the actual storage URI and guidance from the repository
+            template_meta = repo.get_template(chosen_template_id)
+            storage_uri = None
+            summary_guidance = None
+            formatting_guidance = None
+            validation_guidance = None
+            pii_guidance = None
+            template_text = None
+
+            if template_meta:
+                storage_uri = template_meta.original_file_ref
+                summary_guidance = template_meta.summary_guidance
+                formatting_guidance = template_meta.formatting_guidance
+                validation_guidance = template_meta.validation_guidance
+                pii_guidance = template_meta.pii_guidance
+                expected_sections = template_meta.expected_sections
+                expected_fields = template_meta.expected_fields
+                print(f"Found template storage URI: {storage_uri}")
+                
+                # Fetch and extract raw text from template for smarter extraction context
+                try:
+                    if storage_uri:
+                        storage_key = storage_uri.replace("local://", "")
+                        content = storage_provider.get_bytes(storage_key)
+                        
+                        context = ExtractionContext(intent="template_context_extraction", actor_role="system")
+                        extracted_doc = await doc_parser.extract(
+                            file_bytes=content,
+                            filename="template.docx",
+                            content_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                            context=context
+                        )
+                        template_text = extracted_doc.extracted_text
+                        print(f"Template text extracted successfully (length: {len(template_text)})")
+                except Exception as ex:
+                    print(f"Failed to extract raw text from template: {ex}")
+            else:
+                print(f"Warning: Template ID {chosen_template_id} not found in database.")
+                expected_sections = None
+                expected_fields = None
+
 
             return {
-                "selected_template_id": chosen_template,
+                "selected_template_id": chosen_template_id,
+                "template_storage_uri": storage_uri,
+                "template_text": template_text,
+                "summary_guidance": summary_guidance,
+                "formatting_guidance": formatting_guidance,
+                "validation_guidance": validation_guidance,
+                "pii_guidance": pii_guidance,
+                "expected_sections": expected_sections,
+                "expected_fields": expected_fields,
                 "status": "template_resolved"
             }
+
+
         except Exception as e:
             print(f"Error during template resolution: {e}")
             return {
-                "selected_template_id": "general_cv_v1", # fallback
+                "selected_template_id": state.get("selected_template_id") or "general_cv_v1",
                 "status": "template_resolved_fallback"
             }
         finally:

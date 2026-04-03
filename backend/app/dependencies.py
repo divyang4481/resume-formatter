@@ -185,6 +185,22 @@ def get_message_queue(db: Session = Depends(get_db_session)) -> MessageQueue:
 def message_queue_dependency(queue: MessageQueue = Depends(get_message_queue)) -> MessageQueue:
     return queue
 
+def resume_workflow_service_dependency(
+    llm: LlmRuntimeAdapter = Depends(llm_runtime_dependency),
+    parser: DocumentExtractionService = Depends(document_extraction_service_dependency),
+    job_repo: JobRepository = Depends(job_repository_dependency),
+    template_repo: TemplateRepository = Depends(template_repository_dependency),
+    storage: StorageProvider = Depends(storage_provider_dependency)
+):
+    from app.services.resume_workflow_service import ResumeWorkflowService
+    return ResumeWorkflowService(
+        llm=llm,
+        parser_service=parser,
+        job_repo=job_repo,
+        template_repo=template_repo,
+        storage=storage
+    )
+
 
 _local_event_bus = None
 def get_event_bus() -> EventBus:

@@ -34,6 +34,14 @@ class TemplateAsset(BaseModel):
 
     # Notes and Guidance
     notes: Optional[str] = None
+    purpose: Optional[str] = None
+    expected_sections: Optional[str] = None
+    expected_fields: Optional[str] = None
+
+    summary_guidance: Optional[str] = None
+    formatting_guidance: Optional[str] = None
+    validation_guidance: Optional[str] = None
+    pii_guidance: Optional[str] = None
     selection_weight: int = 50
     is_default_for_industry: bool = False
 

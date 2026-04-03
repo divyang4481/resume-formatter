@@ -42,34 +42,63 @@ def create_parse_node(doc_parser: DocumentExtractionService, storage):
     return parse_node
 
 
-def build_workflow_graph(llm_runtime: LlmRuntimeAdapter, doc_parser: DocumentExtractionService, storage=None) -> StateGraph:
-    """
-    Builds the bounded agentic workflow using LangGraph.
-    Takes dependencies injected from the factory configuration.
-
-    The state starts at ingest and moves through document processing
-    stages such as parse, normalize, apply privacy policies, resolve
-    templates, validate constraints, and render output.
-    """
+def build_workflow_graph(llm_runtime: LlmRuntimeAdapter, doc_parser: DocumentExtractionService, storage=None, job_repo=None) -> StateGraph:
     workflow = StateGraph(AgentState)
 
     if storage is None:
         storage = get_storage_provider()
 
-    # Use the concrete factory implementations
-    workflow.add_node("ingest", lambda state: {"status": "ingested"})
-    workflow.add_node("parse", create_parse_node(doc_parser, storage))
-    workflow.add_node("normalize", lambda state: {"status": "normalized"})
-    workflow.add_node("privacy_transform", lambda state: {"status": "privacy_applied"})
+    # Pre-define stage mappings for UI to ensure stepper alignment
+    stage_map = {
+        "ingest": "ingest",
+        "parse": "parse",
+        "normalize": "normalize",
+        "privacy_transform": "privacy",
+        "template_resolution": "classify",
+        "transform": "transform", 
+        "render": "render",
+        "validate": "validate"
+    }
 
-    # Inject the LLM runtime into our agentic bounded reasoning nodes
-    workflow.add_node("template_resolution", create_template_resolve_node(llm_runtime))
-    workflow.add_node("transform", create_transform_node(llm_runtime))
+
+    # Helper function to wrap nodes with DB progress updates
+    def with_progress(node_name, node_func):
+        async def wrapped_node(state: AgentState):
+            job_id = state.get("session_id")
+            if job_repo and job_id:
+                try:
+                    job = job_repo.get_job(job_id)
+                    if job:
+                        job.stage = stage_map.get(node_name, node_name)
+                        job_repo.save_job(job)
+                except Exception as e:
+                    print(f"Non-critical: Failed to update job progress: {e}")
+            
+            import asyncio
+            if asyncio.iscoroutinefunction(node_func):
+                return await node_func(state)
+            return node_func(state)
+        return wrapped_node
+
+    workflow.add_node("ingest", with_progress("ingest", lambda state: {"status": "ingested"}))
+    workflow.add_node("parse", with_progress("parse", create_parse_node(doc_parser, storage)))
+    workflow.add_node("normalize", with_progress("normalize", lambda state: {"status": "normalized"}))
+    workflow.add_node("privacy_transform", with_progress("privacy_transform", lambda state: {"status": "privacy_applied"}))
+
+    from app.services.resume_ai_service import ResumeAiService
+    ai_service = ResumeAiService(llm_runtime, doc_parser)
+
+    # Agentic reasoning nodes
+    workflow.add_node("template_resolution", with_progress("template_resolution", create_template_resolve_node(llm_runtime, storage, doc_parser)))
+    workflow.add_node("transform", with_progress("transform", create_transform_node(llm_runtime)))
+
 
     from app.agent.nodes.render import create_render_node
+    from app.agent.nodes.validate import create_validate_node
 
-    workflow.add_node("validate", lambda state: {"status": "validated"})
-    workflow.add_node("render", create_render_node(llm_runtime, storage))
+    # Align with UI pipeline display: render then validate (or reversed, but let's stick to UI flow)
+    workflow.add_node("render", with_progress("render", create_render_node(ai_service, storage)))
+    workflow.add_node("validate", with_progress("validate", create_validate_node(ai_service)))
 
     # Define edges based on bounded workflow logic
     workflow.set_entry_point("ingest")
@@ -78,9 +107,8 @@ def build_workflow_graph(llm_runtime: LlmRuntimeAdapter, doc_parser: DocumentExt
     workflow.add_edge("normalize", "privacy_transform")
     workflow.add_edge("privacy_transform", "template_resolution")
     workflow.add_edge("template_resolution", "transform")
-    workflow.add_edge("transform", "validate")
-    workflow.add_edge("validate", "render")
-    workflow.add_edge("render", END)
+    workflow.add_edge("transform", "render")
+    workflow.add_edge("render", "validate")
+    workflow.add_edge("validate", END)
 
-    # In a full setup, checkpointer would be passed here
     return workflow.compile()

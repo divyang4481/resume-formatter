@@ -7,6 +7,14 @@ Base = declarative_base()
 
 class TemplateAsset(Base):
     notes = Column(Text, nullable=True)
+    purpose = Column(Text, nullable=True)
+    expected_sections = Column(Text, nullable=True)
+    expected_fields = Column(Text, nullable=True) # Comma-separated list of identified placeholders
+    summary_guidance = Column(Text, nullable=True)
+
+    formatting_guidance = Column(Text, nullable=True)
+    validation_guidance = Column(Text, nullable=True)
+    pii_guidance = Column(Text, nullable=True)
     selection_weight = Column(Integer, default=50)
     is_default_for_industry = Column(Boolean, default=False)
 

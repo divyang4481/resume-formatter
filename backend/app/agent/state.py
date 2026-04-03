@@ -21,19 +21,33 @@ class AgentState(TypedDict):
 
     # Template and Formatting rules
     selected_template_id: Optional[str]
+    template_storage_uri: Optional[str]
+    template_text: Optional[str]
     formatting_rules: Optional[str]
+    summary_guidance: Optional[str]
+    formatting_guidance: Optional[str]
+    validation_guidance: Optional[str]
+    pii_guidance: Optional[str]
+    
+    # Governance Requirements
+    expected_sections: Optional[str]
+    expected_fields: Optional[str]
 
     # LLM Transformation results
     transformed_document_json: Optional[str]
-
+    
     # Validation
     validation_passed: bool
     validation_errors: Optional[list]
+    validation_warnings: Optional[list]
 
     # Output Artifacts
+    summary_text: Optional[str]
     summary_uri: Optional[str]
     render_uri: Optional[str]
     render_docx_uri: Optional[str]
+
+
 
     # Orchestration control variables
     requires_human_review: bool

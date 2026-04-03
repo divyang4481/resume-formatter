@@ -8,6 +8,7 @@ import { MatSelectModule } from '@angular/material/select';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
+import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { AdminService } from '../../../../services/admin.service';
 
 @Component({
@@ -22,70 +23,52 @@ import { AdminService } from '../../../../services/admin.service';
     MatSelectModule,
     MatButtonModule,
     MatIconModule,
-    MatSnackBarModule
+    MatSnackBarModule,
+    MatProgressSpinnerModule
   ],
   template: `
-    <h2 mat-dialog-title>Upload New Template</h2>
+    <h2 mat-dialog-title>Upload Template Document</h2>
     <mat-dialog-content>
       <form [formGroup]="uploadForm" class="upload-form">
-
-        <mat-form-field appearance="outline">
-          <mat-label>Template Name</mat-label>
-          <input matInput formControlName="name" placeholder="e.g. IT Services Standard">
-          <mat-error *ngIf="uploadForm.get('name')?.hasError('required')">Name is required</mat-error>
-        </mat-form-field>
+        <p class="instruction-text">Upload a .docx template. Our AI will automatically suggest the name, purpose, and guidance policies based on the document content.</p>
 
         <div class="row">
           <mat-form-field appearance="outline">
-            <mat-label>Industry / JD Category</mat-label>
-            <input matInput formControlName="industry" placeholder="e.g. IT Services">
+            <mat-label>Industry / Vertical</mat-label>
+            <input matInput formControlName="industry" placeholder="e.g. Technology, Healthcare">
+            <mat-hint>Helps with classification</mat-hint>
           </mat-form-field>
 
           <mat-form-field appearance="outline">
-            <mat-label>Role Family</mat-label>
-            <input matInput formControlName="role_family" placeholder="e.g. Software Engineering">
-          </mat-form-field>
-        </div>
-
-        <div class="row">
-          <mat-form-field appearance="outline">
-            <mat-label>Region / Market</mat-label>
-            <input matInput formControlName="region" placeholder="e.g. US, EMEA, APAC">
-          </mat-form-field>
-
-          <mat-form-field appearance="outline">
-            <mat-label>Language</mat-label>
+            <mat-label>Template Language</mat-label>
             <mat-select formControlName="language">
-              <mat-option value="en">English (en)</mat-option>
-              <mat-option value="fr">French (fr)</mat-option>
-              <mat-option value="de">German (de)</mat-option>
-              <mat-option value="es">Spanish (es)</mat-option>
+              <mat-option value="en">English (default)</mat-option>
+              <mat-option value="fr">French</mat-option>
+              <mat-option value="de">German</mat-option>
+              <mat-option value="es">Spanish</mat-option>
             </mat-select>
           </mat-form-field>
         </div>
 
-        <mat-form-field appearance="outline">
-          <mat-label>Short Description / Notes</mat-label>
-          <textarea matInput formControlName="description" rows="3"></textarea>
-        </mat-form-field>
-
-        <div class="file-upload-container">
-          <button type="button" mat-stroked-button (click)="fileInput.click()">
-            <mat-icon>attach_file</mat-icon> Select Template Document
-          </button>
-          <input hidden (change)="onFileSelected($event)" #fileInput type="file" accept=".pdf,.docx,.doc,.txt">
-          <span class="file-name" *ngIf="selectedFile">{{ selectedFile.name }}</span>
-          <mat-error *ngIf="uploadForm.get('file')?.hasError('required') && uploadForm.get('file')?.touched">
-            File is required
-          </mat-error>
+        <div class="file-upload-zone" [class.has-file]="selectedFile" (click)="fileInput.click()">
+          <mat-icon class="upload-icon">{{ selectedFile ? 'check_circle' : 'cloud_upload' }}</mat-icon>
+          <div class="upload-text">
+            <span *ngIf="!selectedFile">Click to select .docx template</span>
+            <span *ngIf="selectedFile" class="file-name">{{ selectedFile.name }}</span>
+          </div>
+          <input hidden (change)="onFileSelected($event)" #fileInput type="file" accept=".docx">
         </div>
+        <mat-error *ngIf="uploadForm.get('file')?.hasError('required') && uploadForm.get('file')?.touched" style="margin-top: 8px; text-align: center;">
+          Template file is required
+        </mat-error>
 
       </form>
     </mat-dialog-content>
     <mat-dialog-actions align="end">
       <button mat-button mat-dialog-close [disabled]="isUploading">Cancel</button>
-      <button mat-raised-button color="primary" (click)="onSubmit()" [disabled]="uploadForm.invalid || !selectedFile || isUploading">
-        {{ isUploading ? 'Uploading...' : 'Upload & Create Draft' }}
+      <button mat-flat-button color="primary" (click)="onSubmit()" [disabled]="uploadForm.invalid || !selectedFile || isUploading">
+        <mat-spinner diameter="20" *ngIf="isUploading" style="margin-right: 8px; display: inline-block;"></mat-spinner>
+        {{ isUploading ? 'Analyzing & Uploading...' : 'Start AI Analysis' }}
       </button>
     </mat-dialog-actions>
   `,
@@ -93,8 +76,14 @@ import { AdminService } from '../../../../services/admin.service';
     .upload-form {
       display: flex;
       flex-direction: column;
-      gap: 16px;
-      margin-top: 8px;
+      gap: 20px;
+      padding: 10px 0;
+    }
+    .instruction-text {
+      font-size: 0.9rem;
+      color: #64748b;
+      margin-bottom: 8px;
+      line-height: 1.4;
     }
     .row {
       display: flex;
@@ -103,15 +92,48 @@ import { AdminService } from '../../../../services/admin.service';
     .row mat-form-field {
       flex: 1;
     }
-    .file-upload-container {
+    .file-upload-zone {
+      border: 2px dashed #cbd5e1;
+      border-radius: 12px;
+      padding: 32px;
       display: flex;
+      flex-direction: column;
       align-items: center;
-      gap: 16px;
-      padding: 8px 0;
+      gap: 12px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      background: #f8fafc;
+      
+      &:hover {
+        border-color: #6366f1;
+        background: #f1f5f9;
+        .upload-icon { color: #6366f1; }
+      }
+
+      &.has-file {
+        border-color: #10b981;
+        background: #f0fdf4;
+        .upload-icon { color: #10b981; }
+      }
+    }
+    .upload-icon {
+      font-size: 48px;
+      width: 48px;
+      height: 48px;
+      color: #94a3b8;
+    }
+    .upload-text {
+      font-weight: 500;
+      color: #334155;
     }
     .file-name {
-      font-size: 14px;
-      color: #666;
+      color: #0f172a;
+      font-weight: 600;
+      text-align: center;
+      word-break: break-all;
+    }
+    mat-spinner {
+        vertical-align: middle;
     }
   `]
 })
@@ -127,12 +149,8 @@ export class TemplateUploadDialogComponent {
     private snackBar: MatSnackBar
   ) {
     this.uploadForm = this.fb.group({
-      name: ['', Validators.required],
-      industry: [''],
-      role_family: [''],
-      region: [''],
-      language: ['en'],
-      description: [''],
+      industry: ['', Validators.required],
+      language: ['en', Validators.required],
       file: [null, Validators.required]
     });
   }
@@ -155,23 +173,20 @@ export class TemplateUploadDialogComponent {
 
     const formValue = this.uploadForm.value;
     const metadata = {
-      asset_type: 'template', // default type
-      name: formValue.name,
-      industry: formValue.industry || null,
-      role_family: formValue.role_family || null,
-      region: formValue.region || null,
-      language: formValue.language,
-      description: formValue.description || null
+      asset_type: 'template_docx',
+      name: '', // Will be suggested by AI
+      industry: formValue.industry,
+      language: formValue.language
     };
 
     this.adminService.uploadTemplate(this.selectedFile, metadata).subscribe({
       next: (res) => {
-        this.snackBar.open('Template uploaded successfully', 'Close', { duration: 3000 });
-        this.dialogRef.close(true); // Return true to signal success
+        this.snackBar.open('Template analyzed successfully', 'Close', { duration: 3000 });
+        this.dialogRef.close(res.asset_id);
       },
       error: (err) => {
         console.error('Upload failed', err);
-        this.snackBar.open('Upload failed. Please try again.', 'Close', { duration: 5000 });
+        this.snackBar.open('Analysis failed. Please try again.', 'Close', { duration: 5000 });
         this.isUploading = false;
       }
     });
