@@ -55,6 +55,10 @@ class Settings(BaseSettings):
     local_storage_path: str = "./data"
     s3_bucket: str = "agentic-document-platform-bucket"
 
+    # Vector search and shadow mode feature flags
+    vector_search_enabled: bool = False
+    template_selector_mode: str = "legacy"  # "legacy", "shadow", "hybrid"
+
     # Example standard settings
     log_level: str = "INFO"
 

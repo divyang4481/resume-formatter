@@ -131,14 +131,25 @@ def get_storage_provider() -> StorageProvider:
         return LocalStorageProvider(base_path=settings.local_storage_path)
 
 
+def get_embedding_provider() -> 'EmbeddingProvider':
+    """
+    Dependency factory to resolve the EmbeddingProvider.
+    """
+    from app.domain.interfaces import EmbeddingProvider
+    from app.adapters.embedding.local_embedding import LocalEmbeddingProvider
+    return LocalEmbeddingProvider(model_name="all-MiniLM-L6-v2")
+
+
 def get_knowledge_index() -> KnowledgeIndex:
     """
     Dependency Factory to fetch the Knowledge Index.
     Attempts Qdrant -> Chroma -> InMemory.
     """
+    embedding_provider = get_embedding_provider()
+
     try:
         from app.adapters.vector.qdrant_index import QdrantKnowledgeIndex
-        return QdrantKnowledgeIndex()
+        return QdrantKnowledgeIndex(embedding_provider=embedding_provider)
     except Exception as e:
         print(f"Failed to load Qdrant, falling back to Chroma: {e}")
         try:

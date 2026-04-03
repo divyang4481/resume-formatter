@@ -70,6 +70,12 @@ from app.services.template_resolution_service import TemplateResolutionService
 from app.domain.interfaces import ExtractionContext
 from app.db.session import SessionLocal
 from app.db.models import TemplateTestRun
+import logging
+from app.config import settings
+from app.dependencies import get_knowledge_index
+from app.services.hybrid_template_ranker import HybridTemplateRanker
+
+logger = logging.getLogger(__name__)
 
 @router.post("/documents/submit", response_model=SubmitDocumentResponse)
 async def submit_document(
@@ -174,6 +180,38 @@ async def submit_document(
             suggested_industry_id = rec_result.suggested_industry_id
             suggested_template_id = rec_result.suggested_template_id
             allowed_template_ids = rec_result.allowed_template_ids
+
+            # Phase 3: Shadow mode execution
+            if settings.template_selector_mode in ("shadow", "hybrid"):
+                try:
+                    knowledge_index = get_knowledge_index()
+                    # template_repository is injected correctly into submit_document, we use it directly
+                    ranker = HybridTemplateRanker(knowledge_index, template_repository)
+
+                    # Run hybrid ranking
+                    hybrid_results = ranker.rank_templates(
+                        extracted_text=extracted.extracted_text,
+                        industry_id=industry_id,
+                        mode=execution_mode.value
+                    )
+
+                    hybrid_suggested_id = hybrid_results[0]["template_id"] if hybrid_results else None
+                    highest_score = hybrid_results[0]["score"] if hybrid_results else 0.0
+
+                    logger.info(
+                        "template_selection_comparison",
+                        extra={
+                            "old_template_id": suggested_template_id,
+                            "new_template_id": hybrid_suggested_id,
+                            "mode": settings.template_selector_mode,
+                            "vector_enabled": settings.vector_search_enabled,
+                            "confidence_score": highest_score,
+                            "job_id": job_id
+                        }
+                    )
+                except Exception as shadow_e:
+                    logger.error(f"Shadow mode hybrid ranking failed: {shadow_e}")
+
         except Exception as e:
             print(f"Failed to get LLM template recommendation: {e}")
             # Fallback
