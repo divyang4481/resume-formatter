@@ -13,13 +13,13 @@
     <div class="stepper-panel">
       <div class="stepper-header">
         <h2>Resume formatter</h2>
-        <p>AI agent • 5 steps</p>
+        <p>AI agent • 4 steps</p>
       </div>
 
       <mat-stepper orientation="vertical" [linear]="true" [selectedIndex]="getStepIndex(session.currentStep)" #stepper>
         <mat-step [state]="getStepIndex(session.currentStep) > 0 ? 'done' : 'number'">
           <ng-template matStepLabel>
-            <div class="step-label" [class.active]="session.currentStep === 'upload_resume'">
+            <div class="step-label" [class.active]="getStepIndex(session.currentStep) === 0">
               <strong>Upload resume</strong>
               <span>PDF, DOCX, text</span>
             </div>
@@ -28,36 +28,27 @@
 
         <mat-step [state]="getStepIndex(session.currentStep) > 1 ? 'done' : 'number'">
           <ng-template matStepLabel>
-            <div class="step-label" [class.active]="session.currentStep === 'detect_industry'">
-              <strong>Detect industry</strong>
-              <span>AI-guessed + confirmed</span>
+            <div class="step-label" [class.active]="getStepIndex(session.currentStep) === 1">
+              <strong>Industry & Template</strong>
+              <span>Detect and choose</span>
             </div>
           </ng-template>
         </mat-step>
 
         <mat-step [state]="getStepIndex(session.currentStep) > 2 ? 'done' : 'number'">
           <ng-template matStepLabel>
-            <div class="step-label" [class.active]="session.currentStep === 'choose_template'">
-              <strong>Choose template</strong>
-              <span>Industry-specific</span>
+            <div class="step-label" [class.active]="getStepIndex(session.currentStep) === 2">
+              <strong>Processing</strong>
+              <span>Extracting and rendering</span>
             </div>
           </ng-template>
         </mat-step>
 
         <mat-step [state]="getStepIndex(session.currentStep) > 3 ? 'done' : 'number'">
           <ng-template matStepLabel>
-            <div class="step-label" [class.active]="session.currentStep === 'review_resume'">
-              <strong>Review generated resume</strong>
-              <span>Review output before export</span>
-            </div>
-          </ng-template>
-        </mat-step>
-
-        <mat-step [state]="getStepIndex(session.currentStep) > 4 ? 'done' : 'number'">
-          <ng-template matStepLabel>
-            <div class="step-label" [class.active]="session.currentStep === 'export'">
-              <strong>Export</strong>
-              <span>PDF / DOCX / JSON</span>
+            <div class="step-label" [class.active]="getStepIndex(session.currentStep) === 3">
+              <strong>Result</strong>
+              <span>Review, Export & Summary</span>
             </div>
           </ng-template>
         </mat-step>
@@ -77,13 +68,12 @@
       <input type="file" #fileInput style="display: none" (change)="onFileSelected($event)" accept=".pdf,.doc,.docx,.txt" />
 
       <div class="chat-header">
-        <h3 *ngIf="session.currentStep === 'upload_resume'">Upload Resume</h3>
-        <h3 *ngIf="session.currentStep === 'detect_industry'">Detecting Industry</h3>
-        <h3 *ngIf="session.currentStep === 'choose_template'">Choose Template</h3>
-        <h3 *ngIf="session.currentStep === 'review_resume'">Review generated resume</h3>
-        <h3 *ngIf="session.currentStep === 'export'">Export</h3>
-        <span class="step-badge">Step {{ getStepIndex(session.currentStep) + 1 }} of 5</span>
-        <button mat-icon-button *ngIf="session.currentStep === 'export'" (click)="startOver()" matTooltip="Start Over" style="margin-left: auto;">
+        <h3 *ngIf="getStepIndex(session.currentStep) === 0">Upload Resume</h3>
+        <h3 *ngIf="getStepIndex(session.currentStep) === 1">Industry & Template</h3>
+        <h3 *ngIf="getStepIndex(session.currentStep) === 2">Processing Resume</h3>
+        <h3 *ngIf="getStepIndex(session.currentStep) === 3">Result</h3>
+        <span class="step-badge">Step {{ getStepIndex(session.currentStep) + 1 }} of 4</span>
+        <button mat-icon-button *ngIf="session.currentStep === 'export' || session.currentStep === 'review_resume'" (click)="startOver()" matTooltip="Start Over" style="margin-left: auto;">
           <mat-icon>refresh</mat-icon>
         </button>
       </div>

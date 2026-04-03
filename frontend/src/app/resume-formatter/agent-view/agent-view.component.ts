@@ -128,8 +128,22 @@ export class AgentViewComponent implements OnInit {
   }
 
   getStepIndex(currentStep: string | undefined): number {
-    const steps = ['upload_resume', 'detect_industry', 'choose_template', 'review_resume', 'export'];
-    const idx = steps.indexOf(currentStep || 'upload_resume');
-    return idx === -1 ? 0 : idx;
+    if (!currentStep) return 0;
+
+    // Map internal session steps to the 4 stepper steps
+    switch (currentStep) {
+      case 'upload_resume':
+        return 0; // Upload
+      case 'detect_industry':
+      case 'choose_template':
+        return 1; // Ask for industry and template
+      case 'processing':
+        return 2; // Processing
+      case 'review_resume':
+      case 'export':
+        return 3; // Result (Export and Summary)
+      default:
+        return 0;
+    }
   }
 }

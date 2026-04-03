@@ -269,7 +269,7 @@ export class RealAgentBackendClient implements AgentBackendClient {
                 } else if (['classify'].includes(statusRes.stage)) {
                     this.currentSession.currentStep = 'choose_template';
                 } else {
-                    this.currentSession.currentStep = 'review_resume';
+                    this.currentSession.currentStep = 'processing';
                 }
             }
 
