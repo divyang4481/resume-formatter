@@ -101,7 +101,7 @@
         <mat-card-content>
           <mat-form-field appearance="outline" class="full-width">
             <mat-label>Provide feedback on the extracted output...</mat-label>
-            <textarea matInput rows="3" [value]="feedbackText" (input)="updateFeedback($event)"></textarea>
+            <textarea matInput rows="3" [value]="feedbackText" (input)="updateFeedback($event)" title="Feedback Textarea" placeholder="Enter your feedback here..."></textarea>
           </mat-form-field>
           <button mat-raised-button color="accent" (click)="submitFeedback()">Submit Feedback</button>
         </mat-card-content>

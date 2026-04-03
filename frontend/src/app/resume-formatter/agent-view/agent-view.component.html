@@ -17,7 +17,7 @@
       </div>
 
       <mat-stepper orientation="vertical" [linear]="true" [selectedIndex]="getStepIndex(session.currentStep)" #stepper>
-        <mat-step [state]="getStepIndex(session.currentStep) > 0 ? 'done' : 'number'">
+        <mat-step [state]="getStepIndex(session.currentStep) > 0 ? 'done' : 'number'" [completed]="getStepIndex(session.currentStep) > 0">
           <ng-template matStepLabel>
             <div class="step-label" [class.active]="getStepIndex(session.currentStep) === 0">
               <strong>Upload resume</strong>
@@ -26,7 +26,7 @@
           </ng-template>
         </mat-step>
 
-        <mat-step [state]="getStepIndex(session.currentStep) > 1 ? 'done' : 'number'">
+        <mat-step [state]="getStepIndex(session.currentStep) > 1 ? 'done' : 'number'" [completed]="getStepIndex(session.currentStep) > 1">
           <ng-template matStepLabel>
             <div class="step-label" [class.active]="getStepIndex(session.currentStep) === 1">
               <strong>Industry & Template</strong>
@@ -35,7 +35,7 @@
           </ng-template>
         </mat-step>
 
-        <mat-step [state]="getStepIndex(session.currentStep) > 2 ? 'done' : 'number'">
+        <mat-step [state]="getStepIndex(session.currentStep) > 2 ? 'done' : 'number'" [completed]="getStepIndex(session.currentStep) > 2">
           <ng-template matStepLabel>
             <div class="step-label" [class.active]="getStepIndex(session.currentStep) === 2">
               <strong>Processing</strong>
@@ -44,7 +44,7 @@
           </ng-template>
         </mat-step>
 
-        <mat-step [state]="getStepIndex(session.currentStep) > 3 ? 'done' : 'number'">
+        <mat-step [state]="getStepIndex(session.currentStep) > 3 ? 'done' : 'number'" [completed]="getStepIndex(session.currentStep) > 3">
           <ng-template matStepLabel>
             <div class="step-label" [class.active]="getStepIndex(session.currentStep) === 3">
               <strong>Result</strong>
@@ -65,7 +65,7 @@
     <!-- Right Side: Chat -->
     <div class="chat-panel">
       <!-- Hidden file input for real uploads -->
-      <input type="file" #fileInput style="display: none" (change)="onFileSelected($event)" accept=".pdf,.doc,.docx,.txt" />
+      <input type="file" #fileInput class="hidden-file-input" (change)="onFileSelected($event)" accept=".pdf,.doc,.docx,.txt" />
 
       <div class="chat-header">
         <h3 *ngIf="getStepIndex(session.currentStep) === 0">Upload Resume</h3>
@@ -73,7 +73,7 @@
         <h3 *ngIf="getStepIndex(session.currentStep) === 2">Processing Resume</h3>
         <h3 *ngIf="getStepIndex(session.currentStep) === 3">Result</h3>
         <span class="step-badge">Step {{ getStepIndex(session.currentStep) + 1 }} of 4</span>
-        <button mat-icon-button *ngIf="session.currentStep === 'export' || session.currentStep === 'review_resume'" (click)="startOver()" matTooltip="Start Over" style="margin-left: auto;">
+        <button mat-icon-button class="start-over-btn" *ngIf="session.currentStep === 'export' || session.currentStep === 'review_resume'" (click)="startOver()" matTooltip="Start Over">
           <mat-icon>refresh</mat-icon>
         </button>
       </div>
@@ -136,7 +136,7 @@
         <div *ngIf="loading" class="message-group agent">
           <div class="message-label">Agent</div>
           <div class="message-bubble agent-bubble loading">
-            <span>Typing...</span>
+            <span>Typing with that ... running</span>
           </div>
         </div>
       </div>
