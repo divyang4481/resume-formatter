@@ -589,3 +589,119 @@ To support horizontal scaling and dynamic load balancing across cloud container 
 * **Supporting Documents:** Determining if/when supporting documents (cover letters, portfolios) enter the Day-1 runtime flow.
 * **Batch Processing:** Determining if API bulk mode is a Day-1 requirement.
 * **User Override:** Establishing how much manual override is allowed in the template selection process by end-users.
+## 18. Workflow Orchestration (LangGraph)
+
+The Candidate Runtime Plane is orchestrated using **LangGraph**, providing a directed acyclic graph (DAG) that ensures deterministic transitions between agentic and deterministic nodes. This "bounded agent" approach prevents the system from entering infinite loops and ensures every run is auditable.
+
+### 18.1 LangGraph State Machine
+The following diagram represents the active state machine for the resume processing workflow. It includes a specific **Transformation Subgraph** to handle the heavy lifting of schema preparation and context-aware extraction.
+
+```mermaid
+graph TD
+    %% Nodes
+    Ingest[Ingest]
+    Parse[Parse]
+    Normalize[Normalize]
+    Privacy[Privacy Transform]
+    TemplateResolve[Template Resolution]
+    
+    subgraph TransformSubgraph [Transformation Subgraph]
+        direction TB
+        PrepareSchema[Prepare Schema]
+        ExtractMap[Extract & Map]
+        PrepareSchema --> ExtractMap
+    end
+
+    Render[Render]
+    Validate[Validate]
+    END[END]
+
+    %% Edges
+    START((START)) --> Ingest
+    Ingest --> Parse
+    Parse --> Normalize
+    Normalize --> Privacy
+    Privacy --> TemplateResolve
+    TemplateResolve --> TransformSubgraph
+    TransformSubgraph --> Render
+    Render --> Validate
+    Validate --> END
+```
+
+---
+
+## 19. Resume Formatting Sequence
+
+The interaction between the background worker, storage, database, and LLM is captured in this sequence diagram. It highlights the asynchronous nature of the processing and the multiple points of AI interaction.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Client
+    participant Worker as Background Worker
+    participant DB as Postgres/SQLite
+    participant Storage as Object Storage
+    participant LLM as LLM (Ollama/OpenAI)
+
+    Client->>DB: 1. Create Job (Pending)
+    Client->>Storage: 2. Upload Resume
+    Client->>Worker: 3. Trigger Job (job_id)
+    
+    activate Worker
+    Worker->>DB: Update Stage: ingest
+    Worker->>DB: Update Stage: parse
+    Worker->>Storage: Get Resume Bytes
+    Note over Worker: Docling/Parser Extraction
+    
+    Worker->>DB: Update Stage: normalize
+    Worker->>DB: Update Stage: privacy
+    
+    Worker->>DB: Update Stage: classify (Template Resolution)
+    Worker->>LLM: recommend_template(text)
+    LLM-->>Worker: template_id
+    
+    Worker->>DB: Update Stage: transform
+    Note over Worker: Transformation Subgraph
+    Worker->>LLM: context_aware_extraction(text, schema)
+    LLM-->>Worker: Extracted JSON
+    
+    Worker->>DB: Update Stage: render
+    Worker->>LLM: generate_summary(text)
+    LLM-->>Worker: Summary Text
+    Worker->>LLM: format_data_for_template(json, template)
+    LLM-->>Worker: Linearized Formatted JSON
+    Note over Worker: docxtpl Rendering
+    Worker->>Storage: Save formatted_resume.docx
+    
+    Worker->>DB: Update Stage: validate
+    Worker->>LLM: validate_output(json)
+    LLM-->>Worker: Validation Result
+    
+    Worker->>DB: Update Job (Completed)
+    deactivate Worker
+    
+    Client->>DB: Get final status & artifacts
+```
+
+---
+
+## 20. LLM Usage and Token Analysis
+
+The platform is designed to be efficient while maintaining high accuracy. A typical run involves **5 distinct LLM calls**.
+
+### 20.1 LLM Call Breakdown
+
+| Node | Purpose | Task ID | Est. Input (Tokens) | Est. Output (Tokens) |
+| :--- | :--- | :--- | :--- | :--- |
+| `template_resolution` | AI-driven template selection | `recommend_template` | 2,500 | 100 |
+| `transform` | Structured data extraction | `context_aware_extraction` | 4,000 | 1,000 |
+| `render` | Professional USP generation | `generate_summary` | 2,500 | 200 |
+| `render` | Linearization for template | `format_data_for_template` | 2,500 | 1,500 |
+| `validate` | Semantic quality assurance | `validate_output` | 2,000 | 200 |
+| **Total** | | | **~13,500** | **~3,000** |
+
+### 20.2 Token Efficiency Strategies
+* **Context Truncation:** Raw resume text is capped at ~12,000 characters to prevent context window overflow and reduce cost in high-volume environments.
+* **Schema-Driven Extraction:** By providing a strict JSON schema to the `transform` node, we reduce the tokens wasted on descriptive reasoning and focus the output on data.
+* **Aggregated Rendering:** The `format_data_for_template` call groups all complex fields into a single linearization pass, saving repeated prompt overhead.
+* **Cached Templates:** Template metadata and text are extracted once and cached in the state to avoid redundant parsing.
