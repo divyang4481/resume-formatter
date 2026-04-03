@@ -31,7 +31,7 @@ def create_validate_node(ai_service: ResumeAiService):
             
             # If the transformation node already flagged placeholders, we should carry those over
             if not state.get("validation_passed", True):
-                prev_errors = state.get("validation_errors", [])
+                prev_errors = state.get("validation_errors") or []
                 errors.extend(prev_errors)
                 passed = False
 

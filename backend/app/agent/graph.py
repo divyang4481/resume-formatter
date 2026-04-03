@@ -1,10 +1,11 @@
+import asyncio
+from typing import Any
 from langgraph.graph import StateGraph, END
 from app.agent.state import AgentState
 
 from app.adapters.base import LlmRuntimeAdapter
 from app.domain.interfaces import DocumentExtractionService, ExtractionContext
-from app.agent.nodes.transform import create_transform_node
-from app.agent.nodes.template_resolve import create_template_resolve_node
+from app.agent.nodes.transform_nodes import create_schema_builder_node, create_context_aware_extraction_node
 from app.services.resume_ingestion_service import ResumeIngestionService
 from app.dependencies import get_storage_provider
 
@@ -36,10 +37,29 @@ def create_parse_node(doc_parser: DocumentExtractionService, storage):
 
         return {
              "extracted_text": result.get("extracted_text", ""),
-             "extraction_confidence": 0.95, # Assuming a generic confidence for now as it's not strictly mapped
+             "raw_parsed_data": result.get("structured_data", {}),
+             "extraction_confidence": 0.95,
              "status": result.get("status", "parsed")
         }
     return parse_node
+
+
+def create_transformation_subgraph(llm_runtime: LlmRuntimeAdapter) -> Any:
+    """
+    Constructs a granular subgraph for the transformation phase.
+    Ensures that schema preparation and context-aware extraction are separate steps.
+    """
+    from langgraph.graph import StateGraph, END
+    subgraph = StateGraph(AgentState)
+    
+    subgraph.add_node("prepare_schema", create_schema_builder_node())
+    subgraph.add_node("extract_map", create_context_aware_extraction_node(llm_runtime))
+    
+    subgraph.set_entry_point("prepare_schema")
+    subgraph.add_edge("prepare_schema", "extract_map")
+    subgraph.add_edge("extract_map", END)
+    
+    return subgraph.compile()
 
 
 def build_workflow_graph(llm_runtime: LlmRuntimeAdapter, doc_parser: DocumentExtractionService, storage=None, job_repo=None) -> StateGraph:
@@ -74,9 +94,15 @@ def build_workflow_graph(llm_runtime: LlmRuntimeAdapter, doc_parser: DocumentExt
                 except Exception as e:
                     print(f"Non-critical: Failed to update job progress: {e}")
             
-            import asyncio
+            # If the node is a compiled subgraph (Runnable), use ainvoke
+            if hasattr(node_func, "ainvoke"):
+                return await node_func.ainvoke(state)
+            
+            # If it's a coroutine function, await it
             if asyncio.iscoroutinefunction(node_func):
                 return await node_func(state)
+            
+            # Otherwise, call it directly
             return node_func(state)
         return wrapped_node
 
@@ -89,9 +115,12 @@ def build_workflow_graph(llm_runtime: LlmRuntimeAdapter, doc_parser: DocumentExt
     ai_service = ResumeAiService(llm_runtime, doc_parser)
 
     # Agentic reasoning nodes
+    from app.agent.nodes.template_resolve import create_template_resolve_node
     workflow.add_node("template_resolution", with_progress("template_resolution", create_template_resolve_node(llm_runtime, storage, doc_parser)))
-    workflow.add_node("transform", with_progress("transform", create_transform_node(llm_runtime)))
-
+    
+    # Use the transformation subgraph instead of a single node
+    transformation_subgraph = create_transformation_subgraph(llm_runtime)
+    workflow.add_node("transform", with_progress("transform", transformation_subgraph))
 
     from app.agent.nodes.render import create_render_node
     from app.agent.nodes.validate import create_validate_node

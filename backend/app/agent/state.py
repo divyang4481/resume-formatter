@@ -12,6 +12,8 @@ class AgentState(TypedDict):
     # Extraction output
     extracted_text: Optional[str]
     extraction_confidence: Optional[float]
+    raw_parsed_data: Optional[Dict[str, Any]] # Structured sections/tables from Docling/etc
+
 
     # Normalized JSON dictionary
     canonical_model: Optional[Dict[str, Any]]

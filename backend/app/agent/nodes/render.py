@@ -82,12 +82,20 @@ def create_render_node(ai_service: ResumeAiService, storage):
                 offset = 0
                 for match in matches:
                     original = match.group(0)
-                    placeholder_content = match.group(1).strip().lower()
+                    raw_content = match.group(1).strip()
+                    placeholder_content = raw_content.lower().replace(" ", "_")
                     
                     # If it's a generic "fill this section" placeholder, try to map it sequentially
-                    if "fill" in placeholder_content and "section" in placeholder_content and counter < len(field_list):
-                        replacement = f"{{{{ {field_list[counter]} }}}}"
-                        # print(f"Sequential mapping: '{original}' -> '{replacement}' (index {counter})")
+                    is_generic = "fill" in placeholder_content and "section" in placeholder_content
+                    
+                    if is_generic and counter < len(field_list):
+                        # Use the next field name from our expected list, also sanitized
+                        safe_field_name = field_list[counter].lower().replace(" ", "_")
+                        replacement = f"{{{{ {safe_field_name} }}}}"
+                        counter += 1
+                    elif is_generic:
+                        # Falling back to a safe unique name if we run out of fields
+                        replacement = f"{{{{ missing_field_{counter} }}}}"
                         counter += 1
                     else:
                         # Standard mapping: << summary >> -> {{ summary }}
@@ -97,6 +105,7 @@ def create_render_node(ai_service: ResumeAiService, storage):
                     new_text = new_text[:start + offset] + replacement + new_text[end + offset:]
                     offset += len(replacement) - len(original)
                 return new_text, counter
+
             
             # Process paragraphs
             for p in temp_doc.paragraphs:
@@ -117,10 +126,21 @@ def create_render_node(ai_service: ResumeAiService, storage):
             
             doc = DocxTemplate(processed_stream)
             
-            print(f"Rendering template {template_id} with data keys: {list(resume_data.keys())} and {generic_placeholder_count} mapped generic fields.")
+            # New Step: Format structured JSON into document-ready strings to match template style
+            if resume_data:
+                template_text_content = state.get("template_text") or ""
+                formatting_guidance = state.get("formatting_guidance") or ""
+                
+                print(f"Linearizing {len(resume_data)} fields for template-ready formatting...")
+                formatted_data = await ai_service.format_data_for_template(
+                    structured_data=resume_data,
+                    template_text=template_text_content,
+                    formatting_guidance=formatting_guidance
+                )
+                # Overwrite raw JSON objects with beautifully formatted strings
+                resume_data.update(formatted_data)
 
-            
-            print(f"Rendering template {template_id} with data keys: {list(resume_data.keys())}")
+            print(f"Rendering template {template_id} with polished data keys: {list(resume_data.keys())}")
             
             # Merge job metadata and summary into the rendering context
             render_context = {

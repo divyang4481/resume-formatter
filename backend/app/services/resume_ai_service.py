@@ -130,14 +130,20 @@ class ResumeAiService:
         logger.debug(f"LLM Response:\n{response}")
 
         try:
-            # Clean up potential markdown formatting if LLM ignores instructions
-            cleaned_response = response.strip()
-            if "```json" in cleaned_response:
-                cleaned_response = cleaned_response.split("```json")[1].split("```")[0].strip()
-            elif "```" in cleaned_response:
-                cleaned_response = cleaned_response.split("```")[1].strip()
+            # Robust JSON cleaning
+            cleaned = response.strip()
+            if "```json" in cleaned:
+                cleaned = cleaned.split("```json")[1].split("```")[0].strip()
+            elif "```" in cleaned:
+                cleaned = cleaned.split("```")[1].split("```")[0].strip()
             
-            return json.loads(cleaned_response)
+            # Find the actual JSON markers to ignore preamble/epilogue
+            start = cleaned.find("{")
+            end = cleaned.rfind("}")
+            if start != -1 and end != -1:
+                cleaned = cleaned[start:end+1]
+            
+            return json.loads(cleaned)
         except Exception as e:
             # Fallback to empty suggestions if JSON parsing fails
             logger.error(f"Error during template analysis AI extraction: {e}", exc_info=True)
@@ -183,13 +189,83 @@ class ResumeAiService:
         logger.debug(f"LLM Response:\n{response}")
 
         try:
-            cleaned_response = response.strip()
-            if "```json" in cleaned_response:
-                cleaned_response = cleaned_response.split("```json")[1].split("```")[0].strip()
-            return json.loads(cleaned_response)
+            # Robust JSON cleaning
+            cleaned = response.strip()
+            if "```json" in cleaned:
+                cleaned = cleaned.split("```json")[1].split("```")[0].strip()
+            elif "```" in cleaned:
+                cleaned = cleaned.split("```")[1].split("```")[0].strip()
+            
+            # Find the actual JSON markers to ignore preamble/epilogue
+            start = cleaned.find("{")
+            end = cleaned.rfind("}")
+            if start != -1 and end != -1:
+                cleaned = cleaned[start:end+1]
+            
+            if not cleaned:
+                raise ValueError("LLM returned empty or non-JSON validation result")
+
+            return json.loads(cleaned)
         except Exception as e:
             logger.error(f"Error during AI output validation: {e}", exc_info=True)
             return {"status": "FAIL", "errors": [f"Validation engine failure: {e}"], "warnings": [], "confidence_score": 0}
+
+    async def format_data_for_template(
+        self, 
+        structured_data: Dict[str, Any], 
+        template_text: str,
+        formatting_guidance: str = ""
+    ) -> Dict[str, str]:
+        """
+        Uses LLM to transform structured JSON data into strings that perfectly match
+        the visual style and whitespace requirements of the target template.
+        """
+        prompt = f"""
+        TASK: Linearize structured CV data into formatted strings for a Word (.docx) template.
+        
+        INPUT DATA (JSON):
+        {json.dumps(structured_data, indent=2)}
+        
+        TEMPLATE CONTEXT (Excerpts):
+        {template_text[:4000]}
+        
+        FORMATTING GUIDANCE FROM TEMPLATE:
+        {formatting_guidance}
+        
+        INSTRUCTIONS:
+        1. For each key in the JSON, generate a single string that represents that data formatted correctly for the CV.
+        2. Use professional bulleting (e.g., '•' or '-') for lists.
+        3. Maintain chronological order (newest first) for experience and education.
+        4. If a key is an object or list, transform it into a readable text block.
+        5. Ensure date formats are consistent (e.g., 'Jan 2020 - Present').
+        6. Do NOT include any markdown formatting (like **bold**) as this is for a plain text insertion into Word.
+        7. If the field is already a simple string, clean it up but keep the meaning.
+        
+        OUTPUT FORMAT: Return ONLY a valid JSON object where keys match the input keys and values are the formatted strings.
+        """
+
+        logger.info("Sending prompt to LLM for template-aware data formatting.")
+        try:
+            response = self.llm.generate(prompt)
+            
+            # Use robust cleaning
+            cleaned = response.strip()
+            if "```json" in cleaned:
+                cleaned = cleaned.split("```json")[1].split("```")[0].strip()
+            elif "```" in cleaned:
+                cleaned = cleaned.split("```")[1].split("```")[0].strip()
+            
+            start = cleaned.find("{")
+            end = cleaned.rfind("}")
+            if start != -1 and end != -1:
+                cleaned = cleaned[start:end+1]
+            
+            return json.loads(cleaned)
+        except Exception as e:
+            logger.error(f"Failed to linearize data for template: {e}")
+            # Fallback to simple string representations to avoid crash
+            return {k: str(v) for k, v in structured_data.items()}
+
 
 
 

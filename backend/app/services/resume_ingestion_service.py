@@ -28,13 +28,17 @@ class ResumeIngestionService:
         return {
             "status": "candidate_resume_processed",
             "extracted_text": extracted.extracted_text,
+            "structured_data": extracted.structured_data,
             "backend_used": extracted.backend_used
         }
+
 
     async def _process_sample_resume(self, extracted, context: ExtractionContext):
         # Specific logic for admin sample resumes (e.g., skip rendering, add richer diagnostics)
         return {
             "status": "sample_resume_processed",
             "extracted_text": extracted.extracted_text,
+            "structured_data": extracted.structured_data,
             "backend_used": extracted.backend_used
         }
+

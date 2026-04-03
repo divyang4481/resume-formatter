@@ -1,12 +1,13 @@
 {
-  "/v1/*": {
+  "/v1": {
     "target": "http://localhost:8000",
     "secure": false,
     "changeOrigin": true
   },
-  "/admin/*": {
+  "/admin": {
     "target": "http://localhost:8000",
     "secure": false,
     "changeOrigin": true
   }
+
 }
