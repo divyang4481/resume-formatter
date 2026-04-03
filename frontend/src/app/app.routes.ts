@@ -7,6 +7,7 @@ import { TemplateDetailComponent } from './admin/pipeline-shell/templates/templa
 import { KnowledgeComponent } from './admin/pipeline-shell/knowledge/knowledge.component';
 import { ReviewsComponent } from './admin/pipeline-shell/reviews/reviews.component';
 import { PublishRegistryComponent } from './admin/pipeline-shell/publish-registry/publish-registry.component';
+import { McpDocsComponent } from './admin/pipeline-shell/mcp-docs/mcp-docs.component';
 import { ResumeFormatterComponent } from './resume-formatter/resume-formatter.component';
 import { AgentViewComponent } from './resume-formatter/agent-view/agent-view.component';
 import { FormViewComponent } from './resume-formatter/form-view/form-view.component';
@@ -20,7 +21,8 @@ export const routes: Routes = [
     children: [
       { path: '', redirectTo: 'templates', pathMatch: 'full' },
       { path: 'templates', component: TemplatesComponent },
-      { path: 'templates/:id', component: TemplateDetailComponent }
+      { path: 'templates/:id', component: TemplateDetailComponent },
+      { path: 'mcp-docs', component: McpDocsComponent }
     ]
   },
   {

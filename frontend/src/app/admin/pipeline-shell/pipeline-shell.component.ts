@@ -20,6 +20,9 @@ import { MatTabsModule } from '@angular/material/tabs';
           <a mat-tab-link routerLink="/resumeformatter/agentview" routerLinkActive #rlaAgent="routerLinkActive" [active]="rlaAgent.isActive">
             <mat-icon>smart_toy</mat-icon> Agent View
           </a>
+          <a mat-tab-link routerLink="/admin/mcp-docs" routerLinkActive #rlaMcp="routerLinkActive" [active]="rlaMcp.isActive">
+            <mat-icon>hub</mat-icon> MCP Docs
+          </a>
         </nav>
       </mat-toolbar>
 
