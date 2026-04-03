@@ -60,10 +60,9 @@ export class AgentViewComponent implements OnInit {
   }
 
   async startOver(): Promise<void> {
-    if (!this.session) return;
     this.loading = true;
     try {
-      this.session = await this.agentClient.rerunSession(this.session.sessionId);
+      this.session = await this.agentClient.createSession();
       this.scrollToBottom();
     } catch (e) {
       console.error('Failed to start over', e);

@@ -83,6 +83,9 @@
         <h3 *ngIf="session.currentStep === 'review_resume'">Review generated resume</h3>
         <h3 *ngIf="session.currentStep === 'export'">Export</h3>
         <span class="step-badge">Step {{ getStepIndex(session.currentStep) + 1 }} of 5</span>
+        <button mat-icon-button *ngIf="session.currentStep === 'export'" (click)="startOver()" matTooltip="Start Over" style="margin-left: auto;">
+          <mat-icon>refresh</mat-icon>
+        </button>
       </div>
 
       <div class="chat-messages" #chatContainer>

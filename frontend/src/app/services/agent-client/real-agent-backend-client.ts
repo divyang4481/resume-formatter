@@ -244,9 +244,35 @@ export class RealAgentBackendClient implements AgentBackendClient {
   }
 
   private async waitForJobCompletion(jobId: string): Promise<void> {
+    let lastStage: string | null = null;
     while (true) {
         try {
             const statusRes = await firstValueFrom(this.runtimeApi.getJobStatus(jobId));
+
+            // Output polling messages
+            if (this.currentSession && statusRes.stage && statusRes.stage !== lastStage) {
+                lastStage = statusRes.stage;
+                const stageMessage = this.getStageMessage(statusRes.stage);
+                if (stageMessage) {
+                    this.currentSession.messages.push({
+                        id: `m-stage-${Date.now()}`,
+                        role: 'assistant',
+                        type: 'status',
+                        content: stageMessage,
+                        timestamp: new Date().toISOString()
+                    });
+                }
+
+                // Keep the UI current step roughly mapped during polling so stepper might reflect progress
+                if (['ingest', 'parse'].includes(statusRes.stage)) {
+                    this.currentSession.currentStep = 'detect_industry';
+                } else if (['classify'].includes(statusRes.stage)) {
+                    this.currentSession.currentStep = 'choose_template';
+                } else {
+                    this.currentSession.currentStep = 'review_resume';
+                }
+            }
+
             if (statusRes.status === 'completed') {
                 if (this.currentSession) {
                     this.currentSession.status = 'waiting_for_user';
@@ -297,6 +323,20 @@ export class RealAgentBackendClient implements AgentBackendClient {
             break;
         }
     }
+  }
+
+  private getStageMessage(stage: string): string | null {
+    const messages: Record<string, string> = {
+        'ingest': 'Ingesting document...',
+        'parse': 'Parsing contents...',
+        'normalize': 'Normalizing data...',
+        'privacy': 'Applying privacy filters...',
+        'classify': 'Classifying resume...',
+        'transform': 'Transforming content for the template...',
+        'render': 'Rendering final document...',
+        'validate': 'Validating output...'
+    };
+    return messages[stage] || `Processing stage: ${stage}...`;
   }
 
   private clone<T>(obj: T): T {
