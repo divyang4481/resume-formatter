@@ -24,7 +24,16 @@ class AwsBedrockLlmRuntime(LlmRuntimeAdapter):
         else:
             self.client = boto3.client(service_name='bedrock-runtime')
 
-    def generate(self, prompt: str, **kwargs) -> str:
+    def generate(
+        self,
+        prompt: str,
+        *,
+        system_prompt: Optional[str] = None,
+        response_format: Optional[dict] = None,
+        temperature: float = 0.1,
+        max_tokens: Optional[int] = None,
+        **kwargs
+    ) -> str:
         """
         Invokes the Amazon Bedrock model.
         Assumes the Anthropic Messages API format if using Claude 3 models.
@@ -33,7 +42,8 @@ class AwsBedrockLlmRuntime(LlmRuntimeAdapter):
         if "anthropic.claude-3" in self.model_id:
             body = {
                 "anthropic_version": "bedrock-2023-05-31",
-                "max_tokens": kwargs.get("max_tokens", 4096),
+                "max_tokens": max_tokens or kwargs.get("max_tokens", 4096),
+                "temperature": temperature,
                 "messages": [
                     {
                         "role": "user",
@@ -41,8 +51,8 @@ class AwsBedrockLlmRuntime(LlmRuntimeAdapter):
                     }
                 ]
             }
-            if "temperature" in kwargs:
-                body["temperature"] = kwargs["temperature"]
+            if system_prompt:
+                body["system"] = system_prompt
 
             response = self.client.invoke_model(
                 modelId=self.model_id,
@@ -54,12 +64,13 @@ class AwsBedrockLlmRuntime(LlmRuntimeAdapter):
 
         elif "anthropic.claude-v2" in self.model_id or "anthropic.claude-instant-v1" in self.model_id:
             # Fallback for older Claude Text Completions API
+            full_prompt = f"{system_prompt}\n\n" if system_prompt else ""
+            full_prompt += f"\n\nHuman: {prompt}\n\nAssistant:"
             body = {
-                "prompt": f"\n\nHuman: {prompt}\n\nAssistant:",
-                "max_tokens_to_sample": kwargs.get("max_tokens", 4096)
+                "prompt": full_prompt,
+                "max_tokens_to_sample": max_tokens or kwargs.get("max_tokens", 4096),
+                "temperature": temperature
             }
-            if "temperature" in kwargs:
-                body["temperature"] = kwargs["temperature"]
 
             response = self.client.invoke_model(
                 modelId=self.model_id,
@@ -69,11 +80,12 @@ class AwsBedrockLlmRuntime(LlmRuntimeAdapter):
             return response_body['completion'].strip()
 
         elif "amazon.titan" in self.model_id:
+             full_prompt = f"{system_prompt}\n\n{prompt}" if system_prompt else prompt
              body = {
-                 "inputText": prompt,
+                 "inputText": full_prompt,
                  "textGenerationConfig": {
-                     "maxTokenCount": kwargs.get("max_tokens", 4096),
-                     "temperature": kwargs.get("temperature", 0.7)
+                     "maxTokenCount": max_tokens or kwargs.get("max_tokens", 4096),
+                     "temperature": temperature
                  }
              }
              response = self.client.invoke_model(

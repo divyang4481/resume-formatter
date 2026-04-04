@@ -25,20 +25,36 @@ class GcpVertexLlmRuntime(LlmRuntimeAdapter):
         vertexai.init(project=project_id, location=location)
         self.model = GenerativeModel(model_name)
 
-    def generate(self, prompt: str, **kwargs) -> str:
+    def generate(
+        self,
+        prompt: str,
+        *,
+        system_prompt: Optional[str] = None,
+        response_format: Optional[dict] = None,
+        temperature: float = 0.1,
+        max_tokens: Optional[int] = None,
+        **kwargs
+    ) -> str:
         """
         Invokes the Google Cloud Vertex AI generative model.
         """
-        temperature = kwargs.get("temperature", 0.7)
-        max_output_tokens = kwargs.get("max_tokens", 8192)
-
         generation_config = {
-            "max_output_tokens": max_output_tokens,
+            "max_output_tokens": max_tokens or kwargs.get("max_tokens", 8192),
             "temperature": temperature,
         }
 
+        if response_format:
+            generation_config["response_mime_type"] = "application/json"
+
+        # Note: system instruction supported on gemini-1.5+
+        from vertexai.generative_models import Content, Part
+
+        # We can pass system instructions by initializing a new model if needed,
+        # or appending to the prompt. Here we append if not supported natively easily via generate_content args.
+        full_prompt = f"System: {system_prompt}\n\nUser: {prompt}" if system_prompt else prompt
+
         response = self.model.generate_content(
-            prompt,
+            full_prompt,
             generation_config=generation_config,
         )
 

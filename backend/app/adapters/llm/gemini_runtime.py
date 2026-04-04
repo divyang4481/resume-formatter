@@ -17,19 +17,30 @@ class GeminiLlmRuntime(LlmRuntimeAdapter):
         # Initialize the generative model
         self.model = genai.GenerativeModel(self.model_name)
 
-    def generate(self, prompt: str, **kwargs) -> str:
+    def generate(
+        self,
+        prompt: str,
+        *,
+        system_prompt: Optional[str] = None,
+        response_format: Optional[dict] = None,
+        temperature: float = 0.1,
+        max_tokens: Optional[int] = None,
+        **kwargs
+    ) -> str:
         """
         Generate text using Google's Gemini API.
         """
-        temperature = kwargs.get("temperature", 0.7)
+        config_args = {"temperature": temperature}
+        if response_format:
+            config_args["response_mime_type"] = "application/json"
+
+        generation_config = genai.GenerationConfig(**config_args)
         
-        generation_config = genai.GenerationConfig(
-            temperature=temperature
-        )
+        full_prompt = f"System: {system_prompt}\n\nUser: {prompt}" if system_prompt else prompt
         
         # Generate the response
         response = self.model.generate_content(
-            prompt,
+            full_prompt,
             generation_config=generation_config
         )
         
