@@ -37,7 +37,8 @@ class ResumeAiService:
         )
 
         print(f"\n--- [LLM PROMPT: SUMMARY] ---\n{prompt[:1000]}...\n")
-        response = self.llm.generate(prompt)
+        system_prompt = "You are a World-Class Professional Resume Writer. You write highly professional, impactful resume summaries."
+        response = self.llm.generate(prompt, system_prompt=system_prompt)
         print(f"\n--- [LLM RAW RESPONSE: SUMMARY] ---\n{response[:1000]}...\n")
         
         blocks = LlmSanitizer.extract_tagged_blocks(response)
@@ -147,7 +148,8 @@ class ResumeAiService:
             guidance=guidance,
         )
 
-        response = self.llm.generate(prompt)
+        system_prompt = "You are a World-Class Resume Auditor. You output strict validation responses using tagged blocks."
+        response = self.llm.generate(prompt, system_prompt=system_prompt)
         blocks = LlmSanitizer.extract_tagged_blocks(response)
         
         status = blocks.get("STATUS") or blocks.get("status") or "PASS"
@@ -178,8 +180,9 @@ class ResumeAiService:
 
         print(f"\n--- [LLM PROMPT: HARMONIZATION] ---\n{prompt[:2000]}...\n")
 
+        system_prompt = "You are a World-Class Professional Resume Writer and Architect. You synthesize and format resume content perfectly without generating code or technical data dumps. You strictly output requested formatting tags."
         try:
-            response = self.llm.generate(prompt)
+            response = self.llm.generate(prompt, system_prompt=system_prompt)
             print(f"\n--- [LLM RAW RESPONSE: HARMONIZATION] ---\n{response[:2000]}...\n")
             
             # 1. CORE STRATEGY: Tagged Block Extraction

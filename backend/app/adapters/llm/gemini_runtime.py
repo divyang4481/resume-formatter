@@ -1,6 +1,6 @@
 from app.domain.interfaces import LlmRuntimeAdapter
 import google.generativeai as genai
-from typing import Any
+from typing import Any, Optional
 
 class GeminiLlmRuntime(LlmRuntimeAdapter):
     def __init__(self, api_key: str, model_name: str = "gemini-2.0-flash"):
