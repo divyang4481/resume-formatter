@@ -87,52 +87,53 @@ class ResumeGeneratorService:
         # Use simple list for pass-by-reference counter
         manifest_ptr = [0] 
 
-        # Regex for common placeholder patterns: << >>, {{ }}, [[ ]]
-        MARKER_PATTERN = r"(?:<<|\{\{|\[\[)\s*(.*?)\s*(?:>>|\}\}|\]\])"
+        # SMART REGEX: Captures most common marker types including << >>, {{ }}, [[ ]], [ ], and < >.
+        # It also handles standard Jinja2/docxtpl variables.
+        MARKER_PATTERN = r"<<\s*(.*?)\s*>>|\{\{\s*(.*?)\s*\}\}|\[\[\s*(.*?)\s*\]\]|\[\s*(.*?)\s*\]|<\s*(.*?)\s*>"
 
         def transform_paragraph_markers(text, fields, current_counter, manifest, ptr):
-            matches = re.finditer(MARKER_PATTERN, text)
             new_text = text
             offset = 0
-            for match in matches:
+            
+            # We want to iterate matches but avoid double-matching the replacements
+            for match in list(re.finditer(MARKER_PATTERN, text)):
+                start, end = match.span()
                 original = match.group(0)
-                raw_marker_text = match.group(1).strip()
-
-                # SEMANTIC SEQUENTIAL RECOVERY:
-                # If we have a manifest and we're not past the end...
+                
+                # Extract inner content
+                raw_marker_text = next((g for g in match.groups() if g is not None), "").strip()
+                
+                target_key = None
+                
+                # 1. SMART MANIFEST SEQUENTIAL MATCH
                 if manifest and ptr[0] < len(manifest):
-                    item = manifest[ptr[0]]
-                    # Match by raw tag or inner text
-                    if original == item.get("tag") or raw_marker_text == item.get("tag") or raw_marker_text == item.get("inner_label"):
-                        target_key = item.get("meaning")
-                        replacement = f"{{{{ _['{target_key}'] }}}}"
-                        ptr[0] += 1
-                        start, end = match.span()
-                        new_text = (
-                            new_text[: start + offset] + replacement + new_text[end + offset :]
-                        )
-                        offset += len(replacement) - len(original)
-                        continue
+                    item_raw = manifest[ptr[0]]
+                    item = item_raw.model_dump() if hasattr(item_raw, "model_dump") else (item_raw.dict() if hasattr(item_raw, "dict") else item_raw)
+                    
+                    is_generic = "fill" in raw_marker_text.lower() and "section" in raw_marker_text.lower()
+                    if is_generic or original == item.get("tag") or raw_marker_text == item.get("tag"):
+                        target_key = item.get("fieldname") or item.get("meaning")
+                        if target_key:
+                            ptr[0] += 1
+                            replacement = f"{{{{ _['{target_key}'] }}}}"
+                            new_text = new_text[:start + offset] + replacement + new_text[end + offset:]
+                            offset += len(replacement) - (end - start)
+                            continue
 
-                # FALLBACK LOGIC
+                # 2. LEGACY LOGIC FALLBACK
                 if (
                     "fill" in raw_marker_text.lower()
                     and "section" in raw_marker_text.lower()
-                    and current_counter < len(fields)
                 ):
-                    target_key = fields[current_counter]
-                    replacement = f"{{{{ _['{target_key}'] }}}}"
+                    replacement = f"{{{{ _['section_{current_counter}'] }}}}"
+                    new_text = new_text[: start + offset] + replacement + new_text[end + offset :]
+                    offset += len(replacement) - len(original)
                     current_counter += 1
-                else:
-                    # Map visual marker to its logical value
-                    safe_key = raw_marker_text.lower().replace(" ", "_")
-                    replacement = f"{{{{ _['{safe_key}'] }}}}"
+                elif raw_marker_text in fields:
+                    replacement = f"{{{{ _['{raw_marker_text}'] }}}}"
+                    new_text = new_text[: start + offset] + replacement + new_text[end + offset :]
+                    offset += len(replacement) - len(original)
 
-                start, end = match.span()
-                new_text = (
-                    new_text[: start + offset] + replacement + new_text[end + offset :]
-                )
-                offset += len(replacement) - len(original)
             return new_text, current_counter
 
         # Process all structural elements in the document

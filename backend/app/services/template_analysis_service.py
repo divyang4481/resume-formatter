@@ -20,6 +20,7 @@ class TemplateAnalysisService:
                 "summary_guidance": "Standard executive summary focusing on career progression.",
                 "formatting_guidance": "Clear, bulleted lists and consistent date formatting (Jan 2024).",
                 "pii_guidance": "Redact specific details like full home address and non-essential contact data.",
-                "validation_guidance": "Ensure all core sections have data; check for valid date ranges."
+                "validation_guidance": "Ensure all core sections have data; check for valid date ranges.",
+                "field_extraction_manifest": []
             }
 

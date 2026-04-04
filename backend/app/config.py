@@ -60,7 +60,7 @@ class Settings(BaseSettings):
     template_selector_mode: str = "legacy"  # "legacy", "shadow", "hybrid"
 
     # Audit Logging
-    enable_audit_logging: bool = False
+    enable_audit_logging: bool = True
 
     # Example standard settings
     log_level: str = "INFO"

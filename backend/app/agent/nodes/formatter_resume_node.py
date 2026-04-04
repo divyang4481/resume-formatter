@@ -98,9 +98,19 @@ def create_render_node(
                 )
                 resume_data.update(formatted_data)
 
+            # Normalize Keys for the Template Engine (Jinja2 / docxtpl)
+            normalized_resume_data = {}
+            for k, v in resume_data.items():
+                # Map 'Professional Summary' or 'Summary' to 'summary' for consistency
+                safe_key = k.lower().strip().replace(" ", "_").replace(":", "")
+                normalized_resume_data[safe_key] = v
+            
+            # Ensure the specific 'summary' field is populated with our generated summary
+            # but preserve both local 'summary' and the AI-generated 'summary_text'
             final_resume_data = {
-                **resume_data,
+                **normalized_resume_data,
                 "summary": summary_text,
+                "professional_summary": summary_text, # Aliased for common template designs
                 "job_id": session_id,
             }
 

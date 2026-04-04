@@ -34,18 +34,30 @@ def create_schema_builder_node():
         # 2. Build schema from Manifest (SMART)
         if manifest:
             for item in manifest:
-                meaning = item.get("meaning")
+                # Handle Pydantic objects if they were passed instead of raw dicts
+                if not isinstance(item, dict):
+                    if hasattr(item, "model_dump"):
+                        item = item.model_dump()
+                    elif hasattr(item, "dict"):
+                        item = item.dict()
+                    else:
+                        logger.warning(f"Unexpected item type in manifest: {type(item)}")
+                        continue
+
+                fieldname = item.get("fieldname")
                 item_type = item.get("type", "field")
-                if not meaning: continue
+                if not fieldname: continue
                 
                 # Handle nested dot-notation (e.g. personal_information.name)
-                parts = meaning.split(".")
+                parts = fieldname.split(".")
                 curr = dynamic_schema
                 for i, part in enumerate(parts):
                     if i == len(parts) - 1:
                         # Leaf node initialization
                         if part not in curr:
-                            curr[part] = [] if item_type == "section" else ""
+                            # Use the explicit 'type' from manifest to determine schema structure
+                            is_list = item_type in ["list", "section", "array"]
+                            curr[part] = [] if is_list else ""
                     else:
                         # Intermediate node
                         if part not in curr:
@@ -91,11 +103,17 @@ def create_context_aware_extraction_node(llm_runtime: LlmRuntimeAdapter):
                 structured_context += f"\nDETECTED TABLES: {len(tables)} tables found. Use table content for precise facts like dates and roles."
 
         # RENDER EXTERNALIZED PROMPT
-        manifest = state.get("field_extraction_manifest") or []
+        manifest_raw = state.get("field_extraction_manifest") or []
+        # Ensure manifest is serializable (handle Pydantic models)
+        manifest_dicts = [
+            m.model_dump() if hasattr(m, 'model_dump') else (m.dict() if hasattr(m, 'dict') else m) 
+            for m in manifest_raw
+        ]
+        
         prompt = prompt_manager.get_prompt(
             "context_aware_extraction.jinja2",
             dynamic_schema_json=json.dumps(dynamic_schema, indent=2),
-            field_extraction_manifest_json=json.dumps(manifest, indent=2),
+            field_extraction_manifest_json=json.dumps(manifest_dicts, indent=2),
             template_text_excerpt=template_text[:3000],
             structured_context=structured_context,
             extracted_text=extracted_text,

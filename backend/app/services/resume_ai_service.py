@@ -93,37 +93,86 @@ class ResumeAiService:
         
         return summary.strip()
 
-    async def analyze_template(self, content: bytes, filename: str) -> Dict[str, str]:
-        """Analyzes a .docx template to suggest metadata... (Uses Tags for Stability)"""
-        # (Template Analysis Logic - Simplified to Tags)
+    async def analyze_template(self, content: bytes, filename: str) -> Dict[str, Any]:
+        """
+        Analyzes a CV template to understand its structure, tone, and formatting requirements.
+        Generates suggestions for 'expected_fields' and metadata extraction.
+        """
+        from app.services.audit_service import AuditService
+        from app.domain.interfaces import ExtractionContext
         if not self.extraction_service: return {}
         
-        from app.domain.interfaces import ExtractionContext
+        context = ExtractionContext(intent="template_analysis", actor_role="system")
         extracted_doc = await self.extraction_service.extract(
-            content, filename, "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            content, filename, "application/vnd.openxmlformats-officedocument.wordprocessingml.document", context
         )
         
-        # Retrieve placeholders
-        from docxtpl import DocxTemplate
+        # Retrieve placeholders in EXACT visual order using regex across the whole document text
         import io, re
-        doc = DocxTemplate(io.BytesIO(content))
-        detected_placeholders = list(set([str(p).strip() for p in doc.get_undeclared_template_variables()]))
+        
+        # Pattern covers << section >>, {{ field }}, and [[:B:]] markup placeholders
+        pattern = r"<<\s*(.*?)\s*>>|\{\{\s*(.*?)\s*\}\}|\[\[\s*(.*?)\s*\]\]"
+        matches = re.finditer(pattern, extracted_doc.extracted_text)
+        
+        detected_placeholders = []
+        for match in matches:
+            # Get the first non-None group (the inner text)
+            inner_text = next(group for group in match.groups() if group is not None)
+            detected_placeholders.append(inner_text.strip())
+        
+        logger.info(f"AI Template Analysis: Found {len(detected_placeholders)} placeholders in visual order: {detected_placeholders}")
         
         prompt = prompt_manager.get_prompt(
             "template_analysis.jinja2",
             template_text=extracted_doc.extracted_text[:8000],
             detected_placeholders=detected_placeholders,
+            sections=extracted_doc.parsed_document.sections if extracted_doc.parsed_document else [],
+            tables=extracted_doc.parsed_document.tables if extracted_doc.parsed_document else []
+        )
+
+        # Audit Prompt
+        AuditService.log_event(
+            job_id=filename,
+            event_type="TEMPLATE_ANALYSIS_PROMPT",
+            payload={"prompt": prompt},
+            entity_type="TemplateAsset"
         )
 
         response = self.llm.generate(prompt)
-        blocks = LlmSanitizer.extract_tagged_blocks(response)
+
+        # Audit Response
+        AuditService.log_event(
+            job_id=filename,
+            event_type="TEMPLATE_ANALYSIS_RESPONSE",
+            payload={"response": response},
+            entity_type="TemplateAsset"
+        )
         
-        # Build Suggestions from Tags
-        return {
-            "purpose": blocks.get("PURPOSE") or blocks.get("purpose") or "General Template",
-            "expected_sections": blocks.get("SECTIONS") or blocks.get("sections") or "Summary, Experience",
-            "expected_fields": blocks.get("FIELDS") or blocks.get("fields") or ",".join(detected_placeholders),
+        try:
+            cleaned = LlmSanitizer.clean_json(response)
+            result = json.loads(cleaned)
+        except Exception as e:
+            logger.warning(f"AI Template Analysis failed to parse JSON: {e}")
+            logger.debug(f"RAW TEMPLATE ANALYSIS RESPONSE (FIRST 500 CHARS): {response[:500]}")
+            # Fallback to tagged blocks if JSON fails
+            result = LlmSanitizer.extract_tagged_blocks(response)
+
+        # Build Suggestions (Support both JSON keys and Tagged Block keys - Case Insensitive)
+        normalized_result = {str(k).lower(): v for k, v in result.items()}
+        
+        # Extract fields with best match fallback
+        suggestions = {
+            "purpose": normalized_result.get("purpose") or "General Template",
+            "expected_sections": normalized_result.get("expected_sections") or "Summary, Experience",
+            "expected_fields": normalized_result.get("expected_fields") or ",".join(detected_placeholders),
+            "field_extraction_manifest": normalized_result.get("field_extraction_manifest") or [],
+            "summary_guidance": normalized_result.get("summary_guidance") or "",
+            "formatting_guidance": normalized_result.get("formatting_guidance") or "",
+            "validation_guidance": normalized_result.get("validation_guidance") or "",
+            "pii_guidance": normalized_result.get("pii_guidance") or ""
         }
+        
+        return suggestions
 
     async def validate_output(
         self, transformed_data: Dict[str, Any], guidance: str

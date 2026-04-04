@@ -43,7 +43,8 @@ class ResumeWorkflowService:
 
         job.status = JobStatus.PROCESSING
         self.job_repo.save_job(job)
-
+        
+        template = None
         # Reconstruct context from job metadata
         ext_meta = getattr(job, 'extension_metadata', {})
         if not isinstance(ext_meta, dict):
@@ -104,7 +105,10 @@ class ResumeWorkflowService:
             "actor_role": actor_role,
             "filename": filename,
             "content_type": content_type,
-            "runtime_metadata": ext_meta
+            "runtime_metadata": ext_meta,
+            "expected_sections": getattr(template, 'expected_sections', "") if template else "",
+            "expected_fields": getattr(template, 'expected_fields', "") if template else "",
+            "field_extraction_manifest": getattr(template, 'field_extraction_manifest', []) if template else []
         }
 
         try:

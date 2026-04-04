@@ -21,6 +21,8 @@ class FieldExtractionManifestItem(BaseModel):
     fieldname: str
     meaning: str
     source_hints: str
+    tag: Optional[str] = None # The literal visual marker: << Fill this section >>
+    type: str = "field" # 'field' or 'section'
 
 class TemplateAsset(BaseModel):
     id: str
