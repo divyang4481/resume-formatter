@@ -94,7 +94,7 @@ async def pull_templates(
     templates = template_repository.list_templates({})
     return {"templates": [t.model_dump() for t in templates]}
 
-from typing import Optional
+from typing import Optional, Any
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from app.db.session import SessionLocal
@@ -110,6 +110,7 @@ class TemplateUpdateRequest(BaseModel):
     purpose: Optional[str] = None
     expected_sections: Optional[str] = None
     expected_fields: Optional[str] = None
+    field_extraction_manifest: Optional[Any] = None # Support rich list of objects
 
     summary_guidance: Optional[str] = None
     formatting_guidance: Optional[str] = None
@@ -132,6 +133,10 @@ async def update_template(
 
         update_data = payload.model_dump(exclude_unset=True)
         for key, value in update_data.items():
+            if key == "field_extraction_manifest" and value is not None:
+                if not isinstance(value, str):
+                    import json
+                    value = json.dumps(value)
             setattr(template, key, value)
 
         db.commit()
@@ -388,3 +393,31 @@ async def run_evaluations():
 @router.post("/ranking/rerank")
 async def rerank_templates():
     return {"message": "Reranking triggered."}
+
+@router.get("/audit-logs/{job_id}")
+async def get_audit_logs(
+    job_id: str,
+    is_admin: bool = Depends(mock_is_admin)
+):
+    from app.db.models import AuditEvent
+    db = SessionLocal()
+    try:
+        events = db.query(AuditEvent).filter(AuditEvent.entity_id == job_id).order_by(AuditEvent.created_at.asc()).all()
+        result = []
+        for e in events:
+            payload = {}
+            if e.payload_json:
+                try:
+                    payload = json.loads(e.payload_json)
+                except Exception:
+                    pass
+            result.append({
+                "id": e.id,
+                "action": e.action,
+                "actor": e.actor,
+                "payload": payload,
+                "created_at": e.created_at
+            })
+        return {"audit_logs": result}
+    finally:
+        db.close()

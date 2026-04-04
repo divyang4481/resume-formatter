@@ -85,11 +85,29 @@ class QdrantKnowledgeIndex(KnowledgeIndex):
                 conditions.append(FieldCondition(key=k, match=MatchValue(value=v)))
             qdrant_filter = Filter(must=conditions)
 
-        results = self.client.search(
-            collection_name=self.collection_name,
-            query_vector=query_vector,
-            query_filter=qdrant_filter,
-            limit=top_k
-        )
-
-        return [{"id": r.id, "score": r.score, **r.payload} for r in results]
+        try:
+            # Attempt standard search
+            results = self.client.search(
+                collection_name=self.collection_name,
+                query_vector=query_vector,
+                query_filter=qdrant_filter,
+                limit=top_k
+            )
+            return [{"id": r.id, "score": r.score, **r.payload} for r in results]
+        except AttributeError as ae:
+            print(f"CRITICAL: Qdrant client detected without '.search' attribute. Client type: {type(self.client)}. Error: {ae}")
+            # Attempt newer v1.11+ API if legacy search is missing
+            try:
+                # Basic query_points fallback
+                results = self.client.query_points(
+                    collection_name=self.collection_name,
+                    query=query_vector,
+                    query_filter=qdrant_filter,
+                    limit=top_k
+                ).points
+                return [{"id": r.id, "score": r.score, **r.payload} for r in results]
+            except Exception:
+                return []
+        except Exception as e:
+            print(f"Qdrant search unexpected failure: {e}")
+            return []

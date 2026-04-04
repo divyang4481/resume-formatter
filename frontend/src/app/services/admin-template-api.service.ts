@@ -50,4 +50,8 @@ export class AdminTemplateApiService {
   analyzeTemplate(templateId: string): Observable<any> {
     return this.http.post(`${this.apiUrl}/${templateId}/analyze`, {});
   }
+
+  getAuditLogs(jobId: string): Observable<any> {
+    return this.http.get<any>(`${this.apiUrl}/admin/audit-logs/${jobId}`);
+  }
 }

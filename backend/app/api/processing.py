@@ -149,81 +149,15 @@ async def submit_document(
     # Store file via storage provider
     storage_ref = storage_provider.put_bytes(storage_key, file_bytes)
 
-    requires_confirmation = True
+    requires_confirmation = False
     suggested_industry_id = None
     suggested_template_id = None
     allowed_template_ids = None
-    job_status = JobStatus.WAITING_FOR_CONFIRMATION
 
     if industry_id and template_id:
-        requires_confirmation = False
         job_status = JobStatus.CONFIRMED
     else:
-        # Suggest if not provided using shared service
-        try:
-            # Synchronous extraction
-            extracted = await doc_parser_service.extract(
-                file_bytes=file_bytes,
-                filename=filename,
-                content_type=file.content_type,
-                context=ExtractionContext(intent=execution_mode.value, actor_role=x_actor_role)
-            )
-
-            # Use TemplateResolutionService
-            resolution_service = TemplateResolutionService(llm_runtime, template_repository)
-            rec_result = await resolution_service.recommend_template(
-                extracted_text=extracted.extracted_text,
-                industry_id=industry_id,
-                mode=execution_mode.value
-            )
-
-            suggested_industry_id = rec_result.suggested_industry_id
-            suggested_template_id = rec_result.suggested_template_id
-            allowed_template_ids = rec_result.allowed_template_ids
-
-            # Phase 3: Shadow mode execution
-            if settings.template_selector_mode in ("shadow", "hybrid"):
-                try:
-                    knowledge_index = get_knowledge_index()
-                    # template_repository is injected correctly into submit_document, we use it directly
-                    ranker = HybridTemplateRanker(knowledge_index, template_repository)
-
-                    # Run hybrid ranking
-                    hybrid_results = ranker.rank_templates(
-                        extracted_text=extracted.extracted_text,
-                        industry_id=industry_id,
-                        mode=execution_mode.value
-                    )
-
-                    hybrid_suggested_id = hybrid_results[0]["template_id"] if hybrid_results else None
-                    highest_score = hybrid_results[0]["score"] if hybrid_results else 0.0
-
-                    logger.info(
-                        "template_selection_comparison",
-                        extra={
-                            "old_template_id": suggested_template_id,
-                            "new_template_id": hybrid_suggested_id,
-                            "mode": settings.template_selector_mode,
-                            "vector_enabled": settings.vector_search_enabled,
-                            "confidence_score": highest_score,
-                            "job_id": job_id
-                        }
-                    )
-                except Exception as shadow_e:
-                    logger.error(f"Shadow mode hybrid ranking failed: {shadow_e}")
-
-        except Exception as e:
-            print(f"Failed to get LLM template recommendation: {e}")
-            # Fallback
-            suggested_industry_id = "it"
-            suggested_template_id = "general_cv_v1"
-            allowed_template_ids = ["general_cv_v1"]
-        
-        # FORCET: Automatically accept suggestions and move to processing
-        requires_confirmation = False
-        job_status = JobStatus.CONFIRMED
-        template_id = suggested_template_id
-        industry_id = suggested_industry_id
+        job_status = JobStatus.PROCESSING
 
     # Create job record
     job = ProcessingJob(
@@ -231,7 +165,7 @@ async def submit_document(
         status=job_status,
         original_file_ref=storage_ref,
         created_by=x_actor_role,
-        selected_template_id=template_id if not requires_confirmation else None,
+        selected_template_id=template_id,
         extension_metadata={
             "industry_id": industry_id if not requires_confirmation else None,
             "intent": execution_mode.value,
@@ -268,12 +202,12 @@ async def submit_document(
         document_id=job_id,
         job_id=job_id,
         status=job_status,
-        requires_confirmation=requires_confirmation,
+        requires_confirmation=False,
         provided_industry_id=industry_id,
         provided_template_id=template_id,
-        suggested_industry_id=suggested_industry_id,
-        suggested_template_id=suggested_template_id,
-        allowed_template_ids=allowed_template_ids,
+        suggested_industry_id=None,
+        suggested_template_id=None,
+        allowed_template_ids=None,
         message="Document submitted successfully."
     )
 
@@ -289,12 +223,19 @@ async def get_job_status(
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
 
+    extension_metadata = getattr(job, "extension_metadata", {}) or {}
+
     return RuntimeJobStatusResponse(
         job_id=job.id,
         status=job.status,
         original_file_ref=getattr(job, "original_file_ref", "unknown"),
         stage=getattr(job, "stage", None),
-        error_message=getattr(job, "error_message", None)
+        error_message=getattr(job, "error_message", None),
+        suggested_template_ids=extension_metadata.get("suggested_template_ids"),
+        suggested_template_scores=extension_metadata.get("suggested_template_scores"),
+        document_kind=extension_metadata.get("document_kind"),
+        document_confidence=extension_metadata.get("document_confidence"),
+        document_reason=extension_metadata.get("document_reason"),
     )
 
 @router.post("/documents/{id}/confirm")

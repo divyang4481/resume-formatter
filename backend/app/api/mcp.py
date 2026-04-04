@@ -37,20 +37,19 @@ async def submit_document(
     storage_key = f"jobs/{job_id}/input/{filename}"
     storage_ref = storage_provider.put_bytes(storage_key, file_bytes)
 
-    requires_confirmation = True
-    job_status = JobStatus.WAITING_FOR_CONFIRMATION
     if industry_id and template_id:
-        requires_confirmation = False
         job_status = JobStatus.CONFIRMED
+    else:
+        job_status = JobStatus.PROCESSING
 
     job = ProcessingJob(
         id=job_id,
         status=job_status,
         original_file_ref=storage_ref,
         created_by="mcp_agent",
-        selected_template_id=template_id if not requires_confirmation else None,
+        selected_template_id=template_id,
         extension_metadata={
-            "industry_id": industry_id if not requires_confirmation else None,
+            "industry_id": industry_id,
             "intent": "recruiter_runtime",
             "actor_role": "mcp_agent",
             "filename": filename,
@@ -60,8 +59,7 @@ async def submit_document(
     )
     job_repository.save_job(job)
 
-    if not requires_confirmation:
-        message_queue.enqueue("document_processing", {"job_id": job_id})
+    message_queue.enqueue("document_processing", {"job_id": job_id})
 
     return {
         "tool": "submit_document",
@@ -69,7 +67,7 @@ async def submit_document(
         "result": {
             "job_id": job_id,
             "status": job_status.value if hasattr(job_status, "value") else job_status,
-            "requires_confirmation": requires_confirmation
+            "requires_confirmation": False
         }
     }
 

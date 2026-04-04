@@ -36,7 +36,9 @@ class SqlAlchemyJobRepository(JobRepository):
             model.error_message = job.error_message
         if hasattr(job, 'selected_template_id'):
             model.template_asset_id = job.selected_template_id
-
+        if hasattr(job, 'extension_metadata'):
+            # In a real app we might serialize this to a JSON string column, but for now we set it as an attribute if it's dynamic
+            setattr(model, 'extension_metadata', job.extension_metadata)
 
         self.db.commit()
         return model.id

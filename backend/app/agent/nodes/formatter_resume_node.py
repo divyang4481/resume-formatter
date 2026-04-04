@@ -1,6 +1,7 @@
 from app.agent.state import AgentState
 from app.services.resume_ai_service import ResumeAiService
 from app.services.resume_generator_service import ResumeGeneratorService
+from app.services.audit_service import AuditService
 import json
 import logging
 import io
@@ -17,7 +18,8 @@ def create_render_node(
     """
 
     async def render_node(state: AgentState) -> dict:
-        logger.info("Executing Formatter Resume Node...")
+        logger.info(f"Executing Formatter Resume Node (Session ID: {state.get('session_id')})...")
+        logger.info(f"Available State Keys: {list(state.keys())}")
 
         extracted_text = state.get("extracted_text", "")
         transformed_json_str = state.get("transformed_document_json", "")
@@ -28,7 +30,9 @@ def create_render_node(
         # 1. Prepare Data & Summary
         try:
             if transformed_json_str:
-                resume_data = json.loads(transformed_json_str)
+                from app.agent.utils.llm_sanitizer import LlmSanitizer
+                cleaned_transformed = LlmSanitizer.clean_json(transformed_json_str)
+                resume_data = json.loads(cleaned_transformed)
 
             if extracted_text:
                 summary_guidance = state.get("summary_guidance") or ""
@@ -61,12 +65,13 @@ def create_render_node(
 
         # 3. Document Rendering
         try:
-            # Resolve template path
-            template_key = (
-                template_storage_uri.replace("local://", "")
-                if template_storage_uri
-                else f"templates/{template_id}/template.docx"
-            )
+            if not template_storage_uri:
+                logger.warning(f"No template_storage_uri in state. Falling back to ID guess for {template_id}")
+                template_key = f"templates/{template_id}/template.docx"
+            else:
+                template_key = template_storage_uri.replace("local://", "")
+
+            logger.info(f"Loading template from storage key: {template_key}")
             template_bytes = storage.get_bytes(template_key)
 
             # Linearize and polish JSON data for the template style via AI
@@ -93,15 +98,37 @@ def create_render_node(
                 )
                 resume_data.update(formatted_data)
 
+            # Normalize Keys for the Template Engine (Jinja2 / docxtpl)
+            normalized_resume_data = {}
+            for k, v in resume_data.items():
+                # Map 'Professional Summary' or 'Summary' to 'summary' for consistency
+                safe_key = k.lower().strip().replace(" ", "_").replace(":", "")
+                normalized_resume_data[safe_key] = v
+            
+            # Ensure the specific 'summary' field is populated with our generated summary
+            # but preserve both local 'summary' and the AI-generated 'summary_text'
+            final_resume_data = {
+                **normalized_resume_data,
+                "summary": summary_text,
+                "professional_summary": summary_text, # Aliased for common template designs
+                "job_id": session_id,
+            }
+
+            # Log the final data mapping before document generation
+            AuditService.log_event(
+                job_id=session_id,
+                event_type="DATA_BEFORE_DOC_GEN",
+                payload={
+                    **final_resume_data
+                }
+            )
+
             # Delegate rendering to dedicated generator service
             docx_bytes = generator_service.render_formatted_document(
                 template_bytes=template_bytes,
-                resume_data={
-                    **resume_data,
-                    "summary": summary_text,
-                    "job_id": session_id,
-                },
+                resume_data=final_resume_data,
                 expected_fields=state.get("expected_fields") or "",
+                field_extraction_manifest=state.get("field_extraction_manifest"),
             )
 
             render_key = f"jobs/{session_id}/output/formatted_resume.docx"

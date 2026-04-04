@@ -79,9 +79,8 @@ class SqlAlchemyTemplateRepository(TemplateRepository):
         model.expected_fields = template_asset.expected_fields
         
         # Serialize manifest to JSON string for storage
-        if template_asset.field_extraction_manifest:
-            # Pydantic models in list handled by default json.dumps if they have dict() or model_dump()
-            # but more robust to dump manually or use list of dicts
+        if template_asset.field_extraction_manifest is not None:
+            # Pydantic models in list handled by default json.dumps...
             model.field_extraction_manifest = json.dumps([item.model_dump() for item in template_asset.field_extraction_manifest])
         else:
             model.field_extraction_manifest = None

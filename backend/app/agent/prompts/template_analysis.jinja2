@@ -3,17 +3,36 @@ TASK: Reverse-engineer this CV Template to suggest professional governance metad
 TEMPLATE TEXT (EXTRACTED):
 {{ template_text }}
 
-IDENTIFIED RAW PLACEHOLDERS:
-{{ ", ".join(detected_placeholders) if detected_placeholders else "None identified programmatically." }}
+STRUCTURED DOCUMENT CONTEXT:
+{% if sections %}
+DETECTED HEADERS:
+{% for s in sections %}
+- HEADER: {{ s.title }} (Level {{ s.level }})
+  CONTENT SNIPPET: {{ s.content[:200] }}...
+{% endfor %}
+{% endif %}
 
-Analyze the structure, visual hierarchy, expected content, and placeholders in this template. 
-Generate highly specific guidance that will be used to steer other LLMs when they process actual candidate resumes using this template.
+{% if tables %}
+DETECTED TABLES: {{ tables|length }} found.
+{% endif %}
+
+IDENTIFIED RAW PLACEHOLDERS (PROGRAMMATIC):
+{{ ", ".join(detected_placeholders) if detected_placeholders else "None identified." }}
+
+Analyze the structure, visual hierarchy, and literal text of the template.
+Your goal is to identify ALL "placeholders" or "markers" intended to be filled with candidate data.
+
+SMART MARKER IDENTIFICATION:
+- Markers often look like '<< Fill this section >>', '{{ some_field }}', '[MARKER]', or even just capitalized placeholders like 'CANDIDATE_NAME'.
+- You MUST identify all such markers from the TEMPLATE TEXT provided above.
+- HEADER-MARKER RELATIONSHIP: If multiple markers use the same literal text (e.g., 6 instances of '<< Fill this section >>'), you MUST use the visual header or preceding text (e.g., 'Professional Experience', 'Education') to determine the correct 'fieldname' and 'meaning' for that specific marker.
+- Your 'field_extraction_manifest' must follow the TOP-TO-BOTTOM visual order of these markers.
+- For each item in the manifest, include the 'tag' (the literal text of the marker, including brackets if they exist).
 
 CRITICAL INSTRUCTIONS FOR PLACEHOLDERS:
-- You MUST maintain a 1:1 parity between the number of markers in the doc and the number of keys in 'expected_fields'.
-- If you see 6 markers like '<< Fill this section >>', you MUST provide exactly 6 descriptive keys (e.g., 'professional_summary', 'technical_skills', 'experience', etc.).
-- NEVER list granular sub-fields (like 'programming_languages') in 'expected_fields' if the template only has one high-level box for that section. Granular data belongs in 'formatting_guidance'.
+- You MUST maintain a 1:1 parity between the number of physical markers in the doc and the number of keys in 'field_extraction_manifest'.
 - The keys MUST appear in the EXACT ORDER they appear in the visual text of the template.
+- Each manifest item MUST have: 'fieldname', 'meaning', 'source_hints', and 'tag'.
 
 Provide recommendations in the following JSON format:
 1. 'purpose': A concise description of the ideal profile for this template.
@@ -21,8 +40,10 @@ Provide recommendations in the following JSON format:
 3. 'field_extraction_manifest': A list of objects, one for each physical marker in the doc.
    Each object MUST have:
    - 'fieldname': The unique logical key for the marker (e.g., 'technical_skills').
-   - 'meaning': A brief description of what this section represents visually in the template.
-   - 'source_hints': A comma-separated string of specific resume data points that should be "sourced" to fill this field (e.g., 'programming languages, cloud platforms, databases').
+   - 'meaning': Detailed description of what data belongs here.
+   - 'type': Set to "field" for single paragraphs/values (e.g. summary, header info). Set to "list" for repeating entries or bulleted items (e.g. skills, experience, projects, education).
+   - 'source_hints': Keywords from the template to help the extractor locate this field.
+   - 'tag': The literal text of the marker.
 4. 'summary_guidance': Style rules for the summary.
 5. 'formatting_guidance': Specific rules for how the AI should format the harmonized text for these fields.
 

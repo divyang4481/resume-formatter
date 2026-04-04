@@ -13,9 +13,9 @@ def test_submit_document_valid():
     data = response.json()
     assert "job_id" in data
     assert "document_id" in data
-    assert data["status"] in ["waiting_for_confirmation", "confirmed", "completed"]
+    assert data["status"] in ["waiting_for_confirmation", "confirmed", "completed", "processing"]
     assert "requires_confirmation" in data
-    assert data["suggested_industry_id"] in ["it", None]  # Allow None since extraction mocks might not resolve cleanly in e2e unit test without mocked template db
+    assert data["suggested_industry_id"] is None
 
 def test_submit_document_invalid_extension():
     file_content = b"dummy content"
@@ -34,4 +34,4 @@ def test_get_job_status():
     assert response.status_code == 200
     data = response.json()
     assert data["job_id"] == job_id
-    assert data["status"] in ["waiting_for_confirmation", "confirmed", "completed"]
+    assert data["status"] in ["waiting_for_confirmation", "confirmed", "completed", "processing"]
