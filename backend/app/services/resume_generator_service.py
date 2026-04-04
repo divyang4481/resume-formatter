@@ -2,7 +2,7 @@ import io
 import re
 import logging
 from typing import Any, Dict, List, Optional
-from docxtpl import DocxTemplate
+from docxtpl import DocxTemplate, RichText
 from docx import Document
 
 logger = logging.getLogger(__name__)
@@ -151,60 +151,47 @@ class ResumeGeneratorService:
         error_doc.save(error_stream)
         return error_stream.getvalue()
 
-    def _apply_rendering_actions(self, data: Dict[str, Any]) -> Dict[str, Any]:
+    def _apply_rendering_actions(self, content: Any) -> Any:
         """
-        Visual Block Composer: Translates proprietary CVML ([:L1:], [:B:], etc.) 
-        into native document formatting, including RICH TEXT for bolding. 
+        Hyper-Fidelity Composition Node: Recursively translatesproprietary
+        CVML ([:B:], [:L1:], etc.) into native DOCX RichText runs.
         """
-        from docxtpl import RichText
+        # 1. Recursive handling for nested structures (Jobs, Projects, etc)
+        if isinstance(content, dict):
+            return {k: self._apply_rendering_actions(v) for k, v in content.items()}
+        elif isinstance(content, list):
+            return [self._apply_rendering_actions(v) for v in content]
+        elif not isinstance(content, str):
+            return content
+
+        # 2. String Composition (The CVML Engine)
+        if not any(tag in content for tag in ["[:B:]", "[:PIPE:]", "[:BR:]", "[:L1:]", "[:L2:]"]):
+            return content
+
+        rt = RichText()
+        content = content.replace("\r\n", "\n")
         
-        processed_data = {}
-        for key, value in data.items():
-            if not isinstance(value, str):
-                processed_data[key] = str(value)
+        # Split into tokens: keep tags for processing
+        parts = re.split(r'(\[:B:\].*?\[:/B:\]|\[:PIPE:\]|\[:BR:\]|\[:L1:\]|\[:L2:\])', content, flags=re.DOTALL)
+        
+        for part in parts:
+            if not part:
                 continue
                 
-            # If the text has CVML bolding, we must convert it to a RichText object
-            if "[:B:]" in value:
-                rt = RichText()
-                # Split by bold tags to build the RichText runs
-                parts = re.split(r"(\[:B:\].*?\[:/B:\]|\[:L1:\]|\[:L2:\]|\[:PIPE:\]|\[:BR:\])", value)
-                
-                for part in parts:
-                    if not part: continue
-                    
-                    if part.startswith("[:B:]") and part.endswith("[:/B:]"):
-                        rt.add(part[5:-6], bold=True)
-                    elif part == "[:L1:]":
-                        rt.add("• ")
-                    elif part == "[:L2:]":
-                        rt.add("    - ")
-                    elif part == "[:PIPE:]":
-                        rt.add(" | ")
-                    elif part == "[:BR:]":
-                        rt.add("\n")
-                    else:
-                        rt.add(part)
-                processed_data[key] = rt
+            if part.startswith("[:B:]"):
+                # [:B:]Bold Text[:/B:]
+                inner = part[5:-6]
+                rt.add(inner, bold=True)
+            elif part == "[:PIPE:]":
+                rt.add("  |  ")
+            elif part == "[:BR:]":
+                rt.add("\n")
+            elif part == "[:L1:]":
+                rt.add("\n• ")
+            elif part == "[:L2:]":
+                rt.add("\n    - ")
             else:
-                # Handle non-bold but still containing structural CVML
-                processed_data[key] = self._render_visual_markup(value)
-            
-        return processed_data
-
-    def _render_visual_markup(self, text: str) -> str:
-        """
-        Translates CVML reserved keywords into professional document prose.
-        Standard text version (fallback).
-        """
-        if not text:
-            return ""
-            
-        processed = text
-        processed = processed.replace("[:L1:]", "• ")
-        processed = processed.replace("[:L2:]", "    - ")
-        processed = processed.replace("[:PIPE:]", " | ")
-        processed = processed.replace("[:BR:]", "\n")
-        processed = processed.replace("[:B:]", "").replace("[:/B:]", "")
-        
-        return processed.strip()
+                # Standard text run
+                rt.add(part)
+                
+        return rt

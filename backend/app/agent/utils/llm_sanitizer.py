@@ -101,37 +101,42 @@ class LlmSanitizer:
     @staticmethod
     def extract_tagged_blocks(text: str) -> Dict[str, str]:
         """
-        Master Aggregator Protocol: Captures multi-line blocks, joins 
-        duplicates, and handles casing aliases for template compatibility.
+        Hyper-Resilient Harvester: Captures blocks even if the AI adds 
+        bolding (**) or forgets closing tags.
         """
         if not text:
             return {}
 
-        raw_results = {} # name -> list of strings
-        pattern = r"\[MARKER\s*::\s*(.*?)\](.*?)\[/MARKER\]"
+        raw_results = {}
+        # Regex: Matches [MARKER :: Name] possibly wrapped in **
+        # Captures until [/MARKER] OR until the next [MARKER :: or end of string
+        pattern = r"(?:\*\*)?\[MARKER\s*::\s*(.*?)\](?:\*\*)?(.*?)(?=\[MARKER\s*::|\[/MARKER\]|\Z)"
+        
         matches = re.finditer(pattern, text, re.DOTALL | re.IGNORECASE)
 
         for match in matches:
             name = match.group(1).strip()
+            # Clean name from any trailing bolding markers the AI trapped inside
+            name = name.replace("**", "").strip()
+            
             content = match.group(2).strip()
+            # Clean content from trailing [MARKER artifact if regex lookahead was too broad
+            content = re.sub(r'\[MARKER\s*::.*', '', content, flags=re.IGNORECASE | re.DOTALL).strip()
             
             if name not in raw_results:
                 raw_results[name] = []
             raw_results[name].append(content)
 
-        # Build final dictionary with multi-casing support (Aliasing)
         final_results = {}
         for name, contents in raw_results.items():
             joined_content = "\n\n".join(contents)
             final_results[name] = joined_content
             
-            # Alias Support: If AI returns "Professional Experience", 
-            # also populate "professional_experience" to match potential JSON keys
+            # Alias Support for snake_case placeholders
             snake_name = name.lower().replace(" ", "_")
             if snake_name not in final_results:
                 final_results[snake_name] = joined_content
 
-        # Universal Safety Net
         if not final_results:
             final_results["__raw_content__"] = text
 
