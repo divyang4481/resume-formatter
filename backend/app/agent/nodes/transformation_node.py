@@ -11,30 +11,56 @@ logger = logging.getLogger(__name__)
 def create_schema_builder_node():
     """
     Node to build the dynamic JSON schema based purely on template requirements.
-    No hardcoding: driven by template metadata (expected_fields and expected_sections).
+    Driven by the High-IQ field_extraction_manifest (Stage 1).
     """
     async def schema_builder_node(state: AgentState) -> dict:
-        logger.info("Executing Schema Builder Node (Subgraph)...")
-        expected_fields = state.get("expected_fields") or ""
-        expected_sections = state.get("expected_sections") or ""
+        logger.info("Executing Schema Builder Node (Subgraph: High-IQ)...")
+        manifest_raw = state.get("field_extraction_manifest")
         
         dynamic_schema = {}
+        manifest = []
         
-        # Add required specific fields
-        fields = [f.strip() for f in expected_fields.split(",") if f.strip()]
-        for f in fields:
-            # Normalize key to lower_snake_case for consistent LLM output
-            safe_key = f.lower().replace(" ", "_").strip()
-            if safe_key:
-                dynamic_schema[safe_key] = ""
-
-        # Add mandatory sections
-        sections = [s.strip() for s in expected_sections.split(",") if s.strip()]
-        for s in sections:
-            safe_key = s.lower().replace(" ", "_").strip()
-            if safe_key and safe_key not in dynamic_schema:
-                # Sections are treated as lists of items (objects) for better semantic mapping
-                dynamic_schema[safe_key] = []
+        # 1. Load the manifest (JSON list of objects)
+        if manifest_raw:
+            try:
+                if isinstance(manifest_raw, str):
+                    manifest = json.loads(manifest_raw)
+                else:
+                    manifest = manifest_raw
+            except:
+                logger.warning("Manifest parsing failed in Schema Builder. Falling back to legacy strings.")
+        
+        # 2. Build schema from Manifest (SMART)
+        if manifest:
+            for item in manifest:
+                meaning = item.get("meaning")
+                item_type = item.get("type", "field")
+                if not meaning: continue
+                
+                # Handle nested dot-notation (e.g. personal_information.name)
+                parts = meaning.split(".")
+                curr = dynamic_schema
+                for i, part in enumerate(parts):
+                    if i == len(parts) - 1:
+                        # Leaf node initialization
+                        if part not in curr:
+                            curr[part] = [] if item_type == "section" else ""
+                    else:
+                        # Intermediate node
+                        if part not in curr:
+                            curr[part] = {}
+                        curr = curr[part]
+        
+        # 3. FALLBACK: Legacy Comma-Separated Logic
+        else:
+            expected_fields = state.get("expected_fields") or ""
+            expected_sections = state.get("expected_sections") or ""
+            fields = [f.strip() for f in expected_fields.split(",") if f.strip()]
+            for f in fields:
+                dynamic_schema[f.lower().replace(" ", "_")] = ""
+            sections = [s.strip() for s in expected_sections.split(",") if s.strip()]
+            for s in sections:
+                dynamic_schema[s.lower().replace(" ", "_")] = []
 
         return {"canonical_model": dynamic_schema}
     return schema_builder_node

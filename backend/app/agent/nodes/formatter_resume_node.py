@@ -106,6 +106,7 @@ def create_render_node(
                     "job_id": session_id,
                 },
                 expected_fields=state.get("expected_fields") or "",
+                field_extraction_manifest=state.get("field_extraction_manifest"),
             )
 
             render_key = f"jobs/{session_id}/output/formatted_resume.docx"
