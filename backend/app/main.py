@@ -6,6 +6,7 @@ from app.api.admin import router as admin_router
 from app.api.a2a import router as a2a_router
 from app.config import settings
 
+
 def create_app() -> FastAPI:
     """
     Bootstraps the FastAPI application.
@@ -18,19 +19,21 @@ def create_app() -> FastAPI:
         if settings.cloud == "local":
             from app.db.session import engine
             from app.db.models import Base
+
             # Initialize DB tables locally
             Base.metadata.create_all(bind=engine)
             print("Local database initialized")
         yield
 
     from fastapi.middleware.cors import CORSMiddleware
+
     app = FastAPI(
         lifespan=lifespan,
         title=settings.project_name,
         description="A Template-aware, privacy-governed, agentic document processing platform",
         version="1.0.0",
         docs_url="/docs",
-        redoc_url="/redoc"
+        redoc_url="/redoc",
     )
 
     # Initialize Model Context Protocol (MCP) support
@@ -45,11 +48,16 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
-    app.include_router(processing_router, prefix="/v1/processing", tags=["Candidate Processing", "MCP Tool"])
+    app.include_router(
+        processing_router,
+        prefix="/v1/processing",
+        tags=["Candidate Processing", "MCP Tool"],
+    )
     app.include_router(admin_router, prefix="/admin", tags=["Admin"])
-    app.include_router(a2a_router, prefix="/a2a", tags=["A2A Discoverability"])
+    # Expose at root to match `.well-known` discovery path correctly
+    app.include_router(a2a_router, tags=["A2A Discoverability"])
 
-    # Mount the MCP protocol handlers (manifest, tools, etc.)
+    # This automatically turns FastAPI endpoints into discoverable AI tools
     mcp.mount_http()
 
     @app.get("/health")
@@ -60,10 +68,11 @@ def create_app() -> FastAPI:
     async def root():
         return {
             "message": "Welcome to Resume Formatter API. Visit /docs for the API documentation.",
-            "status": "active"
+            "status": "active",
         }
 
     return app
+
 
 app = create_app()
 
