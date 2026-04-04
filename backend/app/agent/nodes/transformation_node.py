@@ -3,6 +3,7 @@ from app.agent.state import AgentState
 from app.domain.interfaces import LlmRuntimeAdapter
 from app.agent.utils.llm_sanitizer import LlmSanitizer
 from app.agent.prompt_manager import prompt_manager
+from app.services.audit_service import AuditService
 import json
 import logging
 
@@ -101,17 +102,43 @@ def create_context_aware_extraction_node(llm_runtime: LlmRuntimeAdapter):
             formatting_guidance=formatting_guidance
         )
         
+        AuditService.log_event(
+            job_id=state.get("session_id"),
+            event_type="LLM_EXTRACTION_PROMPT",
+            payload={"prompt": prompt}
+        )
+
         try:
             # Lower temperature for maximum structural consistency
             response = llm_runtime.generate(prompt=prompt, temperature=0.0)
+
+            AuditService.log_event(
+                job_id=state.get("session_id"),
+                event_type="LLM_EXTRACTION_OUTPUT",
+                payload={"raw_output": response}
+            )
+
             cleaned = LlmSanitizer.clean_json(response)
             
+            AuditService.log_event(
+                job_id=state.get("session_id"),
+                event_type="LLM_EXTRACTION_CLEAN_JSON",
+                payload={"clean_json": cleaned}
+            )
+
             # CRITICAL: Verify JSON integrity BEFORE returning to state
             try:
                 json.loads(cleaned)
                 logger.info("Extraction Node: Successfully validated AI-generated JSON.")
             except Exception as json_e:
                 logger.error(f"Extraction Node: AI produced malformed JSON at Line 70+. Error: {json_e}")
+
+                AuditService.log_event(
+                    job_id=state.get("session_id"),
+                    event_type="LLM_EXTRACTION_FALLBACK",
+                    payload={"error": "JSONDecodeError", "details": str(json_e), "fallback_invoked": True}
+                )
+
                 # Fallback to minimal schema if AI fails
                 fallback_data = {
                     "personal_information": {"name": "Candidate (AI JSON Error)"},
@@ -125,6 +152,13 @@ def create_context_aware_extraction_node(llm_runtime: LlmRuntimeAdapter):
             }
         except Exception as e:
             logger.error(f"Extraction node failed: {e}")
+
+            AuditService.log_event(
+                job_id=state.get("session_id"),
+                event_type="LLM_EXTRACTION_FALLBACK",
+                payload={"error": "Exception", "details": str(e), "fallback_invoked": True}
+            )
+
             return {"status": "extraction_error"}
 
     return context_aware_extraction_node

@@ -8,6 +8,7 @@ from app.domain.interfaces import DocumentExtractionService, ExtractionContext
 from app.agent.nodes.transformation_node import create_schema_builder_node, create_context_aware_extraction_node
 from app.services.resume_parsing_service import ResumeParsingService
 from app.dependencies import get_storage_provider
+from app.services.audit_service import AuditService
 
 def create_parse_node(doc_parser: DocumentExtractionService, storage):
     async def parse_node(state: AgentState):
@@ -33,6 +34,16 @@ def create_parse_node(doc_parser: DocumentExtractionService, storage):
             filename=filename,
             content_type=content_type,
             context=context
+        )
+
+        AuditService.log_event(
+            job_id=state.get("session_id"),
+            event_type="EXTRACTION_RAW_DATA",
+            payload={
+                "extracted_text": result.get("extracted_text", ""),
+                "raw_parsed_data": result.get("structured_data", {}),
+                "extraction_confidence": 0.95,
+            }
         )
 
         return {

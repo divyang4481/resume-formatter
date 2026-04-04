@@ -388,3 +388,31 @@ async def run_evaluations():
 @router.post("/ranking/rerank")
 async def rerank_templates():
     return {"message": "Reranking triggered."}
+
+@router.get("/audit-logs/{job_id}")
+async def get_audit_logs(
+    job_id: str,
+    is_admin: bool = Depends(mock_is_admin)
+):
+    from app.db.models import AuditEvent
+    db = SessionLocal()
+    try:
+        events = db.query(AuditEvent).filter(AuditEvent.entity_id == job_id).order_by(AuditEvent.created_at.asc()).all()
+        result = []
+        for e in events:
+            payload = {}
+            if e.payload_json:
+                try:
+                    payload = json.loads(e.payload_json)
+                except Exception:
+                    pass
+            result.append({
+                "id": e.id,
+                "action": e.action,
+                "actor": e.actor,
+                "payload": payload,
+                "created_at": e.created_at
+            })
+        return {"audit_logs": result}
+    finally:
+        db.close()

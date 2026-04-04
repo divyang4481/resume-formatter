@@ -8,7 +8,7 @@ from app.services.hybrid_template_ranker import HybridTemplateRanker
 from app.dependencies import get_knowledge_index
 from app.db.session import SessionLocal
 from app.adapters.repositories.template_repository import SqlAlchemyTemplateRepository
-
+from app.services.audit_service import AuditService
 
 logger = logging.getLogger(__name__)
 
@@ -106,6 +106,11 @@ def create_triage_node(ai_service: ResumeAiService):
 
         # User already provided template (or recovered from DB)
         if selected_template_id:
+            AuditService.log_event(
+                job_id=state.get("session_id"),
+                event_type="TEMPLATE_PROVIDED_IN_SUBMIT",
+                payload={"template_id": selected_template_id}
+            )
             return {
                 "document_kind": document_kind,
                 "document_confidence": document_confidence,
@@ -120,6 +125,15 @@ def create_triage_node(ai_service: ResumeAiService):
         if suggested_results:
             top_score = float(suggested_results[0].get("score", 0.0))
             if top_template_id and top_score >= AUTO_TEMPLATE_SCORE_THRESHOLD:
+                AuditService.log_event(
+                    job_id=state.get("session_id"),
+                    event_type="TEMPLATE_SUGGESTED_AND_SELECTED",
+                    payload={
+                        "template_id": top_template_id,
+                        "score": top_score,
+                        "suggested_results": suggested_results
+                    }
+                )
                 return {
                     "document_kind": document_kind,
                     "document_confidence": document_confidence,
