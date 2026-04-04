@@ -1,6 +1,7 @@
 from app.agent.state import AgentState
 from app.services.resume_ai_service import ResumeAiService
 from app.services.resume_generator_service import ResumeGeneratorService
+from app.services.audit_service import AuditService
 import json
 import logging
 import io
@@ -97,14 +98,25 @@ def create_render_node(
                 )
                 resume_data.update(formatted_data)
 
+            final_resume_data = {
+                **resume_data,
+                "summary": summary_text,
+                "job_id": session_id,
+            }
+
+            # Log the final data mapping before document generation
+            AuditService.log_event(
+                job_id=session_id,
+                event_type="DATA_BEFORE_DOC_GEN",
+                payload={
+                    **final_resume_data
+                }
+            )
+
             # Delegate rendering to dedicated generator service
             docx_bytes = generator_service.render_formatted_document(
                 template_bytes=template_bytes,
-                resume_data={
-                    **resume_data,
-                    "summary": summary_text,
-                    "job_id": session_id,
-                },
+                resume_data=final_resume_data,
                 expected_fields=state.get("expected_fields") or "",
                 field_extraction_manifest=state.get("field_extraction_manifest"),
             )

@@ -19,6 +19,7 @@ import { ReactiveFormsModule, FormBuilder, FormGroup } from '@angular/forms';
 import { animate, state, style, transition, trigger } from '@angular/animations';
 import { AdminTemplateApiService } from '../../../../services/admin-template-api.service';
 import { AdminTemplateTestingService } from '../../../../services/admin-template-testing.service';
+import { ViewChild, TemplateRef } from '@angular/core';
 
 @Component({
   selector: 'app-template-detail',
@@ -84,6 +85,8 @@ export class TemplateDetailComponent implements OnInit, OnDestroy {
   isRunningTest: boolean = false;
 
   private pollingTimeout: any;
+
+  @ViewChild('auditLogsDialog') auditLogsDialogTemplate!: TemplateRef<any>;
 
   constructor(
     private route: ActivatedRoute,
@@ -386,6 +389,25 @@ export class TemplateDetailComponent implements OnInit, OnDestroy {
     this.dialog.open(dialogRef, {
       width: '600px',
       data: { run }
+    });
+  }
+
+  viewAuditLogs(jobId: string) {
+    if (!jobId) return;
+    this.templateApi.getAuditLogs(jobId).subscribe({
+      next: (res) => {
+        if (res.audit_logs && res.audit_logs.length > 0) {
+          this.dialog.open(this.auditLogsDialogTemplate, {
+            width: '800px',
+            data: { logs: res.audit_logs }
+          });
+        } else {
+          alert('No audit logs found for this run. Make sure ENABLE_AUDIT_LOGGING is true.');
+        }
+      },
+      error: () => {
+        alert('Failed to retrieve audit logs.');
+      }
     });
   }
 }

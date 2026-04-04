@@ -59,6 +59,9 @@ class Settings(BaseSettings):
     vector_search_enabled: bool = False
     template_selector_mode: str = "legacy"  # "legacy", "shadow", "hybrid"
 
+    # Audit Logging
+    enable_audit_logging: bool = False
+
     # Example standard settings
     log_level: str = "INFO"
 
