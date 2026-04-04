@@ -18,6 +18,44 @@ class ResumeAiService:
         self.llm = llm
         self.extraction_service = extraction_service
 
+    async def classify_document(
+        self,
+        extracted_text: str,
+        raw_parsed_data: Dict[str, Any],
+        filename: str,
+        content_type: str,
+        extraction_confidence: Optional[float] = None,
+    ) -> Dict[str, Any]:
+        structured_context = ""
+        sections = (raw_parsed_data or {}).get("sections", []) if raw_parsed_data else []
+        tables = (raw_parsed_data or {}).get("tables", []) if raw_parsed_data else []
+
+        if sections:
+            structured_context += "\nDETECTED SECTIONS:\n" + "\n".join(
+                [f"- {s.get('title')}" for s in sections if s.get("title")]
+            )
+        if tables:
+            structured_context += f"\nDETECTED TABLES: {len(tables)}"
+
+        prompt = prompt_manager.get_prompt(
+            "document_classification.jinja2",
+            filename=filename,
+            content_type=content_type,
+            extraction_confidence=extraction_confidence if extraction_confidence is not None else "",
+            structured_context=structured_context,
+            extracted_text=(extracted_text or "")[:12000],
+        )
+
+        response = self.llm.generate(prompt)
+        cleaned = LlmSanitizer.clean_json(response)
+        result = json.loads(cleaned)
+
+        return {
+            "document_kind": result.get("document_kind", "ambiguous_candidate_document"),
+            "confidence": float(result.get("confidence", 0.5)),
+            "reason": result.get("reason", "No reason returned."),
+        }
+
     async def generate_summary(
         self,
         extracted_text: str,

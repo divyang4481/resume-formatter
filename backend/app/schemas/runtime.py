@@ -32,3 +32,8 @@ class RuntimeJobStatusResponse(BaseModel):
     original_file_ref: str
     stage: Optional[str] = None
     error_message: Optional[str] = None
+    suggested_template_ids: Optional[List[str]] = None
+    suggested_template_scores: Optional[List[Dict[str, Any]]] = None
+    document_kind: Optional[str] = None
+    document_confidence: Optional[float] = None
+    document_reason: Optional[str] = None

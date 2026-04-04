@@ -1,6 +1,6 @@
-from typing import TypedDict, Annotated, Optional, Dict, Any
+from typing import TypedDict, Annotated, Optional, Dict, Any, List
 
-class AgentState(TypedDict):
+class AgentState(TypedDict, total=False):
     """
     Defines the global state schema for the document processing workflow.
     This state object is passed through the LangGraph nodes.
@@ -14,6 +14,18 @@ class AgentState(TypedDict):
     extraction_confidence: Optional[float]
     raw_parsed_data: Optional[Dict[str, Any]] # Structured sections/tables from Docling/etc
 
+
+    # Triage / classification
+    document_kind: Optional[str]
+    document_confidence: Optional[float]
+    document_reason: Optional[str]
+
+    # Template suggestion
+    suggested_template_id: Optional[str]
+    suggested_template_ids: Optional[List[str]]
+    suggested_template_scores: Optional[List[Dict[str, Any]]]
+    template_resolution_mode: Optional[str]
+    awaiting_confirmation: Optional[bool]
 
     # Normalized JSON dictionary
     canonical_model: Optional[Dict[str, Any]]

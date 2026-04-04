@@ -55,7 +55,12 @@ export class ProcessingApiService {
     suggested_template_id?: string,
     provided_industry_id?: string,
     provided_template_id?: string,
-    message: string
+    message: string,
+    document_kind?: string,
+    document_confidence?: number,
+    document_reason?: string,
+    suggested_template_ids?: string[],
+    suggested_template_scores?: any[]
   }> {
     const formData = new FormData();
     formData.append('file', file);

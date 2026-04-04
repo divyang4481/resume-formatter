@@ -71,6 +71,21 @@
     <div *ngIf="docService.status() === 'waiting_for_confirmation'" class="processing-state">
       <mat-icon class="large-icon" color="accent">help_outline</mat-icon>
       <p>We've analyzed your document and suggested an industry and template. Please confirm or adjust the selections on the left, then click <strong>Confirm & Process</strong>.</p>
+
+      <div class="triage-info" *ngIf="docService.documentKind()">
+        <p><strong>Document Analysis:</strong></p>
+        <ul>
+          <li>Type: {{ docService.documentKind() }}</li>
+          <li *ngIf="docService.documentReason()">Reason: {{ docService.documentReason() }}</li>
+        </ul>
+      </div>
+
+      <div class="template-suggestions" *ngIf="docService.suggestedTemplateIds() && docService.suggestedTemplateIds()!.length > 0">
+        <p><strong>Suggested Templates:</strong></p>
+        <ul>
+          <li *ngFor="let tplId of docService.suggestedTemplateIds()">{{ tplId }}</li>
+        </ul>
+      </div>
     </div>
 
     <div *ngIf="docService.status() === 'completed'" class="completed-state">
@@ -116,6 +131,7 @@
     <div *ngIf="docService.status() === 'error'" class="error-state">
       <mat-icon color="warn" class="large-icon">error</mat-icon>
       <p>An error occurred during processing. Please try again.</p>
+      <p class="error-details" *ngIf="docService.errorMessage()"><strong>Details:</strong> {{ docService.errorMessage() }}</p>
     </div>
 
   </div>
