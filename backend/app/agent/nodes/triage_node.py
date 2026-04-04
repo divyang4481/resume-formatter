@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from typing import Dict, Any, List
 
 from app.agent.state import AgentState
@@ -7,6 +8,9 @@ from app.services.hybrid_template_ranker import HybridTemplateRanker
 from app.dependencies import get_knowledge_index
 from app.db.session import SessionLocal
 from app.adapters.repositories.template_repository import SqlAlchemyTemplateRepository
+
+
+logger = logging.getLogger(__name__)
 
 AUTO_TEMPLATE_SCORE_THRESHOLD = 0.85
 NON_CANDIDATE_REJECT_THRESHOLD = 0.80
@@ -33,21 +37,34 @@ def create_triage_node(ai_service: ResumeAiService):
             )
 
         async def suggest_template_task():
-            # If user already supplied a template, do not re-suggest here.
-            if selected_template_id:
-                return {
-                    "top_template_id": selected_template_id,
-                    "results": [],
-                    "mode": "user_provided",
-                }
-
+            nonlocal selected_template_id
             db = SessionLocal()
             try:
+                # 1. FINAL RECOVERY: If selected_template_id is missing from state, 
+                # check the DB directly one last time to avoid desync.
+                if not selected_template_id:
+                    from app.db.models import ProcessingJob
+                    job_record = db.query(ProcessingJob).filter(ProcessingJob.id == state.get("session_id")).first()
+                    if job_record:
+                        # Use the correct DB column name 'template_asset_id'
+                        db_template_id = getattr(job_record, 'template_asset_id', None)
+                        if db_template_id:
+                            selected_template_id = db_template_id
+                            logger.info(f"Triage Node: Recovered selected_template_id '{selected_template_id}' from DB column 'template_asset_id'.")
+
+                # 2. SHORT-CIRCUIT: If we have a target template, skip the guessing game.
+                if selected_template_id:
+                    return {
+                        "top_template_id": selected_template_id,
+                        "results": [],
+                        "mode": "user_provided",
+                    }
+
+                # 3. RANKING: Only guess if we truly have no starting template
                 repo = SqlAlchemyTemplateRepository(db)
                 knowledge_index = get_knowledge_index()
                 ranker = HybridTemplateRanker(knowledge_index, repo)
 
-                # rank_templates should already restrict or be made to restrict ACTIVE templates.
                 results = ranker.rank_templates(
                     extracted_text=extracted_text,
                     industry_id=industry_id,
@@ -87,12 +104,13 @@ def create_triage_node(ai_service: ResumeAiService):
         suggested_results = template_result.get("results", [])
         top_template_id = template_result.get("top_template_id")
 
-        # User already provided template
+        # User already provided template (or recovered from DB)
         if selected_template_id:
             return {
                 "document_kind": document_kind,
                 "document_confidence": document_confidence,
                 "document_reason": document_reason,
+                "selected_template_id": selected_template_id,
                 "template_resolution_mode": "user_provided",
                 "awaiting_confirmation": False,
                 "status": "TRIAGE_READY",

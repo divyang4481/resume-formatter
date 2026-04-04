@@ -24,7 +24,9 @@ dependencies = [
     "torch (>=2.0.0,<3.0.0)",
     "fastapi-mcp (>=0.1.0)",
     "mcp (>=1.27.0,<2.0.0)",
-    "sse-starlette (>=3.3.4,<4.0.0)"
+    "sse-starlette (>=3.3.4,<4.0.0)",
+    "python-jose[cryptography] (>=3.5.0,<4.0.0)",
+    "passlib[bcrypt] (>=1.7.4,<2.0.0)"
 ]
 
 

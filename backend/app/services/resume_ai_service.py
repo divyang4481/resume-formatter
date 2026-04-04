@@ -47,13 +47,19 @@ class ResumeAiService:
         )
 
         response = self.llm.generate(prompt)
-        cleaned = LlmSanitizer.clean_json(response)
-        result = json.loads(cleaned)
+        try:
+            cleaned = LlmSanitizer.clean_json(response)
+            result = json.loads(cleaned)
+        except Exception as e:
+            logger.warning(
+                f"AI classification produced invalid JSON. Defaulting to safe fallback. Error: {e}. Raw Response Excerpt: {response[:200]}"
+            )
+            result = {}
 
         return {
-            "document_kind": result.get("document_kind", "ambiguous_candidate_document"),
-            "confidence": float(result.get("confidence", 0.5)),
-            "reason": result.get("reason", "No reason returned."),
+            "document_kind": result.get("document_kind", "candidate_resume"),
+            "confidence": float(result.get("confidence", 0.8)),
+            "reason": result.get("reason", "Fallback: AI classification failed or was malformed."),
         }
 
     async def generate_summary(

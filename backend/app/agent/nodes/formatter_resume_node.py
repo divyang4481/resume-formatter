@@ -17,7 +17,8 @@ def create_render_node(
     """
 
     async def render_node(state: AgentState) -> dict:
-        logger.info("Executing Formatter Resume Node...")
+        logger.info(f"Executing Formatter Resume Node (Session ID: {state.get('session_id')})...")
+        logger.info(f"Available State Keys: {list(state.keys())}")
 
         extracted_text = state.get("extracted_text", "")
         transformed_json_str = state.get("transformed_document_json", "")
@@ -28,7 +29,9 @@ def create_render_node(
         # 1. Prepare Data & Summary
         try:
             if transformed_json_str:
-                resume_data = json.loads(transformed_json_str)
+                from app.agent.utils.llm_sanitizer import LlmSanitizer
+                cleaned_transformed = LlmSanitizer.clean_json(transformed_json_str)
+                resume_data = json.loads(cleaned_transformed)
 
             if extracted_text:
                 summary_guidance = state.get("summary_guidance") or ""
@@ -61,12 +64,13 @@ def create_render_node(
 
         # 3. Document Rendering
         try:
-            # Resolve template path
-            template_key = (
-                template_storage_uri.replace("local://", "")
-                if template_storage_uri
-                else f"templates/{template_id}/template.docx"
-            )
+            if not template_storage_uri:
+                logger.warning(f"No template_storage_uri in state. Falling back to ID guess for {template_id}")
+                template_key = f"templates/{template_id}/template.docx"
+            else:
+                template_key = template_storage_uri.replace("local://", "")
+
+            logger.info(f"Loading template from storage key: {template_key}")
             template_bytes = storage.get_bytes(template_key)
 
             # Linearize and polish JSON data for the template style via AI

@@ -64,9 +64,11 @@ def create_context_aware_extraction_node(llm_runtime: LlmRuntimeAdapter):
                 structured_context += f"\nDETECTED TABLES: {len(tables)} tables found. Use table content for precise facts like dates and roles."
 
         # RENDER EXTERNALIZED PROMPT
+        manifest = state.get("field_extraction_manifest") or []
         prompt = prompt_manager.get_prompt(
             "context_aware_extraction.jinja2",
             dynamic_schema_json=json.dumps(dynamic_schema, indent=2),
+            field_extraction_manifest_json=json.dumps(manifest, indent=2),
             template_text_excerpt=template_text[:3000],
             structured_context=structured_context,
             extracted_text=extracted_text,
@@ -74,8 +76,22 @@ def create_context_aware_extraction_node(llm_runtime: LlmRuntimeAdapter):
         )
         
         try:
-            response = llm_runtime.generate(prompt=prompt, temperature=0.1)
+            # Lower temperature for maximum structural consistency
+            response = llm_runtime.generate(prompt=prompt, temperature=0.0)
             cleaned = LlmSanitizer.clean_json(response)
+            
+            # CRITICAL: Verify JSON integrity BEFORE returning to state
+            try:
+                json.loads(cleaned)
+                logger.info("Extraction Node: Successfully validated AI-generated JSON.")
+            except Exception as json_e:
+                logger.error(f"Extraction Node: AI produced malformed JSON at Line 70+. Error: {json_e}")
+                # Fallback to minimal schema if AI fails
+                fallback_data = {
+                    "personal_information": {"name": "Candidate (AI JSON Error)"},
+                    "professional_summary": extracted_text[:500] + "..."
+                }
+                cleaned = json.dumps(fallback_data)
                 
             return {
                 "transformed_document_json": cleaned,

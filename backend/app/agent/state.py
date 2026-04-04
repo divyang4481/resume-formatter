@@ -49,6 +49,11 @@ class AgentState(TypedDict, total=False):
 
     # LLM Transformation results
     transformed_document_json: Optional[str]
+
+    # Contextual guidance and metadata
+    field_extraction_manifest: Optional[Dict[str, Any]]
+    industry: Optional[str]
+    language: Optional[str]
     
     # Validation
     validation_passed: bool
