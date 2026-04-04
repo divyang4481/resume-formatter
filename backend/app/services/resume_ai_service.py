@@ -49,37 +49,91 @@ class ResumeAiService:
         
         return summary.strip()
 
-    async def analyze_template(self, content: bytes, filename: str) -> Dict[str, str]:
-        """Analyzes a .docx template to suggest metadata... (Uses Tags for Stability)"""
-        # (Template Analysis Logic - Simplified to Tags)
-        if not self.extraction_service: return {}
+    class TemplateAnalysisError(Exception):
+        """Domain-specific error for template analysis failures."""
+        pass
+
+    async def analyze_template_metadata(self, content: bytes, filename: str) -> 'TemplateAnalysisResult':
+        """
+        Analyzes a .docx template to generate field semantics metadata.
+        Uses structured generation if the runtime supports it, and falls back to strict JSON parsing.
+        """
+        if not self.extraction_service:
+            logger.error("Extraction service unavailable for template analysis.")
+            raise self.TemplateAnalysisError("Extraction service unavailable.")
         
         from app.domain.interfaces import ExtractionContext
-        extracted_doc = await self.extraction_service.extract(
-            content, filename, "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-        )
         
-        # Retrieve placeholders
+        try:
+            extracted_doc = await self.extraction_service.extract(
+                content, filename, "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            )
+        except Exception as e:
+            logger.error(f"Document extraction failed for {filename}: {e}")
+            raise self.TemplateAnalysisError(f"Failed to extract document text: {e}")
+
+        # Retrieve placeholders and preserve order
         from docxtpl import DocxTemplate
-        import io, re
-        doc = DocxTemplate(io.BytesIO(content))
-        detected_placeholders = list(set([str(p).strip() for p in doc.get_undeclared_template_variables()]))
+        import io
+        try:
+            doc = DocxTemplate(io.BytesIO(content))
+            raw_placeholders = [str(p).strip() for p in doc.get_undeclared_template_variables()]
+            detected_placeholders = list(dict.fromkeys(raw_placeholders))
+        except Exception as e:
+            logger.error(f"DOCX placeholder extraction failed for {filename}: {e}")
+            raise self.TemplateAnalysisError(f"Failed to extract DOCX placeholders: {e}")
         
+        if not detected_placeholders:
+            logger.warning(f"No placeholders detected in {filename}.")
+            raise self.TemplateAnalysisError("No placeholders detected in the template. Cannot generate field semantics.")
+
         prompt = prompt_manager.get_prompt(
             "template_analysis.jinja2",
             template_text=extracted_doc.extracted_text[:8000],
             detected_placeholders=detected_placeholders,
         )
 
-        response = self.llm.generate(prompt)
-        blocks = LlmSanitizer.extract_tagged_blocks(response)
+        from app.schemas.template import TemplateAnalysisResult
+        schema = TemplateAnalysisResult.model_json_schema()
+
+        # Provide system prompt and json schema hints for structured generation
+        system_prompt = "You are a World-Class Professional Resume Template Analyzer. You output ONLY valid JSON."
+        try:
+            response = self.llm.generate(
+                prompt,
+                system_prompt=system_prompt,
+                response_format=schema,
+                temperature=0.1
+            )
+        except Exception as e:
+            logger.error(f"LLM generation failed during template analysis: {e}")
+            raise self.TemplateAnalysisError(f"LLM generation failed: {e}")
         
-        # Build Suggestions from Tags
-        return {
-            "purpose": blocks.get("PURPOSE") or blocks.get("purpose") or "General Template",
-            "expected_sections": blocks.get("SECTIONS") or blocks.get("sections") or "Summary, Experience",
-            "expected_fields": blocks.get("FIELDS") or blocks.get("fields") or ",".join(detected_placeholders),
-        }
+        # Parse strict JSON
+        try:
+            result = LlmSanitizer.parse_json_object(response)
+        except ValueError as e:
+            # Re-raise as domain error
+            raise self.TemplateAnalysisError(str(e))
+
+        from pydantic import ValidationError
+        try:
+            validated_result = TemplateAnalysisResult.model_validate(result)
+            # Manifest length equals placeholder count check
+            if len(validated_result.field_extraction_manifest) != len(detected_placeholders):
+                err_msg = f"Manifest count mismatch: expected {len(detected_placeholders)}, got {len(validated_result.field_extraction_manifest)}"
+                logger.error(err_msg)
+                raise self.TemplateAnalysisError(err_msg)
+
+            return validated_result
+        except ValidationError as e:
+            logger.error(f"Schema validation mismatch for LLM output. Errors: {e.errors()}")
+            raise self.TemplateAnalysisError(f"LLM output failed schema validation: {e}")
+
+    async def analyze_template(self, content: bytes, filename: str) -> Dict[str, Any]:
+        """Backward compatibility stub that calls the new analysis logic."""
+        result = await self.analyze_template_metadata(content, filename)
+        return result.model_dump()
 
     async def validate_output(
         self, transformed_data: Dict[str, Any], guidance: str
