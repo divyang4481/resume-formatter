@@ -1,10 +1,10 @@
 import logging
 from app.domain.interfaces.document_extraction import DocumentExtractionService, ExtractedDocument, ExtractionContext
-from app.services.parser_router import ParserRouter
+from .parser_router import ParserRouter
 
 logger = logging.getLogger(__name__)
 
-class RouterBasedExtractionService(DocumentExtractionService):
+class RouterExtractionService(DocumentExtractionService):
     """
     Adapts the new ParserRouter to the existing DocumentExtractionService interface.
     """

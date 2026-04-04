@@ -1,9 +1,9 @@
 import uvicorn
 from fastapi import FastAPI
-from app.api.runtime import router as runtime_router
+from fastapi_mcp import FastApiMCP
+from app.api.processing import router as processing_router
 from app.api.admin import router as admin_router
 from app.api.a2a import router as a2a_router
-from app.api.mcp import router as mcp_router
 from app.config import settings
 
 def create_app() -> FastAPI:
@@ -33,6 +33,10 @@ def create_app() -> FastAPI:
         redoc_url="/redoc"
     )
 
+    # Initialize Model Context Protocol (MCP) support
+    # This automatically turns FastAPI endpoints into discoverable AI tools
+    mcp = FastApiMCP(app)
+
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["http://localhost:4200"],
@@ -41,10 +45,12 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
-    app.include_router(runtime_router, prefix="/v1/runtime", tags=["Runtime"])
+    app.include_router(processing_router, prefix="/v1/processing", tags=["Candidate Processing", "MCP Tool"])
     app.include_router(admin_router, prefix="/admin", tags=["Admin"])
     app.include_router(a2a_router, prefix="/a2a", tags=["A2A Discoverability"])
-    app.include_router(mcp_router, prefix="/mcp", tags=["MCP Tools"])
+
+    # Mount the MCP protocol handlers (manifest, tools, etc.)
+    mcp.mount_http()
 
     @app.get("/health")
     async def health_check():

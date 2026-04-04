@@ -17,7 +17,7 @@ from app.dependencies import (
 from app.utils import validate_uploaded_file
 from app.services.template_service import TemplateService
 from app.domain.interfaces import StorageProvider, TemplateRepository, EventBus, DocumentExtractionService, KnowledgeIndex
-from app.adapters.base import LlmRuntimeAdapter
+from app.domain.interfaces import LlmRuntimeAdapter
 
 router = APIRouter()
 

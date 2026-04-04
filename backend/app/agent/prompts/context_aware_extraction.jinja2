@@ -1,0 +1,22 @@
+TASK: Transform the resume into the target structured format.
+
+TARGET SCHEMA:
+{{ dynamic_schema_json }}
+
+TARGET TEMPLATE CONTEXT (Where the data will go):
+{{ template_text_excerpt }}
+
+REFINED EXTRACTION CONTEXT (From parsing tools):
+{{ structured_context }}
+
+RAW RESUME TEXT:
+{{ extracted_text }}
+
+SPECIFIC FORMATTING GUIDANCE:
+{{ formatting_guidance }}
+
+CRITICAL RULES:
+1. Fill the TARGET SCHEMA using only facts from the document.
+2. Prioritize accuracy for names, dates, and companies.
+3. Maintain original technical terminology.
+4. Output ONLY valid JSON.

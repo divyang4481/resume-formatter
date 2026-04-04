@@ -16,13 +16,13 @@ export interface Template {
 @Injectable({
   providedIn: 'root'
 })
-export class RuntimeApiService {
+export class ProcessingApiService {
   // We'll hardcode to the local backend if environment doesn't exist yet
   // We change this to a relative URL so it goes through the Angular dev server proxy or same origin.
   // Wait, I need to check if proxy is configured. If not, maybe use relative url for now?
-  // Let's use relative '/v1/runtime' and if proxy.conf.json isn't there, we'll create it, OR we'll just proxy the specific request.
+  // Let's use relative '/v1/processing' and if proxy.conf.json isn't there, we'll create it, OR we'll just proxy the specific request.
   // Let's just create proxy.conf.json.
-  private apiUrl = '/v1/runtime';
+  private apiUrl = '/v1/processing';
 
   constructor(private http: HttpClient) {}
 

@@ -3,10 +3,10 @@ from typing import Any
 from langgraph.graph import StateGraph, END
 from app.agent.state import AgentState
 
-from app.adapters.base import LlmRuntimeAdapter
+from app.domain.interfaces import LlmRuntimeAdapter
 from app.domain.interfaces import DocumentExtractionService, ExtractionContext
-from app.agent.nodes.transform_nodes import create_schema_builder_node, create_context_aware_extraction_node
-from app.services.resume_ingestion_service import ResumeIngestionService
+from app.agent.nodes.transformation_node import create_schema_builder_node, create_context_aware_extraction_node
+from app.services.resume_parsing_service import ResumeParsingService
 from app.dependencies import get_storage_provider
 
 def create_parse_node(doc_parser: DocumentExtractionService, storage):
@@ -27,8 +27,8 @@ def create_parse_node(doc_parser: DocumentExtractionService, storage):
         except Exception:
             file_bytes = b"" # Fallback to empty if not found during dev
 
-        ingestion_service = ResumeIngestionService(extractor=doc_parser)
-        result = await ingestion_service.ingest(
+        parsing_service = ResumeParsingService(extractor=doc_parser)
+        result = await parsing_service.ingest(
             file_bytes=file_bytes,
             filename=filename,
             content_type=content_type,
@@ -112,21 +112,23 @@ def build_workflow_graph(llm_runtime: LlmRuntimeAdapter, doc_parser: DocumentExt
     workflow.add_node("privacy_transform", with_progress("privacy_transform", lambda state: {"status": "privacy_applied"}))
 
     from app.services.resume_ai_service import ResumeAiService
+    from app.services.resume_generator_service import ResumeGeneratorService
     ai_service = ResumeAiService(llm_runtime, doc_parser)
+    generator_service = ResumeGeneratorService()
 
     # Agentic reasoning nodes
-    from app.agent.nodes.template_resolve import create_template_resolve_node
+    from app.agent.nodes.template_resolution_node import create_template_resolve_node
     workflow.add_node("template_resolution", with_progress("template_resolution", create_template_resolve_node(llm_runtime, storage, doc_parser)))
     
     # Use the transformation subgraph instead of a single node
     transformation_subgraph = create_transformation_subgraph(llm_runtime)
     workflow.add_node("transform", with_progress("transform", transformation_subgraph))
 
-    from app.agent.nodes.render import create_render_node
-    from app.agent.nodes.validate import create_validate_node
+    from app.agent.nodes.formatter_resume_node import create_render_node
+    from app.agent.nodes.validation_node import create_validate_node
 
     # Align with UI pipeline display: render then validate (or reversed, but let's stick to UI flow)
-    workflow.add_node("render", with_progress("render", create_render_node(ai_service, storage)))
+    workflow.add_node("render", with_progress("render", create_render_node(ai_service, generator_service, storage)))
     workflow.add_node("validate", with_progress("validate", create_validate_node(ai_service)))
 
     # Define edges based on bounded workflow logic

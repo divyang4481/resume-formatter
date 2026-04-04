@@ -13,11 +13,11 @@ from app.dependencies import (
 )
 from app.domain.interfaces import StorageProvider, JobRepository, DocumentExtractionService, MessageQueue, TemplateRepository
 from app.schemas.job import ProcessingJob
-from app.adapters.base import LlmRuntimeAdapter
+from app.domain.interfaces import LlmRuntimeAdapter
 from app.agent.graph import AgentState
 from app.schemas.enums import JobStatus
 from app.schemas.runtime import SubmitDocumentResponse, RuntimeJobStatusResponse, ConfirmDocumentRequest
-from app.services.resume_ingestion_service import ResumeIngestionService
+from app.services.resume_parsing_service import ResumeParsingService
 from app.services.resume_workflow_service import ResumeWorkflowService
 
 router = APIRouter()

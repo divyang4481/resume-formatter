@@ -20,15 +20,15 @@ async def get_agent_card() -> Dict[str, Any]:
             "validate_document"
         ],
         "endpoints": {
-            "lookup_industries": "/v1/runtime/lookups/industries",
-            "lookup_templates": "/v1/runtime/lookups/templates",
-            "submit_document": "/v1/runtime/documents/submit",
-            "confirm_document": "/v1/runtime/documents/{id}/confirm",
-            "get_document_status": "/v1/runtime/jobs/{id}",
-            "stream_document_events": "/v1/runtime/documents/{id}/stream",
-            "download_document": "/v1/runtime/documents/{id}/download",
-            "get_job_output": "/v1/runtime/jobs/{id}/output",
-            "get_job_summary": "/v1/runtime/jobs/{id}/summary",
-            "submit_feedback": "/v1/runtime/jobs/{id}/feedback"
+            "lookup_industries": "/v1/processing/lookups/industries",
+            "lookup_templates": "/v1/processing/lookups/templates",
+            "submit_document": "/v1/processing/documents/submit",
+            "confirm_document": "/v1/processing/documents/{id}/confirm",
+            "get_document_status": "/v1/processing/jobs/{id}",
+            "stream_document_events": "/v1/processing/documents/{id}/stream",
+            "download_document": "/v1/processing/documents/{id}/download",
+            "get_job_output": "/v1/processing/jobs/{id}/output",
+            "get_job_summary": "/v1/processing/jobs/{id}/summary",
+            "submit_feedback": "/v1/processing/jobs/{id}/feedback"
         }
     }

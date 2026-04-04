@@ -57,7 +57,7 @@ def test_admin_pipeline_flow():
     # 3. Admin submits a sample resume using admin_template_test mode
     sample_content = b"Sample resume for John Doe, Software Engineer."
     response = client.post(
-        "/v1/runtime/documents/submit",
+        "/v1/processing/documents/submit",
         headers={
             "X-Execution-Mode": ExecutionMode.ADMIN_TEMPLATE_TEST.value,
             "X-Actor-Role": "admin"

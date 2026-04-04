@@ -123,6 +123,41 @@
       </div>
     </mat-tab>
 
+    <!-- Required Data field Tab -->
+    <mat-tab label="Required Data field">
+      <div class="governance-container p-3">
+        <mat-card appearance="outlined">
+          <mat-card-header class="mb-3">
+            <mat-card-title>Data Extraction Requirements</mat-card-title>
+
+          </mat-card-header>
+          <mat-card-content>
+            <p class="text-muted mb-4">
+              Specify the sections and fields that must be successfully extracted and identified on a candidate's resume to correctly populate this template's placeholders.
+            </p>
+
+            <form [formGroup]="requirementsForm" class="flex-column gap-16">
+              <mat-form-field appearance="outline" class="w-100 mb-3">
+                <mat-label>Logical Sections Expected</mat-label>
+                <textarea matInput formControlName="expected_sections" placeholder="Summary, Experience, Skills, Education..." rows="3"></textarea>
+                <mat-hint>Key sections the system will prioritize during its parsing and classifying stages.</mat-hint>
+              </mat-form-field>
+
+              <mat-form-field appearance="outline" class="w-100 mb-n1">
+                <mat-label>Mandatory Data Fields (Placeholders)</mat-label>
+                <textarea matInput formControlName="expected_fields" placeholder="summary, skills, technical_experience, education..." rows="3"></textarea>
+                <mat-hint>Field identifiers that must be present in the AI extraction manifest for successful document mapping.</mat-hint>
+              </mat-form-field>
+
+              <div class="actions mt-3">
+                <button mat-raised-button color="primary" (click)="saveRequirements()">Save Extraction Logic</button>
+              </div>
+            </form>
+          </mat-card-content>
+        </mat-card>
+      </div>
+    </mat-tab>
+
     <!-- Sample Resume Test Tab -->
     <mat-tab label="Sample Resume Test">
       <div class="test-container">
@@ -226,43 +261,6 @@
       </div>
     </mat-tab>
 
-    <!-- Requirements Tab -->
-    <mat-tab label="Requirements">
-      <div class="governance-container p-3">
-        <mat-card appearance="outlined">
-          <mat-card-header class="mb-3">
-            <mat-card-title>Data Extraction Requirements</mat-card-title>
-
-          </mat-card-header>
-          <mat-card-content>
-            <p class="text-muted mb-4">
-              Specify the sections and fields that must be successfully extracted and identified on a candidate's resume to correctly populate this template's placeholders.
-            </p>
-
-            <form [formGroup]="requirementsForm" class="flex-column gap-16">
-              <mat-form-field appearance="outline" class="w-100 mb-3">
-                <mat-label>Logical Sections Expected</mat-label>
-                <textarea matInput formControlName="expected_sections" placeholder="Summary, Experience, Skills, Education..." rows="3"></textarea>
-                <mat-hint>Key sections the system will prioritize during its parsing and classifying stages.</mat-hint>
-              </mat-form-field>
-
-              <mat-form-field appearance="outline" class="w-100 mb-n1">
-                <mat-label>Mandatory Data Fields (Placeholders)</mat-label>
-                <textarea matInput formControlName="expected_fields" placeholder="name, email, current_role, total_years_xp, tech_stack, certifications..." rows="6"></textarea>
-                <mat-hint>A comma-separated list of core data points to be extracted from the resume and mapped to the template.</mat-hint>
-              </mat-form-field>
-
-              <div class="mt-4 pt-3 flex-justify-end d-flex gap-2">
-                <button mat-raised-button color="primary" type="button" [disabled]="!requirementsForm.dirty || requirementsForm.invalid" (click)="saveRequirements()">
-                  <mat-icon>save</mat-icon> Save Requirements
-                </button>
-              </div>
-            </form>
-
-          </mat-card-content>
-        </mat-card>
-      </div>
-    </mat-tab>
 
     <!-- Test History Tab -->
     <mat-tab label="Test History">
@@ -328,7 +326,7 @@
                     </div>
                     
                     <div class="flex-gap-8 mt-2">
-                        <a mat-raised-button color="primary" [href]="'/v1/runtime/documents/' + element.job_id + '/download'" target="_blank">
+                        <a mat-raised-button color="primary" [href]="'/v1/processing/documents/' + element.job_id + '/download'" target="_blank">
                             <mat-icon>download</mat-icon> Download Formatted DOCX
                         </a>
                         
@@ -451,7 +449,7 @@
       <h4><strong>Formatted Artifact</strong></h4>
       <div class="flex-row gap-8">
         <a mat-raised-button color="primary" class="flex-1 py-2"
-           [href]="'/v1/runtime/documents/' + data.run.job_id + '/download'"
+           [href]="'/v1/processing/documents/' + data.run.job_id + '/download'"
            target="_blank">
           <mat-icon>download</mat-icon> Download Formatted DOCX
         </a>

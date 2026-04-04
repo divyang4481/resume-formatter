@@ -132,7 +132,7 @@ export class TemplateDetailComponent implements OnInit, OnDestroy {
     this.templateId = this.route.snapshot.paramMap.get('id') || '';
     if (this.templateId) {
       this.loadTemplate();
-      this.loadTestRuns();
+      this.refreshTestHistory();
     }
   }
 
@@ -166,10 +166,18 @@ export class TemplateDetailComponent implements OnInit, OnDestroy {
           this.metadataForm.patchValue({
             purpose: res.suggestions.purpose
           });
+          
+          // Sync manifest suggestion into the current template view
+          if (res.suggestions.field_extraction_manifest) {
+             if (!this.template) this.template = {};
+             this.template.field_extraction_manifest = res.suggestions.field_extraction_manifest;
+          }
+
           this.requirementsForm.patchValue({
             expected_sections: res.suggestions.expected_sections,
             expected_fields: res.suggestions.expected_fields
           });
+          
           this.notesForm.patchValue({
             summary_guidance: res.suggestions.summary_guidance,
             formatting_guidance: res.suggestions.formatting_guidance,
@@ -191,7 +199,7 @@ export class TemplateDetailComponent implements OnInit, OnDestroy {
   }
 
 
-  loadTestRuns() {
+  refreshTestHistory() {
     this.templateApi.listTestRuns(this.templateId).subscribe(res => {
       this.testRuns = res.test_runs;
       this.checkAndPollActiveRuns();
@@ -205,7 +213,7 @@ export class TemplateDetailComponent implements OnInit, OnDestroy {
     const hasPendingRuns = this.testRuns.some(run => !run.decision && !run.generated_summary);
     if (hasPendingRuns && !this.isRunningTest) {
       this.pollingTimeout = setTimeout(() => {
-        this.loadTestRuns();
+        this.refreshTestHistory();
       }, 5000);
     }
   }
@@ -290,8 +298,10 @@ export class TemplateDetailComponent implements OnInit, OnDestroy {
         if (res.status === 'completed') {
           this.isRunningTest = false;
           this.loadJobOutputs();
+          this.refreshTestHistory(); // Refresh the history grid immediately
         } else if (res.status === 'failed') {
           this.isRunningTest = false;
+          this.refreshTestHistory(); // Show the failure in history too
           // Handle failure
         } else {
           setTimeout(() => this.pollJobStatus(), 3000);
@@ -329,7 +339,7 @@ export class TemplateDetailComponent implements OnInit, OnDestroy {
       update_template_notes: false
     };
     this.templateApi.saveTestReview(this.templateId, testRunId, payload).subscribe(() => {
-      this.loadTestRuns();
+      this.refreshTestHistory();
       this.loadTemplate(); // reload template to update publish eligibility
 
       // Update currently displayed job output if we are looking at the current run

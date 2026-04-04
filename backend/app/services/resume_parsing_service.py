@@ -2,7 +2,7 @@ from typing import Optional
 from app.domain.interfaces import DocumentExtractionService, ExtractionContext
 import os
 
-class ResumeIngestionService:
+class ResumeParsingService:
     def __init__(self, extractor: DocumentExtractionService):
         self.extractor = extractor
 

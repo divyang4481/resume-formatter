@@ -8,7 +8,7 @@ def test_submit_document_valid():
     # Create a dummy file
     file_content = b"dummy content"
     files = {"file": ("test.pdf", file_content, "application/pdf")}
-    response = client.post("/v1/runtime/documents/submit", files=files)
+    response = client.post("/v1/processing/documents/submit", files=files)
     assert response.status_code == 200
     data = response.json()
     assert "job_id" in data
@@ -20,17 +20,17 @@ def test_submit_document_valid():
 def test_submit_document_invalid_extension():
     file_content = b"dummy content"
     files = {"file": ("test.exe", file_content, "application/x-msdownload")}
-    response = client.post("/v1/runtime/documents/submit", files=files)
+    response = client.post("/v1/processing/documents/submit", files=files)
     assert response.status_code == 400
     assert "Unsupported file type" in response.json()["detail"]
 
 def test_get_job_status():
     file_content = b"dummy content"
     files = {"file": ("test.pdf", file_content, "application/pdf")}
-    submit_response = client.post("/v1/runtime/documents/submit", files=files)
+    submit_response = client.post("/v1/processing/documents/submit", files=files)
     job_id = submit_response.json()["job_id"]
 
-    response = client.get(f"/v1/runtime/jobs/{job_id}")
+    response = client.get(f"/v1/processing/jobs/{job_id}")
     assert response.status_code == 200
     data = response.json()
     assert data["job_id"] == job_id

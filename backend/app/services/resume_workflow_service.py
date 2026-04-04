@@ -1,5 +1,5 @@
 from typing import Any, Dict, Optional
-from app.adapters.base import LlmRuntimeAdapter
+from app.domain.interfaces import LlmRuntimeAdapter
 from app.domain.interfaces import DocumentExtractionService, StorageProvider
 from app.adapters.repositories.job_repository import JobRepository
 from app.adapters.repositories.template_repository import TemplateRepository

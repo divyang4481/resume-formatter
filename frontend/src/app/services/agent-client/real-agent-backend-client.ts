@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { AgentBackendClient } from './agent-backend-client';
 import { AgentSession, AgentMessage, AgentAction } from './contracts';
-import { RuntimeApiService, Template } from '../api/runtime-api.service';
+import { ProcessingApiService, Template } from '../api/processing-api.service';
 import { firstValueFrom } from 'rxjs';
 
 @Injectable({
@@ -10,7 +10,7 @@ import { firstValueFrom } from 'rxjs';
 export class RealAgentBackendClient implements AgentBackendClient {
   private currentSession: AgentSession | null = null;
 
-  constructor(private runtimeApi: RuntimeApiService) {}
+  constructor(private runtimeApi: ProcessingApiService) {}
 
   getJobIdFromSession(session: AgentSession | null): string | null {
     if (!session || !session.artifacts) return null;

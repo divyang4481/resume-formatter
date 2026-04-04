@@ -92,6 +92,20 @@ class TemplateService:
             try:
                 print(f"Triggering automatic AI analysis for template: {filename}")
                 suggestions = await self.template_analysis_service.analyze_template(content, filename)
+                
+                if suggestions:
+                    print(f"--- [AI TEMPLATE INSIGHTS: {filename}] ---")
+                    print(f"EXPECTED SECTIONS: {suggestions.get('expected_sections')}")
+                    manifest = suggestions.get("field_extraction_manifest", [])
+                    print(f"IDENTIFIED MANIFEST FIELDS: {len(manifest)}")
+                    
+                    # BACKWARD COMPATIBILITY: Sync expected_fields from manifest if missing
+                    if manifest and not suggestions.get("expected_fields"):
+                        suggestions["expected_fields"] = ", ".join([f.get("fieldname") for f in manifest if f.get("fieldname")])
+                    
+                    print(f"EXPECTED FIELDS SUMMARY: {suggestions.get('expected_fields')}")
+                    print(f"-------------------------------------------")
+
             except Exception as analysis_err:
                 print(f"Auto-analysis failed during upload, but continuing with default draft: {analysis_err}")
 
@@ -119,6 +133,7 @@ class TemplateService:
             purpose=ensure_str(suggestions.get("purpose")),
             expected_sections=ensure_str(suggestions.get("expected_sections")),
             expected_fields=ensure_str(suggestions.get("expected_fields")),
+            field_extraction_manifest=suggestions.get("field_extraction_manifest"), # Passes List[Dict] to Pydantic
             summary_guidance=ensure_str(suggestions.get("summary_guidance")),
             formatting_guidance=ensure_str(suggestions.get("formatting_guidance")),
             validation_guidance=ensure_str(suggestions.get("validation_guidance")),

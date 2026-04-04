@@ -11,6 +11,7 @@ import { ResumeFormatterComponent } from './resume-formatter/resume-formatter.co
 import { AgentViewComponent } from './resume-formatter/agent-view/agent-view.component';
 import { FormViewComponent } from './resume-formatter/form-view/form-view.component';
 import { DocumentViewerComponent } from './document-viewer/document-viewer.component';
+import { McpDocComponent } from './admin/pipeline-shell/mcp-doc/mcp-doc.component';
 
 export const routes: Routes = [
   { path: '', redirectTo: '/resumeformatter', pathMatch: 'full' },
@@ -20,7 +21,8 @@ export const routes: Routes = [
     children: [
       { path: '', redirectTo: 'templates', pathMatch: 'full' },
       { path: 'templates', component: TemplatesComponent },
-      { path: 'templates/:id', component: TemplateDetailComponent }
+      { path: 'templates/:id', component: TemplateDetailComponent },
+      { path: 'mcp-doc', component: McpDocComponent }
     ]
   },
   {

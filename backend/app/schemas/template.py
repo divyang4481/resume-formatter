@@ -17,6 +17,11 @@ class TemplateRule(BaseModel):
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
 
+class FieldExtractionManifestItem(BaseModel):
+    fieldname: str
+    meaning: str
+    source_hints: str
+
 class TemplateAsset(BaseModel):
     id: str
     asset_type: str = Field(..., description="template, kb, policy, formatting, example")
@@ -37,6 +42,7 @@ class TemplateAsset(BaseModel):
     purpose: Optional[str] = None
     expected_sections: Optional[str] = None
     expected_fields: Optional[str] = None
+    field_extraction_manifest: Optional[List[FieldExtractionManifestItem]] = None
 
     summary_guidance: Optional[str] = None
     formatting_guidance: Optional[str] = None

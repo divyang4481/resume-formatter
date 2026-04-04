@@ -1,0 +1,29 @@
+TASK: Reverse-engineer this CV Template to suggest professional governance metadata and AI-steering guidance.
+
+TEMPLATE TEXT (EXTRACTED):
+{{ template_text }}
+
+IDENTIFIED RAW PLACEHOLDERS:
+{{ ", ".join(detected_placeholders) if detected_placeholders else "None identified programmatically." }}
+
+Analyze the structure, visual hierarchy, expected content, and placeholders in this template. 
+Generate highly specific guidance that will be used to steer other LLMs when they process actual candidate resumes using this template.
+
+CRITICAL INSTRUCTIONS FOR PLACEHOLDERS:
+- You MUST maintain a 1:1 parity between the number of markers in the doc and the number of keys in 'expected_fields'.
+- If you see 6 markers like '<< Fill this section >>', you MUST provide exactly 6 descriptive keys (e.g., 'professional_summary', 'technical_skills', 'experience', etc.).
+- NEVER list granular sub-fields (like 'programming_languages') in 'expected_fields' if the template only has one high-level box for that section. Granular data belongs in 'formatting_guidance'.
+- The keys MUST appear in the EXACT ORDER they appear in the visual text of the template.
+
+Provide recommendations in the following JSON format:
+1. 'purpose': A concise description of the ideal profile for this template.
+2. 'expected_sections': A comma-separated string of the literal headers found.
+3. 'field_extraction_manifest': A list of objects, one for each physical marker in the doc.
+   Each object MUST have:
+   - 'fieldname': The unique logical key for the marker (e.g., 'technical_skills').
+   - 'meaning': A brief description of what this section represents visually in the template.
+   - 'source_hints': A comma-separated string of specific resume data points that should be "sourced" to fill this field (e.g., 'programming languages, cloud platforms, databases').
+4. 'summary_guidance': Style rules for the summary.
+5. 'formatting_guidance': Specific rules for how the AI should format the harmonized text for these fields.
+
+OUTPUT FORMAT: Return ONLY a valid JSON object. No markdown, no preamble.

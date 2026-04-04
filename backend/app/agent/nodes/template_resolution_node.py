@@ -1,6 +1,6 @@
 import asyncio
 from app.agent.state import AgentState
-from app.adapters.base import LlmRuntimeAdapter
+from app.domain.interfaces import LlmRuntimeAdapter
 from app.db.session import SessionLocal
 from app.adapters.repositories.template_repository import SqlAlchemyTemplateRepository
 from app.services.template_resolution_service import TemplateResolutionService

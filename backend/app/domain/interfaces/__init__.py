@@ -4,6 +4,8 @@ from typing import Any, Dict, List, Optional
 
 from .document_extraction import DocumentExtractionService, ExtractionContext, ExtractedDocument
 from .embedding import EmbeddingProvider
+from .llm import LlmRuntimeAdapter
+from .privacy import PiiDetectorAdapter
 
 class TemplateRepository(ABC):
     @abstractmethod
@@ -31,18 +33,6 @@ class KnowledgeIndex(ABC):
     @abstractmethod
     def search(self, query: str, filters: Optional[Dict[str, Any]] = None, top_k: int = 5) -> List[Dict[str, Any]]:
         """Searches the index."""
-        pass
-
-
-class PIIPolicyEngine(ABC):
-    @abstractmethod
-    def detect_pii(self, content: str) -> List[Dict[str, Any]]:
-        """Detects PII entities in the content."""
-        pass
-
-    @abstractmethod
-    def apply_policy(self, candidate_resume: Any) -> Any:
-        """Applies configured policies (retain, mask, redact, tokenize) to candidate resume."""
         pass
 
 
@@ -107,17 +97,6 @@ class JobRepository(ABC):
         pass
 
 
-class LLMProvider(ABC):
-    @abstractmethod
-    def generate_completion(self, prompt: str, **kwargs: Any) -> str:
-        """Generates completion text."""
-        pass
-
-    @abstractmethod
-    def generate_structured(self, prompt: str, schema: Any, **kwargs: Any) -> Any:
-        """Generates structured output constrained to a schema."""
-        pass
-
 class MessageQueue(ABC):
     @abstractmethod
     def enqueue(self, queue_name: str, payload: Dict[str, Any]) -> None:
@@ -139,3 +118,4 @@ class EventBus(ABC):
     def audit(self, action: str, details: Dict[str, Any]) -> None:
         """Records an action for auditing purposes."""
         pass
+

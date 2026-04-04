@@ -2,6 +2,12 @@ import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 
+export interface FieldExtractionManifestItem {
+  fieldname: string;
+  meaning: string;
+  source_hints: string;
+}
+
 export interface TemplateAsset {
   id: string;
   asset_type: string;
@@ -14,6 +20,18 @@ export interface TemplateAsset {
   region?: string;
   language: string;
   tags: string[];
+
+  // Guidance & Extraction Data
+  notes?: string;
+  purpose?: string;
+  expected_sections?: string;
+  expected_fields?: string;
+  field_extraction_manifest?: FieldExtractionManifestItem[];
+  summary_guidance?: string;
+  formatting_guidance?: string;
+  validation_guidance?: string;
+  pii_guidance?: string;
+
   original_file_ref: string;
   checksum: string;
   extraction_artifact_ref?: string;

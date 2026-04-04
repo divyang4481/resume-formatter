@@ -1,6 +1,8 @@
 from typing import Dict, Any
 from app.agent.state import AgentState
-from app.adapters.base import LlmRuntimeAdapter
+from app.domain.interfaces import LlmRuntimeAdapter
+from app.agent.utils.llm_sanitizer import LlmSanitizer
+from app.agent.prompt_manager import prompt_manager
 import json
 import logging
 
@@ -61,46 +63,19 @@ def create_context_aware_extraction_node(llm_runtime: LlmRuntimeAdapter):
             if tables:
                 structured_context += f"\nDETECTED TABLES: {len(tables)} tables found. Use table content for precise facts like dates and roles."
 
-        prompt = f"""
-        TASK: Transform the resume into the target structured format.
-        
-        TARGET SCHEMA:
-        {json.dumps(dynamic_schema, indent=2)}
-        
-        TARGET TEMPLATE CONTEXT (Where the data will go):
-        {template_text[:3000]}
-        
-        REFINED EXTRACTION CONTEXT (From parsing tools):
-        {structured_context}
-        
-        RAW RESUME TEXT:
-        {extracted_text}
-        
-        SPECIFIC FORMATTING GUIDANCE:
-        {formatting_guidance}
-        
-        CRITICAL RULES:
-        1. Fill the TARGET SCHEMA using only facts from the document.
-        2. Prioritize accuracy for names, dates, and companies.
-        3. Maintain original technical terminology.
-        4. Output ONLY valid JSON.
-        """
+        # RENDER EXTERNALIZED PROMPT
+        prompt = prompt_manager.get_prompt(
+            "context_aware_extraction.jinja2",
+            dynamic_schema_json=json.dumps(dynamic_schema, indent=2),
+            template_text_excerpt=template_text[:3000],
+            structured_context=structured_context,
+            extracted_text=extracted_text,
+            formatting_guidance=formatting_guidance
+        )
         
         try:
             response = llm_runtime.generate(prompt=prompt, temperature=0.1)
-            
-            # Sanitization
-            cleaned = response.strip()
-            if "```json" in cleaned:
-                cleaned = cleaned.split("```json")[1].split("```")[0].strip()
-            elif "```" in cleaned:
-                cleaned = cleaned.split("```")[1].split("```")[0].strip()
-            
-            # Find the JSON object
-            start = cleaned.find("{")
-            end = cleaned.rfind("}")
-            if start != -1 and end != -1:
-                cleaned = cleaned[start:end+1]
+            cleaned = LlmSanitizer.clean_json(response)
                 
             return {
                 "transformed_document_json": cleaned,

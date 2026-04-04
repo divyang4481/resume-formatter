@@ -93,7 +93,7 @@ export class DocumentViewerComponent implements OnInit, AfterViewInit {
     this.loading = true;
     this.error = null;
 
-    const url = `/v1/runtime/documents/${this.jobId}/download`;
+    const url = `/v1/processing/documents/${this.jobId}/download`;
 
     this.http.get(url, { responseType: 'blob' }).subscribe({
       next: async (blob) => {

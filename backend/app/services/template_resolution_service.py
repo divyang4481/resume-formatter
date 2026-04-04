@@ -1,6 +1,6 @@
 from typing import List, Optional
 from pydantic import BaseModel
-from app.adapters.base import LlmRuntimeAdapter
+from app.domain.interfaces import LlmRuntimeAdapter
 from app.domain.interfaces import TemplateRepository
 from app.schemas.enums import AssetStatus
 

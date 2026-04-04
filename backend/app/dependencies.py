@@ -13,15 +13,15 @@ from app.domain.interfaces import (
     DocumentExtractionService,
     KnowledgeIndex,
     JobRepository,
-    MessageQueue
+    MessageQueue,
+    LlmRuntimeAdapter
 )
-from app.adapters.base import LlmRuntimeAdapter
 
 # Adapter Implementations
 from app.adapters.repositories.template_repository import SqlAlchemyTemplateRepository
 from app.adapters.repositories.job_repository import SqlAlchemyJobRepository
-from app.adapters.impls.local.local_queue import SqlAlchemyMessageQueue
-from app.adapters.impls.local.event_bus import LocalEventBus
+from app.adapters.queue.local_queue import SqlAlchemyMessageQueue
+from app.adapters.events.local_bus import LocalEventBus
 
 
 def get_db_session():
@@ -55,8 +55,8 @@ def get_document_extraction_service() -> DocumentExtractionService:
     Dependency Factory to fetch the document extraction service.
     Now uses the multi-tier ParserRouter internally.
     """
-    from app.services.extraction_service_adapter import RouterBasedExtractionService
-    return RouterBasedExtractionService()
+    from app.adapters.extraction.router_extraction_adapter import RouterExtractionService
+    return RouterExtractionService()
 
 
 def get_llm_runtime() -> LlmRuntimeAdapter:
@@ -68,32 +68,32 @@ def get_llm_runtime() -> LlmRuntimeAdapter:
     
     # Check if local overrides
     if backend == "local_ollama" or (settings.cloud.lower() == "local" and backend not in ["gemini"]):
-        from app.adapters.impls.local.llm_runtime import LocalOllamaLlmRuntime
+        from app.adapters.llm.ollama_runtime import LocalOllamaLlmRuntime
         return LocalOllamaLlmRuntime(
             model_name=settings.llm_model_name,
             endpoint=settings.ollama_endpoint
         )
     elif backend == "gemini":
-        from app.adapters.impls.local.gemini_runtime import GeminiLlmRuntime
+        from app.adapters.llm.gemini_runtime import GeminiLlmRuntime
         return GeminiLlmRuntime(
             api_key=settings.gemini_api_key,
             model_name=settings.llm_model_name if settings.llm_model_name != "llama3" else "gemini-2.0-flash"
         )
     elif backend == "aws_bedrock":
-        from app.adapters.impls.aws.llm_runtime import AwsBedrockLlmRuntime
+        from app.adapters.llm.aws_bedrock_runtime import AwsBedrockLlmRuntime
         return AwsBedrockLlmRuntime(
             model_id=settings.llm_model_name,
             region_name=settings.aws_region
         )
     elif backend == "gcp_vertex":
-        from app.adapters.impls.gcp.llm_runtime import GcpVertexLlmRuntime
+        from app.adapters.llm.gcp_vertex_runtime import GcpVertexLlmRuntime
         return GcpVertexLlmRuntime(
             project_id=settings.gcp_project_id,
             location=settings.gcp_location,
             model_name=settings.llm_model_name
         )
     elif backend == "azure_openai":
-        from app.adapters.impls.azure.llm_runtime import AzureOpenAiLlmRuntime
+        from app.adapters.llm.azure_openai_runtime import AzureOpenAiLlmRuntime
         return AzureOpenAiLlmRuntime(
             endpoint=settings.azure_openai_endpoint,
             api_key=settings.azure_openai_api_key,
@@ -102,7 +102,7 @@ def get_llm_runtime() -> LlmRuntimeAdapter:
         )
     else:
         # Fallback to local
-        from app.adapters.impls.local.llm_runtime import LocalOllamaLlmRuntime
+        from app.adapters.llm.ollama_runtime import LocalOllamaLlmRuntime
         return LocalOllamaLlmRuntime(
             model_name=settings.llm_model_name,
             endpoint=settings.ollama_endpoint

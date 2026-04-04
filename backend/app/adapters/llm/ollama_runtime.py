@@ -1,4 +1,4 @@
-from app.adapters.base import LlmRuntimeAdapter
+from app.domain.interfaces import LlmRuntimeAdapter
 import httpx
 
 class LocalOllamaLlmRuntime(LlmRuntimeAdapter):

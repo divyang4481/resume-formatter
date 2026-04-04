@@ -1,0 +1,17 @@
+TASK: Perform a Semantic Validation of the transformed resume data.
+
+TRANSFORMED DATA (JSON):
+{{ transformed_data_json }}
+
+TEMPLATE GUIDANCE:
+{{ guidance }}
+
+INSTRUCTIONS:
+1. CHECK: Does the data look professional and match the intended career story?
+2. MISSING DATA: Are there any critical placeholders that are clearly missing or "empty"?
+3. GLITCH CHECK: Does the output contain any raw JSON residue (like brackets {} or quotes "")?
+4. OUTPUT PROTOCOL: 
+   - Wrap your overall status in: [[STATUS :: PASS]] or [[STATUS :: FAIL]]
+   - Wrap your reasoning or errors in: [[REPORT :: ...your detailed feedback...]]
+
+GOAL: True AI Quality Control. Ensure we only output recruiter-grade documents.

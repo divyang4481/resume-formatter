@@ -12,7 +12,7 @@ describe('FormViewComponent', () => {
       providers: [
         { provide: 'HttpClient', useValue: {} },
         { provide: 'DocumentProcessingService', useValue: {} },
-        { provide: 'RuntimeApiService', useValue: {} }
+        { provide: 'ProcessingApiService', useValue: {} }
       ]
     })
     .compileComponents();

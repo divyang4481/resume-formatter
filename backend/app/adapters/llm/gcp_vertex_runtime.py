@@ -1,4 +1,4 @@
-from app.adapters.base import LlmRuntimeAdapter
+from app.domain.interfaces import LlmRuntimeAdapter
 from typing import Optional
 
 class GcpVertexLlmRuntime(LlmRuntimeAdapter):

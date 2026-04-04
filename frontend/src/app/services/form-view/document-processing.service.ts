@@ -1,5 +1,5 @@
 import { Injectable, signal } from '@angular/core';
-import { RuntimeApiService, Industry, Template } from '../api/runtime-api.service';
+import { ProcessingApiService, Industry, Template } from '../api/processing-api.service';
 
 export type ProcessingStatus = 'idle' | 'uploading' | 'waiting_for_confirmation' | 'processing' | 'completed' | 'error';
 
@@ -22,7 +22,7 @@ export class DocumentProcessingService {
   public summary = signal<string | null>(null);
   public outputUrl = signal<string | null>(null);
 
-  constructor(private api: RuntimeApiService) {}
+  constructor(private api: ProcessingApiService) {}
 
   loadIndustries() {
     this.api.getIndustries().subscribe({

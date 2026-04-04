@@ -10,6 +10,7 @@ class TemplateAsset(Base):
     purpose = Column(Text, nullable=True)
     expected_sections = Column(Text, nullable=True)
     expected_fields = Column(Text, nullable=True) # Comma-separated list of identified placeholders
+    field_extraction_manifest = Column(Text, nullable=True) # Rich JSON mapping of fieldname, meaning, source_hints
     summary_guidance = Column(Text, nullable=True)
 
     formatting_guidance = Column(Text, nullable=True)

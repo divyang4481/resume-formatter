@@ -19,10 +19,19 @@ class SqlAlchemyTemplateRepository(TemplateRepository):
             return None
 
         from datetime import datetime
+        import json
+
+        # Deserialize manifest if present
+        manifest_data = None
+        if model.field_extraction_manifest:
+            try:
+                manifest_data = json.loads(model.field_extraction_manifest)
+            except:
+                manifest_data = None
 
         return TemplateAsset(
             id=model.id,
-            asset_type="template", # Default since we lack it in DB
+            asset_type="template",
             name=model.name,
             version=model.version,
             status=AssetStatus(model.status.lower()),
@@ -34,6 +43,7 @@ class SqlAlchemyTemplateRepository(TemplateRepository):
             purpose=model.purpose,
             expected_sections=model.expected_sections,
             expected_fields=model.expected_fields,
+            field_extraction_manifest=manifest_data,
             summary_guidance=model.summary_guidance,
 
             formatting_guidance=model.formatting_guidance,
@@ -54,6 +64,8 @@ class SqlAlchemyTemplateRepository(TemplateRepository):
             model = TemplateAssetModel(id=template_asset.id)
             self.db.add(model)
 
+        import json
+
         model.name = template_asset.name
         model.version = template_asset.version
         model.status = template_asset.status.value.upper()
@@ -65,8 +77,16 @@ class SqlAlchemyTemplateRepository(TemplateRepository):
         model.purpose = template_asset.purpose
         model.expected_sections = template_asset.expected_sections
         model.expected_fields = template_asset.expected_fields
-        model.summary_guidance = template_asset.summary_guidance
+        
+        # Serialize manifest to JSON string for storage
+        if template_asset.field_extraction_manifest:
+            # Pydantic models in list handled by default json.dumps if they have dict() or model_dump()
+            # but more robust to dump manually or use list of dicts
+            model.field_extraction_manifest = json.dumps([item.model_dump() for item in template_asset.field_extraction_manifest])
+        else:
+            model.field_extraction_manifest = None
 
+        model.summary_guidance = template_asset.summary_guidance
         model.formatting_guidance = template_asset.formatting_guidance
         model.validation_guidance = template_asset.validation_guidance
         model.pii_guidance = template_asset.pii_guidance
@@ -84,6 +104,7 @@ class SqlAlchemyTemplateRepository(TemplateRepository):
         query = self.db.query(TemplateAssetModel)
 
         from sqlalchemy import func
+        import json
 
         if "status" in filters:
             query = query.filter(func.lower(TemplateAssetModel.status) == filters["status"].lower())
@@ -94,6 +115,14 @@ class SqlAlchemyTemplateRepository(TemplateRepository):
         results = []
         from datetime import datetime
         for model in models:
+            # Deserialize manifest if present
+            manifest_data = None
+            if model.field_extraction_manifest:
+                try:
+                    manifest_data = json.loads(model.field_extraction_manifest)
+                except:
+                    manifest_data = None
+
             results.append(
                 TemplateAsset(
                     id=model.id,
@@ -109,6 +138,7 @@ class SqlAlchemyTemplateRepository(TemplateRepository):
                     purpose=model.purpose,
                     expected_sections=model.expected_sections,
                     expected_fields=model.expected_fields,
+                    field_extraction_manifest=manifest_data,
                     summary_guidance=model.summary_guidance,
 
                     formatting_guidance=model.formatting_guidance,

@@ -6,7 +6,7 @@ import { Observable } from 'rxjs';
   providedIn: 'root'
 })
 export class AdminTemplateTestingService {
-  private runtimeUrl = 'http://localhost:8000/v1/runtime';
+  private processingUrl = 'http://localhost:8000/v1/processing';
 
   constructor(private http: HttpClient) {}
 
@@ -21,27 +21,27 @@ export class AdminTemplateTestingService {
         formData.append('template_id', templateId);
     }
 
-    return this.http.post(`${this.runtimeUrl}/documents/submit`, formData, { headers });
+    return this.http.post(`${this.processingUrl}/documents/submit`, formData, { headers });
   }
 
   getJob(jobId: string): Observable<any> {
     const headers = new HttpHeaders({
       'X-Actor-Role': 'admin'
     });
-    return this.http.get(`${this.runtimeUrl}/jobs/${jobId}`, { headers });
+    return this.http.get(`${this.processingUrl}/jobs/${jobId}`, { headers });
   }
 
   getJobOutputs(jobId: string): Observable<any> {
     const headers = new HttpHeaders({
       'X-Actor-Role': 'admin'
     });
-    return this.http.get(`${this.runtimeUrl}/jobs/${jobId}/output`, { headers });
+    return this.http.get(`${this.processingUrl}/jobs/${jobId}/output`, { headers });
   }
 
   getJobSummary(jobId: string): Observable<any> {
     const headers = new HttpHeaders({
       'X-Actor-Role': 'admin'
     });
-    return this.http.get(`${this.runtimeUrl}/jobs/${jobId}/summary`, { headers });
+    return this.http.get(`${this.processingUrl}/jobs/${jobId}/summary`, { headers });
   }
 }
