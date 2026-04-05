@@ -199,7 +199,7 @@ class ResumeGeneratorService:
         content = re.sub(r'(?m)^[ \t]*[•\-\*][ \t]*', '[:L1:] ', content)
 
         # Splitting on ANY tag (opening or closing)
-        tag_pattern = r'(?i)(\[:B:\]|\[:/B:\]|\[:PIPE:\]|\[:BR:\]|\[:L1:\]|\[:L2:\])'
+        tag_pattern = r'(?i)(\[:B:\]|\[:/B:\]|\[:PIPE:\]|\[:TAB:\]|\[:BR:\]|\[:L\d+:\])'
         if not re.search(tag_pattern, content):
             return content
 
@@ -218,14 +218,20 @@ class ResumeGeneratorService:
                 is_bold = False
             elif p_lower == "[:pipe:]":
                 rt.add("  |  ", bold=is_bold)
+            elif p_lower == "[:tab:]":
+                rt.add("\t", bold=is_bold)
             elif p_lower == "[:br:]":
                 rt.add("\n")
-            elif p_lower == "[:l1:]":
-                rt.add("\n• ", bold=is_bold)
-            elif p_lower == "[:l2:]":
-                rt.add("\n    - ", bold=is_bold)
+            elif p_lower.startswith("[:l"):
+                # Dynamic bullet handling
+                m = re.search(r'(\d+)', p_lower)
+                level = int(m.group(1)) if m else 1
+                indent = "    " * (level - 1)
+                bullet = "•" if level % 2 != 0 else "-"
+                rt.add(f"\n{indent}{bullet} ", bold=is_bold)
             else:
                 rt.add(part, bold=is_bold)
+
                 
         return rt
 
