@@ -10,12 +10,14 @@ class TemplateAnalysisService:
         Delegates the AI analysis logic to the centralized ResumeAiService.
         """
         try:
-            return await self.ai_service.analyze_template(file_bytes, filename)
+            result = await self.ai_service.analyze_template_metadata(file_bytes, filename)
+            return result.model_dump()
         except Exception as e:
             print(f"Template analysis delegation failed: {e}")
             return {
                 "purpose": "General Professional Template",
                 "expected_sections": "Summary, Experience, Education, Skills",
+                "global_guidance": "Standard executive summary focusing on career progression. Clear, bulleted lists and consistent date formatting (Jan 2024).",
                 "expected_fields": "summary, experience, education, skills",
                 "summary_guidance": "Standard executive summary focusing on career progression.",
                 "formatting_guidance": "Clear, bulleted lists and consistent date formatting (Jan 2024).",

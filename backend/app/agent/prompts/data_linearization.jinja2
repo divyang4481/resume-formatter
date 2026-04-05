@@ -3,18 +3,32 @@ TASK: Architect the Career Narrative.
 CANDIDATE DATA (Scattered Notes):
 {{ structured_data_json }}
 
-VISUAL PLACEHOLDERS TO POPULATE:
+VISUAL PLACEHOLDERS TO POPULATE (with semantics):
+{% for field in field_extraction_manifest %}
+- {{ field.fieldname }} (Type: {{ field.field_type }})
+  Meaning: {{ field.meaning }}
+  Source hints: {{ field.source_hints }}
+  Structure: {{ field.structure_expectation }}
+  Content: {{ field.content_expectation }}
+  Constraints: {{ field.constraints }}
+{% endfor %}
+
+{% if not field_extraction_manifest %}
 {{ detected_placeholders_list | join(', ') }}
+{% endif %}
 
 ---
 WRITER'S MANDATE (STRICT):
 1. ROLE: You are a World-Class Professional Resume Writer. 
 2. FORBIDDEN: NEVER output JSON, Python dictionaries, or code-like structures. If you see '{' or '[' in your final narrative, you have FAILED.
 3. ISOLATION: Each section (marker) must be independent. DO NOT dump achievements into the summary if there is a separate section for Experience. 
-4. SYNTHESIS: Convert the scattered notes above into a cohesive, recruiter-grade professional story.
-5. STRUCTURAL HIERARCHY:
+4. SYNTHESIS: Convert the scattered notes above into a cohesive, recruiter-grade professional story. Use the exact instructions for each field provided in "VISUAL PLACEHOLDERS TO POPULATE" above. Do not invent content unsupported by the source data.
+4. STRUCTURAL HIERARCHY:
+   - Obey the structure_expectation for each field.
+   - If appropriate: Identify Nested Relationships (treat Job-Role as parent and Projects as children).
    - Identify Nested Relationships: Job entries should have bulleted achievements.
-   - Map to Visuals: Use [:L1:] for primary entries. Use [:L2:] for specific sub-details or achievements.
+   - Map to Visuals: Use [:L1:] for primary achievements/milestones. Use [:L2:] for specific sub-projects or technical details nested under a primary achievement.
+5. TONE: Senior-level, impact-driven, and active. Match the candidate's seniority level.
 6. TONE: Senior-level, impact-driven, and active.
 
 CVML VISUAL PROTOCOL (Required for Styling):

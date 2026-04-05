@@ -13,6 +13,12 @@ class TemplateAsset(Base):
     field_extraction_manifest = Column(Text, nullable=True) # Rich JSON mapping of fieldname, meaning, source_hints
     summary_guidance = Column(Text, nullable=True)
 
+    global_guidance = Column(Text, nullable=True)
+    analysis_version = Column(String, nullable=True)
+    llm_backend = Column(String, nullable=True)
+    llm_model_name = Column(String, nullable=True)
+    analysis_timestamp = Column(DateTime, nullable=True)
+
     formatting_guidance = Column(Text, nullable=True)
     validation_guidance = Column(Text, nullable=True)
     pii_guidance = Column(Text, nullable=True)

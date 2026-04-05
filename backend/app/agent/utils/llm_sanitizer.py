@@ -66,6 +66,19 @@ class LlmSanitizer:
         return cleaned
 
     @staticmethod
+    def parse_json_object(text: str) -> dict:
+        """
+        Parses strict JSON from an LLM response safely, logging raw output on failure.
+        """
+        import json
+        cleaned = LlmSanitizer.clean_json(text)
+        try:
+            return json.loads(cleaned)
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse JSON from LLM response. Raw text snippet: {text[:500]}")
+            raise ValueError(f"LLM did not return valid JSON. Error: {e}")
+
+    @staticmethod
     def clean_text(response: str, tag: Optional[str] = None) -> str:
         """
         Cleans free-text responses from LLMs. 

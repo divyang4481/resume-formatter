@@ -81,7 +81,8 @@ class ResumeAiService:
         )
 
         print(f"\n--- [LLM PROMPT: SUMMARY] ---\n{prompt[:1000]}...\n")
-        response = self.llm.generate(prompt)
+        system_prompt = "You are a World-Class Professional Resume Writer. You write highly professional, impactful resume summaries."
+        response = self.llm.generate(prompt, system_prompt=system_prompt)
         print(f"\n--- [LLM RAW RESPONSE: SUMMARY] ---\n{response[:1000]}...\n")
         
         blocks = LlmSanitizer.extract_tagged_blocks(response)
@@ -122,6 +123,10 @@ class ResumeAiService:
         
         logger.info(f"AI Template Analysis: Found {len(detected_placeholders)} placeholders in visual order: {detected_placeholders}")
         
+        if not detected_placeholders:
+            logger.warning(f"No placeholders detected in {filename}.")
+            raise self.TemplateAnalysisError("No placeholders detected in the template. Cannot generate field semantics.")
+
         prompt = prompt_manager.get_prompt(
             "template_analysis.jinja2",
             template_text=extracted_doc.extracted_text[:8000],
@@ -138,41 +143,55 @@ class ResumeAiService:
             entity_type="TemplateAsset"
         )
 
-        response = self.llm.generate(prompt)
+        from app.schemas.template import TemplateAnalysisResult
+        schema = TemplateAnalysisResult.model_json_schema()
 
-        # Audit Response
-        AuditService.log_event(
+        # Provide system prompt and json schema hints for structured generation
+        system_prompt = "You are a World-Class Professional Resume Template Analyzer. You output ONLY valid JSON."
+        try:
+            response = self.llm.generate(
+                prompt,
+                system_prompt=system_prompt,
+                response_format=schema,
+                temperature=0.1
+            )
+            
+            AuditService.log_event(
             job_id=filename,
             event_type="TEMPLATE_ANALYSIS_RESPONSE",
             payload={"response": response},
             entity_type="TemplateAsset"
-        )
-        
-        try:
-            cleaned = LlmSanitizer.clean_json(response)
-            result = json.loads(cleaned)
+            )
+            
         except Exception as e:
-            logger.warning(f"AI Template Analysis failed to parse JSON: {e}")
-            logger.debug(f"RAW TEMPLATE ANALYSIS RESPONSE (FIRST 500 CHARS): {response[:500]}")
-            # Fallback to tagged blocks if JSON fails
-            result = LlmSanitizer.extract_tagged_blocks(response)
+            logger.error(f"LLM generation failed during template analysis: {e}")
+            raise self.TemplateAnalysisError(f"LLM generation failed: {e}")
+        
+        # Parse strict JSON
+        try:
+            result = LlmSanitizer.parse_json_object(response)
+        except ValueError as e:
+            # Re-raise as domain error
+            raise self.TemplateAnalysisError(str(e))
 
-        # Build Suggestions (Support both JSON keys and Tagged Block keys - Case Insensitive)
-        normalized_result = {str(k).lower(): v for k, v in result.items()}
-        
-        # Extract fields with best match fallback
-        suggestions = {
-            "purpose": normalized_result.get("purpose") or "General Template",
-            "expected_sections": normalized_result.get("expected_sections") or "Summary, Experience",
-            "expected_fields": normalized_result.get("expected_fields") or ",".join(detected_placeholders),
-            "field_extraction_manifest": normalized_result.get("field_extraction_manifest") or [],
-            "summary_guidance": normalized_result.get("summary_guidance") or "",
-            "formatting_guidance": normalized_result.get("formatting_guidance") or "",
-            "validation_guidance": normalized_result.get("validation_guidance") or "",
-            "pii_guidance": normalized_result.get("pii_guidance") or ""
-        }
-        
-        return suggestions
+        from pydantic import ValidationError
+        try:
+            validated_result = TemplateAnalysisResult.model_validate(result)
+            # Manifest length equals placeholder count check
+            if len(validated_result.field_extraction_manifest) != len(detected_placeholders):
+                err_msg = f"Manifest count mismatch: expected {len(detected_placeholders)}, got {len(validated_result.field_extraction_manifest)}"
+                logger.error(err_msg)
+                raise self.TemplateAnalysisError(err_msg)
+
+            return validated_result
+        except ValidationError as e:
+            logger.error(f"Schema validation mismatch for LLM output. Errors: {e.errors()}")
+            raise self.TemplateAnalysisError(f"LLM output failed schema validation: {e}")
+
+    async def analyze_template(self, content: bytes, filename: str) -> Dict[str, Any]:
+        """Backward compatibility stub that calls the new analysis logic."""
+        result = await self.analyze_template_metadata(content, filename)
+        return result.model_dump()
 
     async def validate_output(
         self, transformed_data: Dict[str, Any], guidance: str
@@ -186,7 +205,8 @@ class ResumeAiService:
             guidance=guidance,
         )
 
-        response = self.llm.generate(prompt)
+        system_prompt = "You are a World-Class Resume Auditor. You output strict validation responses using tagged blocks."
+        response = self.llm.generate(prompt, system_prompt=system_prompt)
         blocks = LlmSanitizer.extract_tagged_blocks(response)
         
         status = blocks.get("STATUS") or blocks.get("status") or "PASS"
@@ -217,8 +237,9 @@ class ResumeAiService:
 
         print(f"\n--- [LLM PROMPT: HARMONIZATION] ---\n{prompt[:2000]}...\n")
 
+        system_prompt = "You are a World-Class Professional Resume Writer and Architect. You synthesize and format resume content perfectly without generating code or technical data dumps. You strictly output requested formatting tags."
         try:
-            response = self.llm.generate(prompt)
+            response = self.llm.generate(prompt, system_prompt=system_prompt)
             print(f"\n--- [LLM RAW RESPONSE: HARMONIZATION] ---\n{response[:2000]}...\n")
             
             # 1. CORE STRATEGY: Tagged Block Extraction

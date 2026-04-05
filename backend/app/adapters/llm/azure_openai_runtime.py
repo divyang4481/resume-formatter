@@ -30,21 +30,41 @@ class AzureOpenAiLlmRuntime(LlmRuntimeAdapter):
             azure_endpoint=endpoint
         )
 
-    def generate(self, prompt: str, **kwargs) -> str:
+    def generate(
+        self,
+        prompt: str,
+        *,
+        system_prompt: Optional[str] = None,
+        response_format: Optional[dict] = None,
+        temperature: float = 0.1,
+        max_tokens: Optional[int] = None,
+        **kwargs
+    ) -> str:
         """
         Invokes the deployed Azure OpenAI model using Chat Completions API.
         """
-        messages = [{"role": "user", "content": prompt}]
+        messages = []
+        if system_prompt:
+            messages.append({"role": "system", "content": system_prompt})
+
+        messages.append({"role": "user", "content": prompt})
 
         # Merge kwargs
-        temperature = kwargs.get("temperature", 0.7)
-        max_tokens = kwargs.get("max_tokens", 4096)
+        actual_max_tokens = max_tokens or kwargs.get("max_tokens", 4096)
+
+        # Determine if json schema supported (e.g. gpt-4o), if not fallback to generic json object
+        format_kwargs = {}
+        if response_format:
+            # Note: Azure OpenAI SDK requires specific handling for full JSON Schema vs type='json_object'
+            # Here we provide a simple fallback by requesting json_object if any format is specified
+            format_kwargs["response_format"] = {"type": "json_object"}
 
         response = self.client.chat.completions.create(
             model=self.deployment_name,
             messages=messages,
             temperature=temperature,
-            max_tokens=max_tokens
+            max_tokens=actual_max_tokens,
+            **format_kwargs
         )
 
         return response.choices[0].message.content.strip()

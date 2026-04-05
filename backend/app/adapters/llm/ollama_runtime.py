@@ -17,11 +17,20 @@ class LocalOllamaLlmRuntime(LlmRuntimeAdapter):
         self.model_name = model_name
         self.endpoint = endpoint
 
-    def generate(self, prompt: str, **kwargs) -> str:
+    def generate(
+        self,
+        prompt: str,
+        *,
+        system_prompt: str | None = None,
+        response_format: dict | None = None,
+        temperature: float = 0.1,
+        max_tokens: int | None = None,
+        **kwargs
+    ) -> str:
         """
         Invokes the local Ollama model via HTTP request.
         """
-        temperature = kwargs.get("temperature", 0.7)
+        raw = kwargs.get("raw")
 
         payload = {
             "model": self.model_name,
@@ -31,6 +40,13 @@ class LocalOllamaLlmRuntime(LlmRuntimeAdapter):
                 "temperature": temperature
             }
         }
+
+        if system_prompt:
+            payload["system"] = system_prompt
+        if response_format:
+            payload["format"] = response_format
+        if raw is not None:
+            payload["raw"] = raw
 
         try:
             with httpx.Client() as client:

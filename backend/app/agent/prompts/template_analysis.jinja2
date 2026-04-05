@@ -32,7 +32,9 @@ SMART MARKER IDENTIFICATION:
 CRITICAL INSTRUCTIONS FOR PLACEHOLDERS:
 - You MUST maintain a 1:1 parity between the number of physical markers in the doc and the number of keys in 'field_extraction_manifest'.
 - The keys MUST appear in the EXACT ORDER they appear in the visual text of the template.
+- NEVER list granular sub-fields (like 'programming_languages') if the template only has one high-level box for that section. Infer semantics from headers and structure.
 - Each manifest item MUST have: 'fieldname', 'meaning', 'source_hints', and 'tag'.
+- Do not provide generic resume advice. Only provide instructions specific to populating this exact template based on its layout and headers.
 
 Provide recommendations in the following JSON format:
 1. 'purpose': A concise description of the ideal profile for this template.
@@ -40,11 +42,18 @@ Provide recommendations in the following JSON format:
 3. 'field_extraction_manifest': A list of objects, one for each physical marker in the doc.
    Each object MUST have:
    - 'fieldname': The unique logical key for the marker (e.g., 'technical_skills').
-   - 'meaning': Detailed description of what data belongs here.
-   - 'type': Set to "field" for single paragraphs/values (e.g. summary, header info). Set to "list" for repeating entries or bulleted items (e.g. skills, experience, projects, education).
+   - 'meaning': A brief description of what this section represents visually in the template.
+   - 'field_type': The type of field. MUST be one of: narrative | list | timeline | grouped_list | structured | hybrid . Set to "field_type" for single paragraphs/values (e.g. summary, header info). Set to "list" for repeating entries or bulleted items (e.g. skills, experience, projects, education).
+   - 'field_intent': What kind of information should be conveyed here (e.g., 'To show career progression', 'To list hard skills').
    - 'source_hints': Keywords from the template to help the extractor locate this field.
+   - 'content_expectation': What kind of content is expected (e.g., 'Action-oriented bullet points', 'A short paragraph').
+   - 'structure_expectation': Expected structure (e.g., 'Bullet points starting with verbs', 'Key-value pairs').
+   - 'constraints': Any constraints (e.g., 'Maximum 5 bullet points', 'Do not use first person').
+   - 'confidence': (Optional) Float between 0.0 and 1.0 indicating confidence in the inferred semantics.
+   - 'ambiguity_note': (Optional) A brief string explaining any uncertainty about this field's purpose.
    - 'tag': The literal text of the marker.
-4. 'summary_guidance': Style rules for the summary.
-5. 'formatting_guidance': Specific rules for how the AI should format the harmonized text for these fields.
+4. 'global_guidance': Specific rules for how the AI should approach filling this template overall.   
+5. 'summary_guidance': Style rules for the summary.
+6. 'formatting_guidance': Specific rules for how the AI should format the harmonized text for these fields.
 
 OUTPUT FORMAT: Return ONLY a valid JSON object. No markdown, no preamble.

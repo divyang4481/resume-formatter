@@ -17,12 +17,47 @@ class TemplateRule(BaseModel):
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
 
+from enum import Enum
+
+class FieldType(str, Enum):
+    NARRATIVE = "narrative"
+    LIST = "list"
+    TIMELINE = "timeline"
+    GROUPED_LIST = "grouped_list"
+    STRUCTURED = "structured"
+    HYBRID = "hybrid"
+
 class FieldExtractionManifestItem(BaseModel):
     fieldname: str
     meaning: str
+    field_type: FieldType
+    field_intent: str
     source_hints: str
     tag: Optional[str] = None # The literal visual marker: << Fill this section >>
-    type: str = "field" # 'field' or 'section'
+    type: str = "field" # 'field' or 'section'  
+    content_expectation: str
+    structure_expectation: str
+    constraints: str
+    confidence: Optional[float] = Field(None, ge=0.0, le=1.0, description="Confidence in the field semantics (0-1)")
+    ambiguity_note: Optional[str] = Field(None, description="Notes on any ambiguity in the field meaning")
+
+from pydantic import model_validator
+
+class TemplateAnalysisResult(BaseModel):
+    purpose: str
+    expected_sections: str
+    field_extraction_manifest: List[FieldExtractionManifestItem]
+    global_guidance: str
+
+    @model_validator(mode='before')
+    @classmethod
+    def no_extra_keys(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            allowed_keys = {'purpose', 'expected_sections', 'field_extraction_manifest', 'global_guidance'}
+            extra_keys = set(data.keys()) - allowed_keys
+            if extra_keys:
+                raise ValueError(f"Unexpected top-level keys found: {extra_keys}")
+        return data
 
 class TemplateAsset(BaseModel):
     id: str
@@ -45,6 +80,12 @@ class TemplateAsset(BaseModel):
     expected_sections: Optional[str] = None
     expected_fields: Optional[str] = None
     field_extraction_manifest: Optional[List[FieldExtractionManifestItem]] = None
+
+    global_guidance: Optional[str] = None
+    analysis_version: Optional[str] = None
+    llm_backend: Optional[str] = None
+    llm_model_name: Optional[str] = None
+    analysis_timestamp: Optional[datetime] = None
 
     summary_guidance: Optional[str] = None
     formatting_guidance: Optional[str] = None
