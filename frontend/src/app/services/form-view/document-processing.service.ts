@@ -25,6 +25,11 @@ export class DocumentProcessingService {
 
   public summary = signal<string | null>(null);
   public outputUrl = signal<string | null>(null);
+  public currentStage = signal<string | null>(null);
+  public validationPassed = signal<boolean | null>(null);
+  public validationReport = signal<string | null>(null);
+
+
 
   constructor(private api: ProcessingApiService) {}
 
@@ -92,7 +97,8 @@ export class DocumentProcessingService {
     });
   }
 
-  private pollJobStatus(jobId: string) {
+  public pollJobStatus(jobId: string) {
+
     this.api.getJobStatus(jobId).subscribe({
       next: (res) => {
         if (res.status === 'completed') {
@@ -109,8 +115,20 @@ export class DocumentProcessingService {
           this.status.set('waiting_for_confirmation');
         } else {
           // If still processing, wait 2 seconds and poll again
+          this.currentStage.set(res.stage || null);
+          
+          // Capture intermediate validation if it exists
+          if (res.validation_passed !== undefined) {
+             this.validationPassed.set(res.validation_passed);
+          }
+          if (res.validation_report) {
+             this.validationReport.set(res.validation_report);
+          }
+
           setTimeout(() => this.pollJobStatus(jobId), 2000);
         }
+
+
       },
       error: (err) => {
         console.error('Failed to get job status', err);

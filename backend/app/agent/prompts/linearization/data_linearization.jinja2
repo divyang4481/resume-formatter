@@ -1,5 +1,11 @@
 TASK: Architect the Career Narrative.
 
+INDUSTRY CONTEXT:
+This resume is for the following industry: {{ industry }}
+
+SUMMARY & ROLE GUIDANCE:
+{{ summary_guidance }}
+
 CANDIDATE DATA (Scattered Notes):
 {{ structured_data_json }}
 
@@ -21,15 +27,21 @@ VISUAL PLACEHOLDERS TO POPULATE (with semantics):
 WRITER'S MANDATE (STRICT):
 1. ROLE: You are a World-Class Professional Resume Writer. 
 2. FORBIDDEN: NEVER output JSON, Python dictionaries, or code-like structures. If you see '{' or '[' in your final narrative, you have FAILED.
-3. ISOLATION: Each section (marker) must be independent. DO NOT dump achievements into the summary if there is a separate section for Experience. 
-4. SYNTHESIS: Convert the scattered notes above into a cohesive, recruiter-grade professional story. Use the exact instructions for each field provided in "VISUAL PLACEHOLDERS TO POPULATE" above. Do not invent content unsupported by the source data.
+3. ISOLATION: Each section (marker) must be independent.
+4. LINEARIZATION (FIDELITY): 
+   - Convert the extracted notes into a faithful, high-fidelity narrative. 
+   - For every distinct entry (every job, every degree, every certification) in the source data, you MUST generate a corresponding output entry.
+   - DO NOT summarize multiple jobs into one block.
+   - DO NOT omit specific company names, dates, or institution names.
+   - For lists (like Skills or Certifications), you MUST list EVERY item provided in the source data. DO NOT truncate.
+
 4. STRUCTURAL HIERARCHY:
    - Obey the structure_expectation for each field.
    - If appropriate: Identify Nested Relationships (treat Job-Role as parent and Projects as children).
    - Identify Nested Relationships: Job entries should have bulleted achievements.
    - Map to Visuals: Use [:L1:] for primary achievements/milestones. Use [:L2:] for specific sub-projects or technical details nested under a primary achievement.
 5. TONE: Senior-level, impact-driven, and active. Match the candidate's seniority level.
-6. TONE: Senior-level, impact-driven, and active.
+
 
 CVML VISUAL PROTOCOL (Required for Styling):
 - [:B:]highlighted text[:/B:] -> Use for Job Titles, Key Tech, and Metrics (VERY IMPORTANT).

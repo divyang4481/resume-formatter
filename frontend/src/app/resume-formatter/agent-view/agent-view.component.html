@@ -97,6 +97,21 @@
           </div>
         </ng-container>
 
+        <!-- AI Quality Audit Report Bubble -->
+        <div *ngIf="docService.validationReport()" class="message-group agent audit-bubble-group">
+          <div class="message-label">AI Quality Audit</div>
+          <div class="message-bubble agent-bubble audit" [class.audit-fail]="docService.validationPassed() === false">
+            <div class="audit-header">
+              <mat-icon [color]="docService.validationPassed() ? 'primary' : 'warn'">
+                {{ docService.validationPassed() ? 'verified_user' : 'report_problem' }}
+              </mat-icon>
+              <strong>{{ docService.validationPassed() ? 'Audit Passed' : 'Audit Warning' }}</strong>
+            </div>
+            <p class="audit-text m-0">{{ docService.validationReport() }}</p>
+          </div>
+        </div>
+
+
         <div class="actions-container" *ngIf="session.pendingActions && session.pendingActions.length > 0 && !loading">
           <div class="message-group agent">
             <div class="options-grid">
@@ -138,16 +153,17 @@
           </div>
         </div>
 
-        <!-- Loading Indicator -->
-        <div *ngIf="loading" class="message-group agent">
-          <div class="message-label">Agent</div>
-          <div class="message-bubble agent-bubble loading">
-            <span>Typing</span>
-            <span class="dot-animation">
-              <span>.</span><span>.</span><span>.</span>
-            </span>
+        <!-- Processing/Loading Pipeline -->
+        <div *ngIf="loading || session.currentStep === 'processing'" class="message-group agent">
+          <div class="message-label">Agentic Pipeline</div>
+          <div class="message-bubble agent-bubble full-width">
+            <app-pipeline-stepper 
+                [currentStage]="$any(session.artifacts)?.current_stage"
+                [status]="session.currentStep === 'processing' ? 'processing' : 'idle'">
+            </app-pipeline-stepper>
           </div>
         </div>
+
       </div>
 
       <div class="chat-input-container">

@@ -30,16 +30,17 @@ class FieldType(str, Enum):
 class FieldExtractionManifestItem(BaseModel):
     fieldname: str
     meaning: str
-    field_type: FieldType
-    field_intent: str
+    field_type: FieldType = FieldType.NARRATIVE
+    field_intent: Optional[str] = ""
     source_hints: str
     tag: Optional[str] = None # The literal visual marker: << Fill this section >>
     type: str = "field" # 'field' or 'section'  
-    content_expectation: str
-    structure_expectation: str
-    constraints: str
+    content_expectation: Optional[str] = ""
+    structure_expectation: Optional[str] = ""
+    constraints: Optional[str] = ""
     confidence: Optional[float] = Field(None, ge=0.0, le=1.0, description="Confidence in the field semantics (0-1)")
     ambiguity_note: Optional[str] = Field(None, description="Notes on any ambiguity in the field meaning")
+
 
 from pydantic import model_validator
 
@@ -48,16 +49,23 @@ class TemplateAnalysisResult(BaseModel):
     expected_sections: str
     field_extraction_manifest: List[FieldExtractionManifestItem]
     global_guidance: str
+    summary_guidance: Optional[str] = None
+    formatting_guidance: Optional[str] = None
 
     @model_validator(mode='before')
     @classmethod
     def no_extra_keys(cls, data: Any) -> Any:
         if isinstance(data, dict):
-            allowed_keys = {'purpose', 'expected_sections', 'field_extraction_manifest', 'global_guidance'}
+            allowed_keys = {
+                'purpose', 'expected_sections', 'field_extraction_manifest', 
+                'global_guidance', 'summary_guidance', 'formatting_guidance'
+            }
             extra_keys = set(data.keys()) - allowed_keys
             if extra_keys:
-                raise ValueError(f"Unexpected top-level keys found: {extra_keys}")
+                # Optionally log instead of raising, or just allow it
+                pass 
         return data
+
 
 class TemplateAsset(BaseModel):
     id: str

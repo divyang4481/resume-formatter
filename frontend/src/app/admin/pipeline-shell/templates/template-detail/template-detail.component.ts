@@ -62,14 +62,16 @@ export class TemplateDetailComponent implements OnInit, OnDestroy {
 
   pipelineStages = [
     { id: 'ingest', name: 'Ingestion', icon: 'cloud_upload' },
-    { id: 'parse', name: 'Extraction', icon: 'document_scanner' },
-    { id: 'classify', name: 'Classification', icon: 'category' },
-    { id: 'normalize', name: 'Normalization', icon: 'schema' },
-    { id: 'privacy', name: 'PII Privacy', icon: 'security' },
-    { id: 'transform', name: 'AI Transformation', icon: 'auto_awesome' },
-    { id: 'validate', name: 'Quality Check', icon: 'fact_check' },
-    { id: 'render', name: 'Rendering', icon: 'picture_as_pdf' }
+    { id: 'parse', name: 'Document Parsing', icon: 'document_scanner' },
+    { id: 'triage', name: 'Triage/Kind', icon: 'rule' },
+    { id: 'normalize', name: 'Skill Normalization', icon: 'schema' },
+    { id: 'privacy', name: 'Privacy/PII', icon: 'security' },
+    { id: 'classify', name: 'Template Matching', icon: 'category' },
+    { id: 'transform', name: 'AI Extraction', icon: 'auto_awesome' },
+    { id: 'render', name: 'Document Rendering', icon: 'picture_as_pdf' },
+    { id: 'validate', name: 'AI Audit/Quality', icon: 'fact_check' }
   ];
+
 
 
   metadataForm: FormGroup;

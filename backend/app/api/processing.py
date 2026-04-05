@@ -236,7 +236,10 @@ async def get_job_status(
         document_kind=extension_metadata.get("document_kind"),
         document_confidence=extension_metadata.get("document_confidence"),
         document_reason=extension_metadata.get("document_reason"),
+        validation_passed=getattr(job, "validation_passed", None),
+        validation_report=getattr(job, "validation_report", None),
     )
+
 
 @router.post("/documents/{id}/confirm")
 async def confirm_document(

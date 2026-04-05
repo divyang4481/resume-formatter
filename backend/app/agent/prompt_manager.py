@@ -21,17 +21,48 @@ class PromptManager:
 
     def get_prompt(self, template_name: str, **kwargs) -> str:
         """
-        Loads and renders a prompt template with the provided context.
-        
-        Args:
-            template_name: The name of the template file (e.g., 'resume_summary.jinja2')
-            **kwargs: Context variables for interpolation
-            
-        Returns:
-            The fully rendered prompt string.
+        Loads and renders a single prompt template (User instructions).
+        Now supports recursive search in subdirectories.
         """
-        template = self.env.get_template(template_name)
-        return template.render(**kwargs)
+        if not template_name.endswith(".jinja2"):
+            template_name += ".jinja2"
+            
+        # Try to find the file in subdirectories if not in root
+        found_template = None
+        
+        # 1. Check relative path as provided
+        try:
+            found_template = self.env.get_template(template_name)
+        except:
+            # 2. Search in all sub-loaders/directories
+            for template in self.env.list_templates():
+                if template.endswith(f"/{template_name}") or template == template_name:
+                    found_template = self.env.get_template(template)
+                    break
+        
+        if not found_template:
+            raise FileNotFoundError(f"Template '{template_name}' not found in any prompt subdirectory.")
+            
+        return found_template.render(**kwargs)
+
+    def get_chat_prompt(self, feature_name: str, **kwargs) -> tuple[str, str]:
+        """
+        Loads and renders a dual-part prompt for chat models.
+        Automatically resolves subdirectories for '{feature_name}.jinja2' and '{feature_name}_system.jinja2'.
+        """
+        user_prompt = self.get_prompt(feature_name, **kwargs)
+        
+        system_prompt = ""
+        try:
+            # Check if system template exists (feature_name_system)
+            system_prompt = self.get_prompt(f"{feature_name}_system", **kwargs)
+        except Exception:
+            # Fallback to a generic persona
+            system_prompt = "You are a professional AI coding and document assistant."
+            
+        return system_prompt, user_prompt
+
+
 
 # Singleton instance for easy access
 prompt_manager = PromptManager()

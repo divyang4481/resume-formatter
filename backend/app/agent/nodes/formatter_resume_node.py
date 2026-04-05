@@ -45,7 +45,9 @@ def create_render_node(
                     guidance=summary_guidance,
                     industry=industry,
                     language=language,
+                    job_id=session_id
                 )
+
             else:
                 summary_text = (
                     "Original resume text not found. Summary cannot be generated."
@@ -95,8 +97,15 @@ def create_render_node(
                     detected_placeholders=detected_placeholders,
                     field_manifest=field_manifest,
                     formatting_guidance=formatting_guidance,
+                    industry=state.get("industry") or "Professional Services",
+                    summary_guidance=state.get("summary_guidance") or "",
+                    job_id=session_id
                 )
+
+
                 resume_data.update(formatted_data)
+                state["linearized_data"] = json.dumps(formatted_data, indent=2)
+
 
             # Normalize Keys for the Template Engine (Jinja2 / docxtpl)
             normalized_resume_data = {}

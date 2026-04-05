@@ -252,12 +252,18 @@ async def list_template_test_runs(
                 except Exception:
                     pass
             
-            # Direct query fallback to ensure we get the job summary if missing on test run
+            # Direct query fallback to ensure we get the job artifacts if missing on test run
             summary = r.generated_summary
-            if not summary:
-                job = db.query(ProcessingJob).filter(ProcessingJob.id == r.processing_job_id).first()
-                if job:
+            val_passed = None
+            val_report = None
+            
+            job = db.query(ProcessingJob).filter(ProcessingJob.id == r.processing_job_id).first()
+            if job:
+                if not summary:
                     summary = job.generated_summary
+                val_passed = job.validation_passed
+                val_report = job.validation_report
+
 
             result.append({
                 "id": r.id,
@@ -267,8 +273,11 @@ async def list_template_test_runs(
                 "reviewed_at": r.reviewed_at,
                 "sample_resume_asset_id": r.sample_resume_asset_id,
                 "generated_summary": summary,
+                "validation_passed": val_passed,
+                "validation_report": val_report,
                 "validation_result": val_json
             })
+
         return {"test_runs": result}
 
 

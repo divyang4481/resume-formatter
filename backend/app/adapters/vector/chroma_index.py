@@ -5,9 +5,30 @@ from app.domain.interfaces import KnowledgeIndex
 import uuid
 
 class ChromaKnowledgeIndex(KnowledgeIndex):
-    def __init__(self, collection_name: str = "knowledge_base"):
-        self.client = chromadb.Client(Settings(is_persistent=False))
+    def __init__(self, collection_name: str = "hays_knowledge_index"):
+        import os
+        from app.config import settings
+        # Ensure persistent path exists for the vector DB
+        vector_full_path = os.path.abspath(settings.vector_db_path)
+        os.makedirs(vector_full_path, exist_ok=True)
+        
+        # Use PersistentClient
+        self.client = chromadb.PersistentClient(path=vector_full_path)
+        
+        # 1. VALIDATION: Check Heartbeat
+        try:
+            hb = self.client.heartbeat()
+            print(f"--- [VECTOR DB HEALTHY] Heartbeat: {hb} ---")
+        except Exception as e:
+            print(f"--- [CATASTROPHE] Vector DB Initialization Failure: {e} ---")
+            raise e
+
+        # 2. COLLECTION: Identify or Create
         self.collection = self.client.get_or_create_collection(name=collection_name)
+        print(f"--- [VECTOR DB READY] Collection '{collection_name}' verified. Count: {self.collection.count()} ---")
+
+
+
 
     def index_chunks(self, chunks: List[Dict[str, Any]], asset_id: str) -> None:
         """Stores knowledge chunks into the Chroma index."""

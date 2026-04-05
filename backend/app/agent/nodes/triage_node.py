@@ -34,7 +34,9 @@ def create_triage_node(ai_service: ResumeAiService):
                 filename=filename,
                 content_type=content_type,
                 extraction_confidence=extraction_confidence,
+                job_id=state.get("session_id")
             )
+
 
         async def suggest_template_task():
             nonlocal selected_template_id

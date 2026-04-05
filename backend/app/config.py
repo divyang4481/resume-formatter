@@ -1,4 +1,9 @@
+import os
+from pathlib import Path
 from pydantic_settings import BaseSettings
+
+# Identify the project root (assumes this file is in backend/app/config.py)
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 
 
 class Settings(BaseSettings):
@@ -33,9 +38,7 @@ class Settings(BaseSettings):
     ollama_endpoint: str = (
         "http://localhost:11434/api/generate"  # Default for local Ollama
     )
-    gemini_api_key: str = (
-        ""  # Key for Google Gemini API
-    )
+    gemini_api_key: str = ""  # Key for Google Gemini API
 
     # AWS Settings
     aws_region: str = "us-east-1"
@@ -52,7 +55,10 @@ class Settings(BaseSettings):
 
     # Storage Settings
     storage_backend: str = "local"  # "local", "s3"
-    local_storage_path: str = "./data"
+    local_storage_path: str = str(PROJECT_ROOT / ".data")
+    sqlite_db_path: str = str(PROJECT_ROOT / ".data" / "sqlite" / "app.db")
+    vector_db_path: str = str(PROJECT_ROOT / ".data" / "vector_storage.vdb")
+
     s3_bucket: str = "agentic-document-platform-bucket"
 
     # Vector search and shadow mode feature flags

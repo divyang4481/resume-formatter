@@ -97,26 +97,50 @@ def build_workflow_graph(llm_runtime: LlmRuntimeAdapter, doc_parser: DocumentExt
     def with_progress(node_name, node_func):
         async def wrapped_node(state: AgentState):
             job_id = state.get("session_id")
+            
+            # 1. RUN THE NODE
+            if hasattr(node_func, "ainvoke"):
+                result = await node_func.ainvoke(state)
+            elif asyncio.iscoroutinefunction(node_func):
+                result = await node_func(state)
+            else:
+                result = node_func(state)
+
+            # 2. SYNC PROGRESS TO DB (POST-EXECUTION)
             if job_repo and job_id:
                 try:
                     job = job_repo.get_job(job_id)
                     if job:
+                        # Combine current state + result updates to see what we now have
+                        merged_data = {**state, **(result or {})}
+
                         job.stage = stage_map.get(node_name, node_name)
+                        
+                        # Capture fresh artifacts produced by the node
+                        if merged_data.get("transformed_document_json"):
+                            job.transformed_json = merged_data.get("transformed_document_json")
+                        
+                        if merged_data.get("linearized_data"):
+                            job.linearized_data = merged_data.get("linearized_data")
+                            
+                        if merged_data.get("summary_text"):
+                            job.generated_summary = merged_data.get("summary_text")
+                            
+                        if merged_data.get("validation_report"):
+                            job.validation_report = merged_data.get("validation_report")
+                        
+                        if merged_data.get("validation_passed") is not None:
+                            job.validation_passed = merged_data.get("validation_passed")
+
                         job_repo.save_job(job)
+
+
                 except Exception as e:
                     print(f"Non-critical: Failed to update job progress: {e}")
             
-            # If the node is a compiled subgraph (Runnable), use ainvoke
-            if hasattr(node_func, "ainvoke"):
-                return await node_func.ainvoke(state)
-            
-            # If it's a coroutine function, await it
-            if asyncio.iscoroutinefunction(node_func):
-                return await node_func(state)
-            
-            # Otherwise, call it directly
-            return node_func(state)
+            return result
         return wrapped_node
+
 
     from app.services.resume_ai_service import ResumeAiService
     from app.services.resume_generator_service import ResumeGeneratorService

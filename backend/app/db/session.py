@@ -1,12 +1,14 @@
 import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+from app.config import settings
 
-# Ensure the .data directory exists
-DATA_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../.data"))
-os.makedirs(DATA_DIR, exist_ok=True)
+# Ensure the database directory exists
+db_full_path = os.path.abspath(settings.sqlite_db_path)
+db_dir = os.path.dirname(db_full_path)
+os.makedirs(db_dir, exist_ok=True)
 
-SQLALCHEMY_DATABASE_URL = f"sqlite:///{os.path.join(DATA_DIR, 'app.db')}"
+SQLALCHEMY_DATABASE_URL = f"sqlite:///{db_full_path}"
 
 engine = create_engine(
     SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False}

@@ -47,8 +47,9 @@ class AgentState(TypedDict, total=False):
     expected_sections: Optional[str]
     expected_fields: Optional[str]
 
-    # LLM Transformation results
+     # LLM Transformation results
     transformed_document_json: Optional[str]
+    linearized_data: Optional[str]
 
     # Contextual guidance and metadata
     field_extraction_manifest: Optional[Dict[str, Any]]
@@ -57,8 +58,10 @@ class AgentState(TypedDict, total=False):
     
     # Validation
     validation_passed: bool
+    validation_report: Optional[str]
     validation_errors: Optional[list]
     validation_warnings: Optional[list]
+
 
     # Output Artifacts
     summary_text: Optional[str]

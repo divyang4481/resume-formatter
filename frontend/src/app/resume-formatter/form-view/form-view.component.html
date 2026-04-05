@@ -63,10 +63,18 @@
     </div>
 
     <div *ngIf="docService.status() === 'uploading' || docService.status() === 'processing'" class="processing-state">
-      <mat-spinner diameter="48"></mat-spinner>
+      <mat-spinner diameter="48" *ngIf="docService.status() === 'uploading'"></mat-spinner>
+      
+      <!-- High-Fidelity Pipeline Stepper -->
+      <app-pipeline-stepper *ngIf="docService.status() === 'processing'"
+          [currentStage]="docService.currentStage()" 
+          [status]="docService.status()">
+      </app-pipeline-stepper>
+
       <p *ngIf="docService.status() === 'uploading'">Uploading document...</p>
-      <p *ngIf="docService.status() === 'processing'">Processing document with selected template...</p>
+      <p *ngIf="docService.status() === 'processing'">AI Agent is restructuring your resume...</p>
     </div>
+
 
     <div *ngIf="docService.status() === 'waiting_for_confirmation'" class="processing-state">
       <mat-icon class="large-icon" color="accent">help_outline</mat-icon>
@@ -113,8 +121,29 @@
           <p *ngIf="!docService.summary()"><em>Loading summary...</em></p>
         </mat-card-content>
       </mat-card>
+      
+      <!-- AI Quality & Audit Report -->
+      <mat-card class="result-card mt-3 audit-card" [class.audit-fail]="docService.validationPassed() === false" *ngIf="docService.validationReport()">
+        <mat-card-header>
+          <div mat-card-avatar class="audit-avatar" [class.fail]="docService.validationPassed() === false">
+            <mat-icon>{{ docService.validationPassed() ? 'verified_user' : 'report_problem' }}</mat-icon>
+          </div>
+          <mat-card-title>AI Quality & Audit Report</mat-card-title>
+          <mat-card-subtitle [class.text-warn]="docService.validationPassed() === false">
+            Status: {{ docService.validationPassed() ? 'PASSED' : 'AUDIT WARNING' }}
+          </mat-card-subtitle>
+        </mat-card-header>
+        <mat-card-content class="audit-content">
+          <p class="audit-text">{{ docService.validationReport() }}</p>
+          <div class="audit-actions" *ngIf="docService.validationPassed() === false">
+             <mat-icon color="warn">info_outline</mat-icon>
+             <span>Please review the "View" document mode to verify missing fields against original.</span>
+          </div>
+        </mat-card-content>
+      </mat-card>
 
       <mat-card class="result-card mt-3">
+
         <mat-card-header>
           <mat-card-title>Feedback</mat-card-title>
         </mat-card-header>

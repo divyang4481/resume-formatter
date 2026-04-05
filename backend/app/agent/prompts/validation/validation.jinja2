@@ -1,0 +1,24 @@
+TASK: Perform a Semantic Validation of the transformed resume data.
+
+TRANSFORMED DATA (JSON):
+{{ transformed_data_json }}
+
+TEMPLATE GUIDANCE:
+{{ guidance }}
+
+SOURCE TEXT (ORIGINAL RESUME):
+{{ extracted_text }}
+
+INSTRUCTIONS:
+1. **OMISSION CHECK (CRITICAL)**: Compare the SOURCE TEXT against the TRANSFORMED DATA. 
+   - Does the source mention a Degree or School (e.g., University, Bachelor, Masters) that is missing from the JSON 'education' field?
+   - Does the source have Certifications missing from the JSON?
+   - If critical data (Education, Full Job History) is present in the source but missing/empty in the JSON, you MUST [[STATUS :: FAIL]].
+2. **PROFESSIONALISM**: Does the data look professional and match the intended career story?
+3. **GLITCH CHECK**: Does the output contain any raw JSON residue (like brackets {} or quotes "")?
+4. **OUTPUT PROTOCOL**: 
+   - Wrap your overall status in: [[STATUS :: PASS]] or [[STATUS :: FAIL]]
+   - Wrap your reasoning or errors in: [[REPORT :: ...your detailed feedback...]]
+
+GOAL: Zero Data Loss. Capture every credential.
+

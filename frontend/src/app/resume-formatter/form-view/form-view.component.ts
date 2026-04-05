@@ -10,6 +10,8 @@ import { MatCardModule } from '@angular/material/card';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { CommonModule } from '@angular/common';
 import { DocumentProcessingService } from '../../services/form-view/document-processing.service';
+import { PipelineStepperComponent } from '../components/pipeline-stepper/pipeline-stepper.component';
+
 
 @Component({
   selector: 'app-form-view',
@@ -24,8 +26,10 @@ import { DocumentProcessingService } from '../../services/form-view/document-pro
     MatCardModule,
     MatProgressSpinnerModule,
     CommonModule,
-    RouterModule
+    RouterModule,
+    PipelineStepperComponent
   ],
+
   templateUrl: './form-view.component.html',
   styleUrl: './form-view.component.scss'
 })

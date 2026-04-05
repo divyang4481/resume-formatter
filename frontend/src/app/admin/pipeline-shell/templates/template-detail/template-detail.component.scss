@@ -265,4 +265,27 @@ tr.example-element-row:not(.example-expanded-row):active {
 .mt-4 { margin-top: 32px; }
 .btn-sm { font-size: 11px; padding: 0 8px; line-height: 28px; height: 28px; }
 
+.audit-section {
+  &.audit-failed {
+    background-color: #fffbeb !important;
+    border-color: #fcd34d !important;
+    
+    h4 { color: #92400e; }
+    .audit-text { color: #92400e; font-style: italic; }
+  }
+}
 
+.audit-history-report {
+  white-space: pre-line;
+  font-style: italic;
+  font-size: 0.95rem;
+  color: #334155;
+  
+  &.audit-fail {
+    background-color: #fffbeb !important;
+    border-color: #fcd34d !important;
+  }
+}
+
+.text-success { color: #166534 !important; font-weight: 600; }
+.text-danger { color: #991b1b !important; font-weight: 600; }

@@ -62,6 +62,8 @@ export class RealAgentBackendClient implements AgentBackendClient {
     try {
       const res = await firstValueFrom(this.runtimeApi.submitDocument(file));
       this.currentSession.sessionId = res.job_id; // Using job_id as sessionId
+      if (!this.currentSession.artifacts) this.currentSession.artifacts = {};
+      this.currentSession.artifacts['jobId'] = res.job_id;
 
       if (res.requires_confirmation) {
         this.currentSession.status = 'waiting_for_user';

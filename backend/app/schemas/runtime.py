@@ -37,3 +37,8 @@ class RuntimeJobStatusResponse(BaseModel):
     document_kind: Optional[str] = None
     document_confidence: Optional[float] = None
     document_reason: Optional[str] = None
+    
+    # Audit & Validation Fields
+    validation_passed: Optional[bool] = None
+    validation_report: Optional[str] = None
+

@@ -23,11 +23,15 @@ def create_validate_node(ai_service: ResumeAiService):
             # Delegate semantic validation to the specialized AI service
             validation_result = await ai_service.validate_output(
                 transformed_data=transformed_data,
-                guidance=validation_guidance
+                guidance=validation_guidance,
+                extracted_text=state.get("extracted_text", ""),
+                job_id=state.get("session_id")
             )
+
             
             passed = validation_result.get("status") == "PASS"
             errors = validation_result.get("errors", [])
+            report = validation_result.get("report", "No report.")
             
             # If the transformation node already flagged placeholders, we should carry those over
             if not state.get("validation_passed", True):
@@ -38,8 +42,10 @@ def create_validate_node(ai_service: ResumeAiService):
             return {
                 "validation_passed": passed,
                 "validation_errors": errors,
+                "validation_report": report,
                 "status": "validated" if passed else "validation_failed"
             }
+
         except Exception as e:
             print(f"Error during AI semantic validation: {e}")
             return {

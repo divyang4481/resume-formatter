@@ -33,8 +33,9 @@ CRITICAL INSTRUCTIONS FOR PLACEHOLDERS:
 - You MUST maintain a 1:1 parity between the number of physical markers in the doc and the number of keys in 'field_extraction_manifest'.
 - The keys MUST appear in the EXACT ORDER they appear in the visual text of the template.
 - NEVER list granular sub-fields (like 'programming_languages') if the template only has one high-level box for that section. Infer semantics from headers and structure.
-- Each manifest item MUST have: 'fieldname', 'meaning', 'source_hints', and 'tag'.
+- Each manifest item MUST have: 'fieldname', 'meaning', 'field_type', 'field_intent', 'source_hints', 'content_expectation', 'structure_expectation', 'constraints', and 'tag'.
 - Do not provide generic resume advice. Only provide instructions specific to populating this exact template based on its layout and headers.
+
 
 Provide recommendations in the following JSON format:
 1. 'purpose': A concise description of the ideal profile for this template.

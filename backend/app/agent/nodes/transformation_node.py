@@ -110,25 +110,29 @@ def create_context_aware_extraction_node(llm_runtime: LlmRuntimeAdapter):
             for m in manifest_raw
         ]
         
-        prompt = prompt_manager.get_prompt(
-            "context_aware_extraction.jinja2",
+        system_prompt, prompt = prompt_manager.get_chat_prompt(
+            "context_aware_extraction",
             dynamic_schema_json=json.dumps(dynamic_schema, indent=2),
             field_extraction_manifest_json=json.dumps(manifest_dicts, indent=2),
             template_text_excerpt=template_text[:3000],
             structured_context=structured_context,
             extracted_text=extracted_text,
-            formatting_guidance=formatting_guidance
+            formatting_guidance=formatting_guidance,
+            industry=state.get("industry") or "Professional Services",
+            summary_guidance=state.get("summary_guidance") or ""
         )
+
         
         AuditService.log_event(
             job_id=state.get("session_id"),
             event_type="LLM_EXTRACTION_PROMPT",
-            payload={"prompt": prompt}
+            payload={"system_prompt": system_prompt, "user_prompt": prompt}
         )
 
         try:
             # Lower temperature for maximum structural consistency
-            response = llm_runtime.generate(prompt=prompt, temperature=0.0)
+            response = llm_runtime.generate(prompt=prompt, system_prompt=system_prompt, temperature=0.0)
+
 
             AuditService.log_event(
                 job_id=state.get("session_id"),

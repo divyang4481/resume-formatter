@@ -79,8 +79,15 @@ class ProcessingJob(Base):
     stage = Column(String, nullable=False)
     summary_uri = Column(String, nullable=True)
     generated_summary = Column(Text, nullable=True)
+    transformed_json = Column(Text, nullable=True)
+    linearized_data = Column(Text, nullable=True)
+    validation_passed = Column(Boolean, nullable=True)
+    validation_report = Column(Text, nullable=True)
+
+
     render_docx_uri = Column(String, nullable=True)
     error_message = Column(Text, nullable=True)
+
 
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

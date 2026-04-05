@@ -195,4 +195,62 @@
       line-height: 1.5;
     }
   }
+
+  .audit-card {
+    border: 1px solid #e2e8f0;
+    transition: all 0.3s ease;
+
+    &.audit-fail {
+      background-color: #fffbeb;
+      border-color: #fcd34d;
+    }
+
+    .audit-avatar {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background-color: #dcfce7;
+      color: #166534;
+      border-radius: 50%;
+
+      &.fail {
+        background-color: #fef3c7;
+        color: #92400e;
+      }
+    }
+
+    .audit-content {
+      margin-top: 1rem;
+      
+      .audit-text {
+        font-style: italic;
+        padding: 0.75rem;
+        background: rgba(0,0,0,0.03);
+        border-radius: 6px;
+        white-space: pre-line;
+      }
+
+      .audit-actions {
+        margin-top: 1rem;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 0.85rem;
+        color: #92400e;
+        font-weight: 500;
+
+        mat-icon {
+          font-size: 18px;
+          width: 18px;
+          height: 18px;
+        }
+      }
+    }
+
+    .text-warn {
+      color: #92400e !important;
+      font-weight: 600;
+    }
+  }
 }
+

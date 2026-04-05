@@ -10,6 +10,8 @@ import { RouterModule } from '@angular/router';
 import { AGENT_BACKEND_CLIENT, AgentBackendClient } from '../../services/agent-client/agent-backend-client';
 import { AgentSession } from '../../services/agent-client/contracts';
 import { DocumentProcessingService } from '../../services/form-view/document-processing.service';
+import { PipelineStepperComponent } from '../components/pipeline-stepper/pipeline-stepper.component';
+
 
 
 @Component({
@@ -23,8 +25,10 @@ import { DocumentProcessingService } from '../../services/form-view/document-pro
     CommonModule,
     FormsModule,
     MatInputModule,
-    RouterModule
+    RouterModule,
+    PipelineStepperComponent
   ],
+
   templateUrl: './agent-view.component.html',
   styleUrl: './agent-view.component.scss'
 })
@@ -54,6 +58,7 @@ export class AgentViewComponent implements OnInit {
 
     try {
       this.session = await this.agentClient.createSession();
+      this.checkAndPollJob();
     } catch (e) {
       console.error('Failed to create session', e);
     } finally {
@@ -66,6 +71,7 @@ export class AgentViewComponent implements OnInit {
     try {
       this.session = await this.agentClient.createSession();
       this.scrollToBottom();
+      this.checkAndPollJob();
     } catch (e) {
       console.error('Failed to start over', e);
     } finally {
@@ -84,6 +90,7 @@ export class AgentViewComponent implements OnInit {
     this.loading = true;
     try {
       this.session = await this.agentClient.uploadDocument(file);
+      this.checkAndPollJob();
     } catch (e) {
       console.error('Failed to upload document', e);
     } finally {
@@ -97,6 +104,7 @@ export class AgentViewComponent implements OnInit {
     try {
       this.session = await this.agentClient.answerQuestion(this.session.sessionId, answer);
       this.scrollToBottom();
+      this.checkAndPollJob();
     } catch (e) {
       console.error('Failed to answer question', e);
     } finally {
@@ -114,10 +122,22 @@ export class AgentViewComponent implements OnInit {
     try {
       this.session = await this.agentClient.answerQuestion(this.session.sessionId, message);
       this.scrollToBottom();
+      this.checkAndPollJob();
     } catch (e) {
       console.error('Failed to send message', e);
     } finally {
       this.loading = false;
+    }
+  }
+
+  private checkAndPollJob(): void {
+    if (!this.session) return;
+
+    const jobId = this.agentClient.getJobIdFromSession(this.session);
+    if (jobId && (this.session.currentStep === 'processing' || this.session.currentStep === 'review_resume' || this.session.currentStep === 'export')) {
+      // If we have a jobId and we are in or past processing, start the polling in the doc service
+      // This will fill docService.validationPassed() and docService.validationReport()
+      this.docService.pollJobStatus(jobId);
     }
   }
 
@@ -130,6 +150,7 @@ export class AgentViewComponent implements OnInit {
   }
 
   getStepIndex(currentStep: string | undefined): number {
+
     if (!currentStep) return 0;
 
     // Map internal session steps to the 4 stepper steps
