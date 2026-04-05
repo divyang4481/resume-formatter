@@ -26,7 +26,10 @@ SMART MARKER IDENTIFICATION:
 - Markers often look like '<< Fill this section >>', '{{ some_field }}', '[MARKER]', or even just capitalized placeholders like 'CANDIDATE_NAME'.
 - You MUST identify all such markers from the TEMPLATE TEXT provided above.
 - HEADER-MARKER RELATIONSHIP: If multiple markers use the same literal text (e.g., 6 instances of '<< Fill this section >>'), you MUST use the visual header or preceding text (e.g., 'Professional Experience', 'Education') to determine the correct 'fieldname' and 'meaning' for that specific marker.
+- **EDUCATIONAL GRANULARITY**: If you identify a marker for 'Education', you MUST specify in 'structure_expectation' that it should include the **Degree Name**, the **Institution/University**, and the **Dates/Time** (Start-End).
+- **EXPERIENCE HIERARCHY**: If you identify a marker for 'Professional Experience' or 'Work History', you MUST specify in 'structure_expectation' that entries should have a clear **Job Title**, **Company**, **Dates**, and **Action-Oriented Bullet points**.
 - Your 'field_extraction_manifest' must follow the TOP-TO-BOTTOM visual order of these markers.
+
 - For each item in the manifest, include the 'tag' (the literal text of the marker, including brackets if they exist).
 
 CRITICAL INSTRUCTIONS FOR PLACEHOLDERS:

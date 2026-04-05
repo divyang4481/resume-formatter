@@ -1,24 +1,31 @@
-TASK: Perform a Semantic Validation of the transformed resume data.
+TASK: Perform a Semantic & Structural Validation of the formatted resume.
 
-TRANSFORMED DATA (JSON):
+SOURCE TEXT (RAW RESUME):
+{{ extracted_text }}
+
+TRANSFORMED DATA (JSON MANIFEST):
 {{ transformed_data_json }}
+
+LINEARIZED NARRATIVE (FINAL FORMATTED TEXT):
+{{ linearized_data }}
 
 TEMPLATE GUIDANCE:
 {{ guidance }}
 
-SOURCE TEXT (ORIGINAL RESUME):
-{{ extracted_text }}
-
 INSTRUCTIONS:
-1. **OMISSION CHECK (CRITICAL)**: Compare the SOURCE TEXT against the TRANSFORMED DATA. 
-   - Does the source mention a Degree or School (e.g., University, Bachelor, Masters) that is missing from the JSON 'education' field?
-   - Does the source have Certifications missing from the JSON?
-   - If critical data (Education, Full Job History) is present in the source but missing/empty in the JSON, you MUST [[STATUS :: FAIL]].
-2. **PROFESSIONALISM**: Does the data look professional and match the intended career story?
-3. **GLITCH CHECK**: Does the output contain any raw JSON residue (like brackets {} or quotes "")?
-4. **OUTPUT PROTOCOL**: 
-   - Wrap your overall status in: [[STATUS :: PASS]] or [[STATUS :: FAIL]]
-   - Wrap your reasoning or errors in: [[REPORT :: ...your detailed feedback...]]
+1. **DATA FIDELITY CHECK (CRITICAL)**: 
+   - **EXTRACTION FAILURE**: If the SOURCE TEXT mentions a Degree, School, or Certification that is NOT in the TRANSFORMED DATA, you MUST [[STATUS :: FAIL]].
+   - **LEGITIMATE ABSENCE**: If a template field (e.g., Certifications) is empty because the SOURCE TEXT truly contains no such information, this is a [[STATUS :: PASS]]. 
+   - In the report, clearly note when data was absent in the source (e.g., "Candidate has no certifications in source resume").
 
-GOAL: Zero Data Loss. Capture every credential.
+2. **LINEARIZATION & FORMATTING CHECK**:
+   - **NO WALLS OF TEXT**: Does 'Professional Experience' look like a single block in the LINEARIZED NARRATIVE? If it lacks [:L1:] markers, it is a failure.
+   - **EDUCATION COMPLETENESS**: Ensure university names and dates appear in the narrative if they were in the source.
+   - **TAG INTEGRITY**: Check for raw JSON residue or missing visual protocol tags like [:B:], [:PIPE:], etc.
+
+3. **OUTPUT PROTOCOL**: 
+   - Overall status: [[STATUS :: PASS]] or [[STATUS :: FAIL]]
+   - Reasoning/Feedback: [[REPORT :: ...detailed reasoning...]]
+
+GOAL: Zero data loss. Premium formatting. Transparent quality.
 

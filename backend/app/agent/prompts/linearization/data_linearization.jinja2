@@ -29,18 +29,22 @@ WRITER'S MANDATE (STRICT):
 2. FORBIDDEN: NEVER output JSON, Python dictionaries, or code-like structures. If you see '{' or '[' in your final narrative, you have FAILED.
 3. ISOLATION: Each section (marker) must be independent.
 4. LINEARIZATION (FIDELITY): 
-   - Convert the extracted notes into a faithful, high-fidelity narrative. 
-   - For every distinct entry (every job, every degree, every certification) in the source data, you MUST generate a corresponding output entry.
-   - DO NOT summarize multiple jobs into one block.
+   - **DO NOT SUMMARIZE**: Each job entry, degree, and certification MUST be its own distinct entry.
+   - **EDUCATION MANDATE**: For every Education entry, you MUST include the **Institution Name**, **Degree**, and **Duration (Dates)** in a clear, formatted line using [:B:] and [:PIPE:].
+   - **EXPERIENCE ARCHITECTURE (ANTI-WALL-OF-TEXT)**: 
+     - Each job header MUST use the format: [:B:]Role | Company | Dates[:/B:] (Use [:PIPE:] as the separator).
+     - Every achievement/duty MUST be its own line starting with **[:L1:]**.
+     - DO NOT merge multiple job achievements into a single paragraph.
+   - For every distinct entry in the source data, you MUST generate a corresponding output entry.
    - DO NOT omit specific company names, dates, or institution names.
    - For lists (like Skills or Certifications), you MUST list EVERY item provided in the source data. DO NOT truncate.
 
-4. STRUCTURAL HIERARCHY:
+5. STRUCTURAL HIERARCHY:
    - Obey the structure_expectation for each field.
-   - If appropriate: Identify Nested Relationships (treat Job-Role as parent and Projects as children).
-   - Identify Nested Relationships: Job entries should have bulleted achievements.
+   - Job entries should have clear headers followed by bulleted achievements using [:L1:].
    - Map to Visuals: Use [:L1:] for primary achievements/milestones. Use [:L2:] for specific sub-projects or technical details nested under a primary achievement.
-5. TONE: Senior-level, impact-driven, and active. Match the candidate's seniority level.
+6. TONE: Senior-level, impact-driven, and active. Match the candidate's seniority level.
+
 
 
 CVML VISUAL PROTOCOL (Required for Styling):
