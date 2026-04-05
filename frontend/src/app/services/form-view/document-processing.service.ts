@@ -18,6 +18,10 @@ export class DocumentProcessingService {
 
   public suggestedIndustryId = signal<string | null>(null);
   public suggestedTemplateId = signal<string | null>(null);
+  public suggestedTemplateIds = signal<string[] | null>(null);
+  public documentKind = signal<string | null>(null);
+  public documentReason = signal<string | null>(null);
+  public errorMessage = signal<string | null>(null);
 
   public summary = signal<string | null>(null);
   public outputUrl = signal<string | null>(null);
@@ -61,15 +65,8 @@ export class DocumentProcessingService {
       next: (res) => {
         this.currentDocumentId.set(res.document_id || res.job_id);
         this.currentJobId.set(res.job_id);
-
-        if (res.requires_confirmation) {
-          this.suggestedIndustryId.set(res.suggested_industry_id || null);
-          this.suggestedTemplateId.set(res.suggested_template_id || null);
-          this.status.set('waiting_for_confirmation');
-        } else {
-          this.status.set('processing');
-          this.pollJobStatus(res.job_id);
-        }
+        this.status.set('processing');
+        this.pollJobStatus(res.job_id);
       },
       error: (err) => {
         console.error('Failed to submit document', err);
@@ -103,6 +100,13 @@ export class DocumentProcessingService {
           this.fetchResults(jobId);
         } else if (res.status === 'failed') {
           this.status.set('error');
+          this.errorMessage.set(res.error_message || 'Processing failed');
+        } else if (res.status === 'waiting_for_confirmation') {
+          this.suggestedTemplateId.set(res.suggested_template_ids?.[0] || null);
+          this.suggestedTemplateIds.set(res.suggested_template_ids || null);
+          this.documentKind.set(res.document_kind || null);
+          this.documentReason.set(res.document_reason || null);
+          this.status.set('waiting_for_confirmation');
         } else {
           // If still processing, wait 2 seconds and poll again
           setTimeout(() => this.pollJobStatus(jobId), 2000);

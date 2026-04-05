@@ -59,8 +59,15 @@ class Settings(BaseSettings):
     vector_search_enabled: bool = False
     template_selector_mode: str = "legacy"  # "legacy", "shadow", "hybrid"
 
+    # Audit Logging
+    enable_audit_logging: bool = True
+
     # Example standard settings
     log_level: str = "INFO"
+
+    # Worker and Asynchronous Settings
+    max_parallel_jobs: int = 3
+    message_queue_poll_interval: int = 2
 
     class Config:
         env_file = ".env"

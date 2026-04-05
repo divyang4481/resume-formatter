@@ -8,6 +8,7 @@ from app.domain.interfaces import DocumentExtractionService, ExtractionContext
 from app.agent.nodes.transformation_node import create_schema_builder_node, create_context_aware_extraction_node
 from app.services.resume_parsing_service import ResumeParsingService
 from app.dependencies import get_storage_provider
+from app.services.audit_service import AuditService
 
 def create_parse_node(doc_parser: DocumentExtractionService, storage):
     async def parse_node(state: AgentState):
@@ -33,6 +34,16 @@ def create_parse_node(doc_parser: DocumentExtractionService, storage):
             filename=filename,
             content_type=content_type,
             context=context
+        )
+
+        AuditService.log_event(
+            job_id=state.get("session_id"),
+            event_type="EXTRACTION_RAW_DATA",
+            payload={
+                "extracted_text": result.get("extracted_text", ""),
+                "raw_parsed_data": result.get("structured_data", {}),
+                "extraction_confidence": 0.95,
+            }
         )
 
         return {
@@ -72,6 +83,7 @@ def build_workflow_graph(llm_runtime: LlmRuntimeAdapter, doc_parser: DocumentExt
     stage_map = {
         "ingest": "ingest",
         "parse": "parse",
+        "triage": "triage",
         "normalize": "normalize",
         "privacy_transform": "privacy",
         "template_resolution": "classify",
@@ -106,15 +118,17 @@ def build_workflow_graph(llm_runtime: LlmRuntimeAdapter, doc_parser: DocumentExt
             return node_func(state)
         return wrapped_node
 
-    workflow.add_node("ingest", with_progress("ingest", lambda state: {"status": "ingested"}))
-    workflow.add_node("parse", with_progress("parse", create_parse_node(doc_parser, storage)))
-    workflow.add_node("normalize", with_progress("normalize", lambda state: {"status": "normalized"}))
-    workflow.add_node("privacy_transform", with_progress("privacy_transform", lambda state: {"status": "privacy_applied"}))
-
     from app.services.resume_ai_service import ResumeAiService
     from app.services.resume_generator_service import ResumeGeneratorService
+    from app.agent.nodes.triage_node import create_triage_node
     ai_service = ResumeAiService(llm_runtime, doc_parser)
     generator_service = ResumeGeneratorService()
+
+    workflow.add_node("ingest", with_progress("ingest", lambda state: {"status": "ingested"}))
+    workflow.add_node("parse", with_progress("parse", create_parse_node(doc_parser, storage)))
+    workflow.add_node("triage", with_progress("triage", create_triage_node(ai_service)))
+    workflow.add_node("normalize", with_progress("normalize", lambda state: {"status": "normalized"}))
+    workflow.add_node("privacy_transform", with_progress("privacy_transform", lambda state: {"status": "privacy_applied"}))
 
     # Agentic reasoning nodes
     from app.agent.nodes.template_resolution_node import create_template_resolve_node
@@ -134,7 +148,21 @@ def build_workflow_graph(llm_runtime: LlmRuntimeAdapter, doc_parser: DocumentExt
     # Define edges based on bounded workflow logic
     workflow.set_entry_point("ingest")
     workflow.add_edge("ingest", "parse")
-    workflow.add_edge("parse", "normalize")
+    workflow.add_edge("parse", "triage")
+
+    def triage_router(state: AgentState):
+        status = state.get("status")
+        if status == "REJECTED_INVALID_DOCUMENT":
+            return END
+        if status == "WAITING_FOR_CONFIRMATION":
+            return END
+        return "normalize"
+
+    workflow.add_conditional_edges("triage", triage_router, {
+        "normalize": "normalize",
+        END: END,
+    })
+
     workflow.add_edge("normalize", "privacy_transform")
     workflow.add_edge("privacy_transform", "template_resolution")
     workflow.add_edge("template_resolution", "transform")

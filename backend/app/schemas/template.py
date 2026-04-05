@@ -33,6 +33,8 @@ class FieldExtractionManifestItem(BaseModel):
     field_type: FieldType
     field_intent: str
     source_hints: str
+    tag: Optional[str] = None # The literal visual marker: << Fill this section >>
+    type: str = "field" # 'field' or 'section'  
     content_expectation: str
     structure_expectation: str
     constraints: str

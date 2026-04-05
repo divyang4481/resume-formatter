@@ -18,6 +18,50 @@ class ResumeAiService:
         self.llm = llm
         self.extraction_service = extraction_service
 
+    async def classify_document(
+        self,
+        extracted_text: str,
+        raw_parsed_data: Dict[str, Any],
+        filename: str,
+        content_type: str,
+        extraction_confidence: Optional[float] = None,
+    ) -> Dict[str, Any]:
+        structured_context = ""
+        sections = (raw_parsed_data or {}).get("sections", []) if raw_parsed_data else []
+        tables = (raw_parsed_data or {}).get("tables", []) if raw_parsed_data else []
+
+        if sections:
+            structured_context += "\nDETECTED SECTIONS:\n" + "\n".join(
+                [f"- {s.get('title')}" for s in sections if s.get("title")]
+            )
+        if tables:
+            structured_context += f"\nDETECTED TABLES: {len(tables)}"
+
+        prompt = prompt_manager.get_prompt(
+            "document_classification.jinja2",
+            filename=filename,
+            content_type=content_type,
+            extraction_confidence=extraction_confidence if extraction_confidence is not None else "",
+            structured_context=structured_context,
+            extracted_text=(extracted_text or "")[:12000],
+        )
+
+        response = self.llm.generate(prompt)
+        try:
+            cleaned = LlmSanitizer.clean_json(response)
+            result = json.loads(cleaned)
+        except Exception as e:
+            logger.warning(
+                f"AI classification produced invalid JSON. Defaulting to safe fallback. Error: {e}. Raw Response Excerpt: {response[:200]}"
+            )
+            result = {}
+
+        return {
+            "document_kind": result.get("document_kind", "candidate_resume"),
+            "confidence": float(result.get("confidence", 0.8)),
+            "reason": result.get("reason", "Fallback: AI classification failed or was malformed."),
+        }
+
     async def generate_summary(
         self,
         extracted_text: str,
@@ -50,39 +94,34 @@ class ResumeAiService:
         
         return summary.strip()
 
-    class TemplateAnalysisError(Exception):
-        """Domain-specific error for template analysis failures."""
-        pass
-
-    async def analyze_template_metadata(self, content: bytes, filename: str) -> 'TemplateAnalysisResult':
+    async def analyze_template(self, content: bytes, filename: str) -> Dict[str, Any]:
         """
-        Analyzes a .docx template to generate field semantics metadata.
-        Uses structured generation if the runtime supports it, and falls back to strict JSON parsing.
+        Analyzes a CV template to understand its structure, tone, and formatting requirements.
+        Generates suggestions for 'expected_fields' and metadata extraction.
         """
-        if not self.extraction_service:
-            logger.error("Extraction service unavailable for template analysis.")
-            raise self.TemplateAnalysisError("Extraction service unavailable.")
-        
+        from app.services.audit_service import AuditService
         from app.domain.interfaces import ExtractionContext
+        if not self.extraction_service: return {}
         
-        try:
-            extracted_doc = await self.extraction_service.extract(
-                content, filename, "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-            )
-        except Exception as e:
-            logger.error(f"Document extraction failed for {filename}: {e}")
-            raise self.TemplateAnalysisError(f"Failed to extract document text: {e}")
-
-        # Retrieve placeholders and preserve order
-        from docxtpl import DocxTemplate
-        import io
-        try:
-            doc = DocxTemplate(io.BytesIO(content))
-            raw_placeholders = [str(p).strip() for p in doc.get_undeclared_template_variables()]
-            detected_placeholders = list(dict.fromkeys(raw_placeholders))
-        except Exception as e:
-            logger.error(f"DOCX placeholder extraction failed for {filename}: {e}")
-            raise self.TemplateAnalysisError(f"Failed to extract DOCX placeholders: {e}")
+        context = ExtractionContext(intent="template_analysis", actor_role="system")
+        extracted_doc = await self.extraction_service.extract(
+            content, filename, "application/vnd.openxmlformats-officedocument.wordprocessingml.document", context
+        )
+        
+        # Retrieve placeholders in EXACT visual order using regex across the whole document text
+        import io, re
+        
+        # Pattern covers << section >>, {{ field }}, and [[:B:]] markup placeholders
+        pattern = r"<<\s*(.*?)\s*>>|\{\{\s*(.*?)\s*\}\}|\[\[\s*(.*?)\s*\]\]"
+        matches = re.finditer(pattern, extracted_doc.extracted_text)
+        
+        detected_placeholders = []
+        for match in matches:
+            # Get the first non-None group (the inner text)
+            inner_text = next(group for group in match.groups() if group is not None)
+            detected_placeholders.append(inner_text.strip())
+        
+        logger.info(f"AI Template Analysis: Found {len(detected_placeholders)} placeholders in visual order: {detected_placeholders}")
         
         if not detected_placeholders:
             logger.warning(f"No placeholders detected in {filename}.")
@@ -92,6 +131,16 @@ class ResumeAiService:
             "template_analysis.jinja2",
             template_text=extracted_doc.extracted_text[:8000],
             detected_placeholders=detected_placeholders,
+            sections=extracted_doc.parsed_document.sections if extracted_doc.parsed_document else [],
+            tables=extracted_doc.parsed_document.tables if extracted_doc.parsed_document else []
+        )
+
+        # Audit Prompt
+        AuditService.log_event(
+            job_id=filename,
+            event_type="TEMPLATE_ANALYSIS_PROMPT",
+            payload={"prompt": prompt},
+            entity_type="TemplateAsset"
         )
 
         from app.schemas.template import TemplateAnalysisResult
@@ -106,6 +155,14 @@ class ResumeAiService:
                 response_format=schema,
                 temperature=0.1
             )
+            
+            AuditService.log_event(
+            job_id=filename,
+            event_type="TEMPLATE_ANALYSIS_RESPONSE",
+            payload={"response": response},
+            entity_type="TemplateAsset"
+            )
+            
         except Exception as e:
             logger.error(f"LLM generation failed during template analysis: {e}")
             raise self.TemplateAnalysisError(f"LLM generation failed: {e}")

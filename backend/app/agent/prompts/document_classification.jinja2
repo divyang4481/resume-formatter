@@ -1,0 +1,31 @@
+TASK: Classify whether this uploaded file is suitable for resume/CV formatting.
+
+FILE NAME: {{ filename }}
+CONTENT TYPE: {{ content_type }}
+
+PARSE CONFIDENCE:
+{{ extraction_confidence }}
+
+STRUCTURED PARSE SIGNALS:
+{{ structured_context }}
+
+EXTRACTED TEXT:
+{{ extracted_text }}
+
+INSTRUCTIONS:
+1. Decide whether this is:
+   - candidate_document
+   - ambiguous_candidate_document
+   - non_candidate_document
+2. A candidate document may be a classic CV/resume, a fresher profile, a consultant profile, or a candidate profile deck.
+3. Do NOT reject only because the format is unusual.
+4. Return a confidence score from 0 to 1.
+5. Return a short reason.
+
+OUTPUT FORMAT:
+Return ONLY valid JSON in this exact shape:
+{
+  "document_kind": "candidate_document",
+  "confidence": 0.91,
+  "reason": "Contains candidate profile, skills, education, and employment history."
+}

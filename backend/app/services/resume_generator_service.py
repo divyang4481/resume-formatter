@@ -19,6 +19,7 @@ class ResumeGeneratorService:
         template_bytes: bytes,
         resume_data: Dict[str, Any],
         expected_fields: Optional[str] = "",
+        field_extraction_manifest: Optional[List[Dict[str, str]]] = None,
     ) -> bytes:
         """
         Takes raw template bytes and AI-harmonized data, prepares the document markers,
@@ -33,8 +34,19 @@ class ResumeGeneratorService:
                 f.strip() for f in expected_fields.split(",") if f.strip()
             ]
 
+            # Provide the manifest list directly to the marker preparer
+            manifest_list = []
+            if field_extraction_manifest:
+                if isinstance(field_extraction_manifest, str):
+                    try:
+                        manifest_list = json.loads(field_extraction_manifest)
+                    except:
+                        manifest_list = []
+                elif isinstance(field_extraction_manifest, list):
+                    manifest_list = field_extraction_manifest
+
             processed_template_stream = self.prepare_document_markers(
-                template_stream, expected_fields_list
+                template_stream, expected_fields_list, manifest_list
             )
 
             # 2. Apply "Rendering Actions" to transform structured data into professional document prose
@@ -43,20 +55,14 @@ class ResumeGeneratorService:
             # 3. Render final content using docxtpl
             doc = DocxTemplate(processed_template_stream)
 
-            # Prepare render context (merge nested personal_info for easier access)
+            # Universal Scoped Context mapping: Create a flat, semantic lookup for markers.
+            # The manifest ensures that document tags resolve to these keys.
             render_context = {**processed_resume_data}
-            if "personal_info" in processed_resume_data and isinstance(
-                processed_resume_data["personal_info"], dict
-            ):
-                render_context.update(processed_resume_data["personal_info"])
+            render_context_with_scope = {
+                **render_context, 
+                "_": self._flatten_dict(render_context)
+            }
 
-            # Universal Scoped Context mapping logic:
-            render_context_with_scope = {**render_context, "_": {**render_context}}
-
-            logger.info(
-                f"RENDERING DOCUMENT: {len(render_context_with_scope['_'])} labels available in context."
-            )
-            
             doc.render(render_context_with_scope)
 
             # 4. Save to bytes (preserving original formatting)
@@ -65,13 +71,11 @@ class ResumeGeneratorService:
             return out_stream.getvalue()
 
         except Exception as e:
-            logger.error(
-                f"Document rendering failed: {e}. Available keys in data: {list(render_context.keys()) if 'render_context' in locals() else 'Unknown'}"
-            )
+            logger.error(f"Document rendering failed: {e}")
             raise RuntimeError(f"Failed to render document: {str(e)}")
 
     def prepare_document_markers(
-        self, template_stream: io.BytesIO, field_list: List[str]
+        self, template_stream: io.BytesIO, field_list: List[str], manifest_list: Optional[List[Dict[str, Any]]] = None
     ) -> io.BytesIO:
         """
         Scans the document for various marker patterns (<< >>, {{ }}, [[ ]]) and 
@@ -79,55 +83,70 @@ class ResumeGeneratorService:
         """
         doc = Document(template_stream)
         counter = 0
+        manifest_list = manifest_list or []
+        # Use simple list for pass-by-reference counter
+        manifest_ptr = [0] 
 
-        # Regex for common placeholder patterns: << >>, {{ }}, [[ ]]
-        MARKER_PATTERN = r"(?:<<|\{\{|\[\[)\s*(.*?)\s*(?:>>|\}\}|\]\])"
+        # SMART REGEX: Captures most common marker types including << >>, {{ }}, [[ ]], [ ], and < >.
+        # It also handles standard Jinja2/docxtpl variables.
+        MARKER_PATTERN = r"<<\s*(.*?)\s*>>|\{\{\s*(.*?)\s*\}\}|\[\[\s*(.*?)\s*\]\]|\[\s*(.*?)\s*\]|<\s*(.*?)\s*>"
 
-        def transform_paragraph_markers(text, fields, current_counter):
-            matches = re.finditer(MARKER_PATTERN, text)
+        def transform_paragraph_markers(text, fields, current_counter, manifest, ptr):
             new_text = text
             offset = 0
-            for match in matches:
+            
+            # We want to iterate matches but avoid double-matching the replacements
+            for match in list(re.finditer(MARKER_PATTERN, text)):
+                start, end = match.span()
                 original = match.group(0)
-                raw_marker_text = match.group(1).strip()
+                
+                # Extract inner content
+                raw_marker_text = next((g for g in match.groups() if g is not None), "").strip()
+                
+                target_key = None
+                
+                # 1. SMART MANIFEST SEQUENTIAL MATCH
+                if manifest and ptr[0] < len(manifest):
+                    item_raw = manifest[ptr[0]]
+                    item = item_raw.model_dump() if hasattr(item_raw, "model_dump") else (item_raw.dict() if hasattr(item_raw, "dict") else item_raw)
+                    
+                    is_generic = "fill" in raw_marker_text.lower() and "section" in raw_marker_text.lower()
+                    if is_generic or original == item.get("tag") or raw_marker_text == item.get("tag"):
+                        target_key = item.get("fieldname") or item.get("meaning")
+                        if target_key:
+                            ptr[0] += 1
+                            replacement = f"{{{{ _['{target_key}'] }}}}"
+                            new_text = new_text[:start + offset] + replacement + new_text[end + offset:]
+                            offset += len(replacement) - (end - start)
+                            continue
 
-                # 1. Identify 'fill' placeholders (sequential mapping)
-                is_fill_section = (
+                # 2. LEGACY LOGIC FALLBACK
+                if (
                     "fill" in raw_marker_text.lower()
                     and "section" in raw_marker_text.lower()
-                )
-
-                if is_fill_section and current_counter < len(fields):
-                    # Map generic marker to specific AI field
-                    target_key = fields[current_counter]
-                    replacement = f"{{{{ _['{target_key}'] }}}}"
+                ):
+                    replacement = f"{{{{ _['section_{current_counter}'] }}}}"
+                    new_text = new_text[: start + offset] + replacement + new_text[end + offset :]
+                    offset += len(replacement) - len(original)
                     current_counter += 1
-                elif is_fill_section:
-                    replacement = f"{{{{ _['missing_field_{current_counter}'] }}}}"
-                    current_counter += 1
-                else:
-                    # 2. Map visual marker to its logical value in context
-                    # Any marker text now becomes a valid dictionary key.
+                elif raw_marker_text in fields:
                     replacement = f"{{{{ _['{raw_marker_text}'] }}}}"
+                    new_text = new_text[: start + offset] + replacement + new_text[end + offset :]
+                    offset += len(replacement) - len(original)
 
-                start, end = match.span()
-                new_text = (
-                    new_text[: start + offset] + replacement + new_text[end + offset :]
-                )
-                offset += len(replacement) - len(original)
             return new_text, current_counter
 
         # Process all structural elements in the document
         for p in doc.paragraphs:
             if "<<" in p.text or "{{" in p.text or "[[" in p.text:
-                p.text, counter = transform_paragraph_markers(p.text, field_list, counter)
+                p.text, counter = transform_paragraph_markers(p.text, field_list, counter, manifest_list, manifest_ptr)
 
         for table in doc.tables:
             for row in table.rows:
                 for cell in row.cells:
                     for p in cell.paragraphs:
                         if "<<" in p.text or "{{" in p.text or "[[" in p.text:
-                            p.text, counter = transform_paragraph_markers(p.text, field_list, counter)
+                            p.text, counter = transform_paragraph_markers(p.text, field_list, counter, manifest_list, manifest_ptr)
 
         processed_stream = io.BytesIO()
         doc.save(processed_stream)
@@ -150,6 +169,20 @@ class ResumeGeneratorService:
         error_stream = io.BytesIO()
         error_doc.save(error_stream)
         return error_stream.getvalue()
+
+    def _flatten_dict(self, d: Dict[str, Any], parent_key: str = "", sep: str = ".") -> Dict[str, Any]:
+        """
+        Recursively flattens a nested dictionary into dot-notation keys.
+        Example: {'a': {'b': 1}} -> {'a.b': 1}
+        """
+        items = []
+        for k, v in d.items():
+            new_key = f"{parent_key}{sep}{k}" if parent_key else k
+            if isinstance(v, dict):
+                items.extend(self._flatten_dict(v, new_key, sep=sep).items())
+            else:
+                items.append((new_key, v))
+        return dict(items)
 
     def _apply_rendering_actions(self, content: Any) -> Any:
         """

@@ -342,6 +342,10 @@
                         <span *ngIf="element.decision" class="p-2 border rounded">
                             Decision Recorded: <strong>{{ element.decision }}</strong>
                         </span>
+
+                        <button mat-flat-button color="accent" (click)="viewAuditLogs(element.job_id)">
+                          <mat-icon>history</mat-icon> Show Audit Logs
+                        </button>
                     </div>
                  </div>
               </div>
@@ -468,3 +472,23 @@
   </mat-dialog-actions>
 </ng-template>
 
+<!-- Audit Logs Dialog Template -->
+<ng-template #auditLogsDialog let-data>
+  <h2 mat-dialog-title class="flex-align-center flex-gap-8">
+    <mat-icon color="primary">history</mat-icon>
+    Audit Logs
+  </h2>
+
+  <mat-dialog-content class="mat-typography" style="min-width: 600px; max-width: 800px;">
+    <div class="mb-4" *ngFor="let log of data.logs">
+      <h3 class="mb-2"><strong>{{ log.action }}</strong> <span class="text-muted" style="font-size: 0.8em; margin-left: 8px;">{{ log.created_at | date:'medium' }}</span></h3>
+      <div class="p-3 bg-light border rounded" style="max-height: 200px; overflow-y: auto;">
+        <pre style="margin: 0; font-size: 0.9em;">{{ log.payload | json }}</pre>
+      </div>
+    </div>
+  </mat-dialog-content>
+
+  <mat-dialog-actions align="end">
+    <button mat-button mat-dialog-close>Close</button>
+  </mat-dialog-actions>
+</ng-template>

@@ -43,7 +43,8 @@ class ResumeWorkflowService:
 
         job.status = JobStatus.PROCESSING
         self.job_repo.save_job(job)
-
+        
+        template = None
         # Reconstruct context from job metadata
         ext_meta = getattr(job, 'extension_metadata', {})
         if not isinstance(ext_meta, dict):
@@ -104,15 +105,37 @@ class ResumeWorkflowService:
             "actor_role": actor_role,
             "filename": filename,
             "content_type": content_type,
-            "runtime_metadata": ext_meta
+            "runtime_metadata": ext_meta,
+            "expected_sections": getattr(template, 'expected_sections', "") if template else "",
+            "expected_fields": getattr(template, 'expected_fields', "") if template else "",
+            "field_extraction_manifest": getattr(template, 'field_extraction_manifest', []) if template else []
         }
 
         try:
             # Execute the workflow
             final_state = await self.graph.ainvoke(initial_state)
 
-            # Persist final state back to job
-            job.status = JobStatus.COMPLETED
+            final_status = final_state.get("status")
+
+            if final_status == "WAITING_FOR_CONFIRMATION":
+                job.status = JobStatus.WAITING_FOR_CONFIRMATION
+            elif final_status == "REJECTED_INVALID_DOCUMENT":
+                job.status = JobStatus.FAILED
+                job.error_message = final_state.get("document_reason") or "Invalid document"
+            else:
+                job.status = JobStatus.COMPLETED
+
+            # Persist triage outcomes to job extension metadata
+            ext_meta["document_kind"] = final_state.get("document_kind")
+            ext_meta["document_confidence"] = final_state.get("document_confidence")
+            ext_meta["document_reason"] = final_state.get("document_reason")
+            ext_meta["suggested_template_ids"] = final_state.get("suggested_template_ids")
+            ext_meta["suggested_template_scores"] = final_state.get("suggested_template_scores")
+            job.extension_metadata = ext_meta
+
+            if final_state.get("selected_template_id"):
+                job.selected_template_id = final_state["selected_template_id"]
+
             if final_state.get("summary_uri"):
                 job.summary_uri = final_state["summary_uri"]
             if final_state.get("summary_text"):
@@ -120,7 +143,6 @@ class ResumeWorkflowService:
             if final_state.get("render_docx_uri"):
                 job.render_docx_uri = final_state["render_docx_uri"]
 
-            
             # If it's a governance audit run, update the audit record
             test_run_id = ext_meta.get("test_run_id")
             if test_run_id:
