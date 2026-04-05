@@ -71,7 +71,12 @@ def get_llm_runtime() -> LlmRuntimeAdapter:
         from app.adapters.llm.ollama_runtime import LocalOllamaLlmRuntime
         return LocalOllamaLlmRuntime(
             model_name=settings.llm_model_name,
-            endpoint=settings.ollama_endpoint
+            endpoint=settings.ollama_endpoint,
+            timeout=settings.ollama_timeout_seconds,
+            num_predict=settings.ollama_num_predict,
+            context_window=settings.ollama_context_window,
+            keep_alive=settings.ollama_keep_alive,
+            retry_count=settings.ollama_retry_count
         )
     elif backend == "gemini":
         from app.adapters.llm.gemini_runtime import GeminiLlmRuntime
@@ -105,7 +110,12 @@ def get_llm_runtime() -> LlmRuntimeAdapter:
         from app.adapters.llm.ollama_runtime import LocalOllamaLlmRuntime
         return LocalOllamaLlmRuntime(
             model_name=settings.llm_model_name,
-            endpoint=settings.ollama_endpoint
+            endpoint=settings.ollama_endpoint,
+            timeout=settings.ollama_timeout_seconds,
+            num_predict=settings.ollama_num_predict,
+            context_window=settings.ollama_context_window,
+            keep_alive=settings.ollama_keep_alive,
+            retry_count=settings.ollama_retry_count
         )
 
 

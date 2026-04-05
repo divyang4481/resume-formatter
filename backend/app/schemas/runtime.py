@@ -41,4 +41,7 @@ class RuntimeJobStatusResponse(BaseModel):
     # Audit & Validation Fields
     validation_passed: Optional[bool] = None
     validation_report: Optional[str] = None
+    
+    # Generated Outputs
+    summary: Optional[str] = None
 

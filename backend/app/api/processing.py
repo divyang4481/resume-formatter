@@ -238,6 +238,7 @@ async def get_job_status(
         document_reason=extension_metadata.get("document_reason"),
         validation_passed=getattr(job, "validation_passed", None),
         validation_report=getattr(job, "validation_report", None),
+        summary=getattr(job, "generated_summary", None)
     )
 
 
@@ -342,24 +343,20 @@ async def get_job_summary(
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
 
-    status_val = job.status.value if hasattr(job.status, 'value') else job.status
-    if status_val == JobStatus.COMPLETED.value or status_val == JobStatus.COMPLETED:
-        # 1. Try to get summary text directly from DB
-        generated_summary = getattr(job, "generated_summary", None)
-        if generated_summary:
-            return {"summary": generated_summary}
+    # 1. Try to get summary text directly from DB (if available yet)
+    generated_summary = getattr(job, "generated_summary", None)
+    if generated_summary:
+        return {"summary": generated_summary}
 
-        # 2. Fallback to reading from summary_uri in storage
-        summary_uri = getattr(job, "summary_uri", None)
-        if summary_uri:
-            try:
-                data = storage_provider.get_bytes(summary_uri)
-                return {"summary": data.decode("utf-8")}
-            except Exception as e:
-                print(f"Failed to read summary from storage: {e}")
-                return {"summary": "Summary file exists but could not be read."}
-
-        return {"summary": "Summary missing from completed job."}
+    # 2. Fallback to reading from summary_uri in storage
+    summary_uri = getattr(job, "summary_uri", None)
+    if summary_uri:
+        try:
+            data = storage_provider.get_bytes(summary_uri)
+            return {"summary": data.decode("utf-8")}
+        except Exception as e:
+            print(f"Failed to read summary from storage: {e}")
+            return {"summary": "Summary file exists but could not be read."}
 
     return {"summary": "Summary not available yet."}
 

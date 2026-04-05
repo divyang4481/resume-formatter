@@ -64,6 +64,7 @@ class AgentState(TypedDict, total=False):
 
 
     # Output Artifacts
+    overall_resume_summary: Optional[str]
     summary_text: Optional[str]
     summary_uri: Optional[str]
     render_uri: Optional[str]

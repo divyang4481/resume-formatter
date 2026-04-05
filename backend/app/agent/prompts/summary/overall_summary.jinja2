@@ -1,0 +1,21 @@
+TASK: Compose a PURE TEXT Professional Summary.
+
+CANDIDATE NARRATIVE CONTEXT:
+{{ extracted_text }}
+
+INDUSTRY: {{ industry or "General Professional" }}
+SELECTED TEMPLATE: {{ template_id or "General CV" }}
+TEMPLATE CONTEXT: {{ template_text or "No template context provided" }}
+STYLE GUIDANCE: {{ guidance }}
+
+---
+WRITER INSTRUCTIONS:
+1. ROLE: You are an expert Resume Writer. Compose a premium, recruiter-grade executive introduction.
+2. FORMAT: This MUST be PURE TEXT. No bolding, no bullets, no special CVML tags like [:B:], [:L1:], etc.
+3. DISCIPLINE: Do NOT parrot database keys. SYNTHESIZE a story from the candidate's achievements into 1-2 powerful paragraphs.
+4. PROTOCOL: Wrap your final summary in this exact marker block:
+   [MARKER :: Summary]
+   ...your elite professional summary here...
+   [/MARKER]
+
+GOAL: True AI Narrative. Create a masterpiece summary that captures immediate attention without any technical residue or rich text formatting.

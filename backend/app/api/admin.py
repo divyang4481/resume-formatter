@@ -123,8 +123,10 @@ class TemplateUpdateRequest(BaseModel):
 async def update_template(
     id: str,
     payload: TemplateUpdateRequest,
-    is_admin: bool = Depends(mock_is_admin)
+    is_admin: bool = Depends(mock_is_admin),
+    knowledge_index: KnowledgeIndex = Depends(get_knowledge_index)
 ):
+    print(f"--- [ADMIN API] Updating template: {id} ---")
     db = SessionLocal()
     try:
         template = db.query(TemplateAsset).filter(TemplateAsset.id == id).first()
@@ -140,6 +142,27 @@ async def update_template(
             setattr(template, key, value)
 
         db.commit()
+
+        # Update Vector DB for template suggestion/ranking
+        # Index the 'purpose' and 'industry' as knowledge to make it rankable
+        if payload.purpose or payload.industry:
+            knowledge_text = f"Industry: {template.industry or ''}. Purpose: {template.purpose or ''}. Description: {template.notes or ''}"
+            
+            chunk_metadata = {
+                "template_id": id,
+                "asset_id": f"metadata-{id}",
+                "asset_type": "template_metadata",
+                "status": template.status.lower(),
+                "industry": template.industry,
+                "role_family": template.role_family,
+                "language": template.language
+            }
+            
+            knowledge_index.index_chunks(
+                chunks=[{"text": knowledge_text, **chunk_metadata}],
+                asset_id=f"metadata-{id}"
+            )
+
         return {"message": "Template updated successfully"}
     finally:
         db.close()
@@ -184,6 +207,7 @@ async def get_template_detail(
     id: str,
     is_admin: bool = Depends(mock_is_admin)
 ):
+    print(f"--- [ADMIN API] Fetching template details: {id} ---")
     db = SessionLocal()
     try:
         template = db.query(TemplateAsset).filter(TemplateAsset.id == id).first()
@@ -218,6 +242,7 @@ async def get_template_detail(
                 "industry": template.industry,
                 "language": template.language,
                 "role_family": template.role_family,
+                "field_extraction_manifest": json.loads(template.field_extraction_manifest) if template.field_extraction_manifest else [],
                 "updated_at": template.updated_at
             },
             "latest_test_run": {
@@ -408,6 +433,7 @@ async def get_audit_logs(
     job_id: str,
     is_admin: bool = Depends(mock_is_admin)
 ):
+    print(f"--- [ADMIN API] Fetching audit logs for job: {job_id} ---")
     from app.db.models import AuditEvent
     db = SessionLocal()
     try:

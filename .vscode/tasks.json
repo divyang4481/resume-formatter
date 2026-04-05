@@ -54,7 +54,7 @@
     {
       "label": "Start Full Stack",
       "dependsOn": ["Start Backend (FastAPI)", "Start Frontend (Angular)"],
-      "dependsOrder": "parallel"
+      "dependsOrder": "sequence"
     }
   ]
 }

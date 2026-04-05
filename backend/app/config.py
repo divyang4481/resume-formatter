@@ -38,6 +38,13 @@ class Settings(BaseSettings):
     ollama_endpoint: str = (
         "http://localhost:11434/api/generate"  # Default for local Ollama
     )
+    ollama_timeout_seconds: int = 120
+    ollama_temperature: float = 0.1
+    ollama_num_predict: int = 2048
+    ollama_context_window: int = 8192
+    ollama_json_mode: bool = True
+    ollama_retry_count: int = 2
+    ollama_keep_alive: str = "10m"
     gemini_api_key: str = ""  # Key for Google Gemini API
 
     # AWS Settings
@@ -55,9 +62,9 @@ class Settings(BaseSettings):
 
     # Storage Settings
     storage_backend: str = "local"  # "local", "s3"
-    local_storage_path: str = str(PROJECT_ROOT / ".data")
-    sqlite_db_path: str = str(PROJECT_ROOT / ".data" / "sqlite" / "app.db")
-    vector_db_path: str = str(PROJECT_ROOT / ".data" / "vector_storage.vdb")
+    local_storage_path: str = str(PROJECT_ROOT / "backend" / ".data")
+    sqlite_db_path: str = str(PROJECT_ROOT / "backend" / ".data" / "sqlite" / "app.db")
+    vector_db_path: str = str(PROJECT_ROOT / "backend" / ".data" / "vector_storage.vdb")
 
     s3_bucket: str = "agentic-document-platform-bucket"
 

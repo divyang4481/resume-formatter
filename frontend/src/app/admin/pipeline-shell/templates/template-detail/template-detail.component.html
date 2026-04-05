@@ -124,37 +124,101 @@
     </mat-tab>
 
     <!-- Required Data field Tab -->
-    <mat-tab label="Required Data field">
+    <mat-tab label="Extraction Manifest">
       <div class="governance-container p-3">
         <mat-card appearance="outlined">
           <mat-card-header class="mb-3">
-            <mat-card-title>Data Extraction Requirements</mat-card-title>
-
+            <div class="d-flex justify-content-between align-items-center w-100">
+               <mat-card-title>Field Extraction Manifest</mat-card-title>
+               <div class="actions">
+                 <button mat-button color="primary" *ngIf="!isManifestEditing" (click)="toggleManifestEdit()">
+                   <mat-icon>edit</mat-icon> Edit Manifest
+                 </button>
+                 <button mat-button color="warn" *ngIf="isManifestEditing" (click)="toggleManifestEdit()">
+                   Cancel
+                 </button>
+               </div>
+            </div>
           </mat-card-header>
           <mat-card-content>
-            <p class="text-muted mb-4">
-              Specify the sections and fields that must be successfully extracted and identified on a candidate's resume to correctly populate this template's placeholders.
+            <p class="text-muted mb-4 small">
+              This manifest defines exactly how to map resume data into the template placeholders. 
+              The system uses descriptions and source hints to find relevant information during AI extraction.
             </p>
 
+            <div class="manifest-table-wrapper border rounded">
+              <table class="w-100 table-sm">
+                <thead class="bg-light">
+                  <tr>
+                    <th class="p-2 border-bottom field-name-header">Field Name</th>
+                    <th class="p-2 border-bottom field-desc-header">Description / Purpose</th>
+                    <th class="p-2 border-bottom field-hint-header">Source Hint / Keywords</th>
+                    <th class="p-2 border-bottom field-action-header" *ngIf="isManifestEditing"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr *ngFor="let field of manifestFields; let i = index">
+                    <td class="p-2 border-bottom">
+                      <input [disabled]="!isManifestEditing" class="form-control form-control-sm" [(ngModel)]="field.fieldname" [ngModelOptions]="{standalone: true}" title="Field Name">
+                    </td>
+                    <td class="p-2 border-bottom">
+                      <input [disabled]="!isManifestEditing" class="form-control form-control-sm" [(ngModel)]="field.description" [ngModelOptions]="{standalone: true}" title="Field Description">
+                    </td>
+                    <td class="p-2 border-bottom">
+                      <input [disabled]="!isManifestEditing" class="form-control form-control-sm" [(ngModel)]="field.source_hint" [ngModelOptions]="{standalone: true}" title="Source Hint">
+                    </td>
+                    <td class="p-2 border-bottom text-center" *ngIf="isManifestEditing">
+                       <button mat-icon-button color="warn" (click)="removeManifestField(i)" size="small">
+                         <mat-icon>delete</mat-icon>
+                       </button>
+                    </td>
+                  </tr>
+                  <tr *ngIf="manifestFields.length === 0">
+                    <td colspan="4" class="p-4 text-center text-muted italic">No manifest fields identified. Use AI Analysis to suggest them.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="actions mt-3 d-flex justify-content-between">
+              <button mat-stroked-button color="primary" *ngIf="isManifestEditing" (click)="addManifestField()">
+                <mat-icon>add</mat-icon> Add Missing Field
+              </button>
+              <div class="spacer"></div>
+              <button mat-raised-button color="primary" *ngIf="isManifestEditing" (click)="saveManifest()">
+                <mat-icon>save</mat-icon> Save Manifest metadata
+              </button>
+            </div>
+          </mat-card-content>
+        </mat-card>
+      </div>
+
+      <div class="governance-container p-3 pt-0">
+        <mat-expansion-panel class="mat-elevation-z0 border">
+          <mat-expansion-panel-header>
+            <mat-panel-title>Legacy Data Constraints (Advanced)</mat-panel-title>
+          </mat-expansion-panel-header>
+          <div class="p-3">
+            <p class="text-muted mb-4 small">
+              These fields provide supplemental hints for legacy parsing nodes. Use the Manifest above for primary mapping logic.
+            </p>
             <form [formGroup]="requirementsForm" class="flex-column gap-16">
               <mat-form-field appearance="outline" class="w-100 mb-3">
                 <mat-label>Logical Sections Expected</mat-label>
-                <textarea matInput formControlName="expected_sections" placeholder="Summary, Experience, Skills, Education..." rows="3"></textarea>
-                <mat-hint>Key sections the system will prioritize during its parsing and classifying stages.</mat-hint>
+                <textarea matInput formControlName="expected_sections" placeholder="Summary, Experience, Skills, Education..." rows="2"></textarea>
+                <mat-hint>Key sections the system will prioritize during parsing.</mat-hint>
               </mat-form-field>
-
               <mat-form-field appearance="outline" class="w-100 mb-n1">
                 <mat-label>Mandatory Data Fields (Placeholders)</mat-label>
-                <textarea matInput formControlName="expected_fields" placeholder="summary, skills, technical_experience, education..." rows="3"></textarea>
-                <mat-hint>Field identifiers that must be present in the AI extraction manifest for successful document mapping.</mat-hint>
+                <textarea matInput formControlName="expected_fields" placeholder="summary, skills, technical_experience, education..." rows="2"></textarea>
+                <mat-hint>Field identifiers that must be present in the extraction manifest.</mat-hint>
               </mat-form-field>
-
               <div class="actions mt-3">
-                <button mat-raised-button color="primary" type="button" (click)="saveRequirements()">Save Extraction Logic</button>
+                <button mat-raised-button color="secondary" type="button" (click)="saveRequirements()">Save Legacy Hints</button>
               </div>
             </form>
-          </mat-card-content>
-        </mat-card>
+          </div>
+        </mat-expansion-panel>
       </div>
     </mat-tab>
 
@@ -164,29 +228,49 @@
 
         <!-- Action Form -->
         <mat-card class="test-form-card">
+          <mat-card-header>
+            <mat-card-title>Test Execution</mat-card-title>
+            <mat-card-subtitle>Run an end-to-end processing test using this template configuration.</mat-card-subtitle>
+          </mat-card-header>
           <mat-card-content>
-            <form [formGroup]="testForm" (ngSubmit)="runTest()">
-              <div>
-                <input type="file" id="fileUpload" title="Upload Resume for Testing" (change)="onFileSelected($event)">
+            <form [formGroup]="testForm" (ngSubmit)="runTest()" class="mt-3">
+              <div class="test-controls-row">
+                <div class="upload-trigger-container">
+                  <input type="file" #testFileInput hidden (change)="onFileSelected($event)" accept=".pdf,.doc,.docx">
+                  <button mat-stroked-button type="button" (click)="testFileInput.click()" [color]="selectedFile ? 'accent' : 'primary'">
+                    <mat-icon>{{ selectedFile ? 'file_present' : 'attach_file' }}</mat-icon>
+                    {{ selectedFile ? selectedFile.name : 'Select Sample Resume' }}
+                  </button>
+                </div>
+
+                <div class="toggles-group">
+                  <mat-slide-toggle formControlName="redact_pii">Redact PII</mat-slide-toggle>
+                  <mat-slide-toggle formControlName="generate_summary">Generate Summary</mat-slide-toggle>
+                </div>
+
+                <div class="test-action">
+                  <button mat-raised-button color="primary" type="submit" [disabled]="!selectedFile || isRunningTest">
+                    <span *ngIf="!isRunningTest">Run AI Pipeline Test</span>
+                    <span *ngIf="isRunningTest" class="flex-align-center flex-gap-8">
+                      <mat-spinner diameter="20"></mat-spinner>
+                      Processing...
+                    </span>
+                  </button>
+                </div>
               </div>
 
-              <mat-form-field appearance="outline" class="full-width mt-2">
-                <mat-label>Industry (Override)</mat-label>
-                <input matInput formControlName="industry_id" id="industryOverride" title="Industry Override" placeholder="Optional industry override">
-              </mat-form-field>
-
-              <mat-slide-toggle formControlName="redact_pii">Redact PII</mat-slide-toggle>
-              <mat-slide-toggle formControlName="generate_summary">Generate Summary</mat-slide-toggle>
-
-              <div class="actions mt-2 flex-align-center flex-gap-8">
-                <button mat-raised-button color="primary" type="submit" [disabled]="!selectedFile || isRunningTest">
-                  <span *ngIf="!isRunningTest">Run Test</span>
-                  <span *ngIf="isRunningTest" class="flex-align-center flex-gap-8">
-                    <mat-spinner diameter="20"></mat-spinner>
-                    Processing...
-                  </span>
-                </button>
-              </div>
+              <!-- Hidden/Advanced Overrides -->
+              <mat-expansion-panel class="mt-3 mat-elevation-z0 border">
+                <mat-expansion-panel-header>
+                  <mat-panel-title>Advanced Configuration</mat-panel-title>
+                </mat-expansion-panel-header>
+                <div class="advanced-test-content pt-2">
+                  <mat-form-field appearance="outline" class="full-width">
+                    <mat-label>Industry (Override)</mat-label>
+                    <input matInput formControlName="industry_id" placeholder="Falls back to template's industry if empty">
+                  </mat-form-field>
+                </div>
+              </mat-expansion-panel>
             </form>
           </mat-card-content>
         </mat-card>
@@ -508,11 +592,11 @@
     Audit Logs
   </h2>
 
-  <mat-dialog-content class="mat-typography" style="min-width: 600px; max-width: 800px;">
+  <mat-dialog-content class="mat-typography audit-logs-body">
     <div class="mb-4" *ngFor="let log of data.logs">
-      <h3 class="mb-2"><strong>{{ log.action }}</strong> <span class="text-muted" style="font-size: 0.8em; margin-left: 8px;">{{ log.created_at | date:'medium' }}</span></h3>
-      <div class="p-3 bg-light border rounded" style="max-height: 200px; overflow-y: auto;">
-        <pre style="margin: 0; font-size: 0.9em;">{{ log.payload | json }}</pre>
+      <h3 class="mb-2"><strong>{{ log.action }}</strong> <span class="text-muted audit-log-date">{{ log.created_at | date:'medium' }}</span></h3>
+      <div class="p-3 bg-light border rounded audit-log-payload">
+        <pre class="audit-log-pre">{{ log.payload | json }}</pre>
       </div>
     </div>
   </mat-dialog-content>

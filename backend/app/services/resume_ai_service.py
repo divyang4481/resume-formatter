@@ -131,6 +131,55 @@ class ResumeAiService:
         
         return summary.strip()
 
+    async def generate_overall_summary(
+        self,
+        extracted_text: str,
+        guidance: str,
+        industry: Optional[str] = None,
+        template_id: Optional[str] = None,
+        template_text: Optional[str] = None,
+        language: str = "en",
+        job_id: Optional[str] = None,
+    ) -> str:
+        """
+        Generates a pure-text professional summary for the overall resume overview.
+        No rich text, no CVML markers.
+        """
+        system_prompt, prompt = prompt_manager.get_chat_prompt(
+            "overall_summary",
+            extracted_text=extracted_text[:12000],
+            industry=industry,
+            template_id=template_id,
+            template_text=template_text[:4000] if template_text else None,
+            language=language,
+            guidance=guidance,
+        )
+
+        from app.services.audit_service import AuditService
+        AuditService.log_event(
+            job_id=job_id,
+            event_type="LLM_OVERALL_SUMMARY_PROMPT",
+            payload={"system_prompt": system_prompt, "user_prompt": prompt}
+        )
+
+        response = self.llm.generate(prompt, system_prompt=system_prompt)
+        
+        AuditService.log_event(
+            job_id=job_id,
+            event_type="LLM_OVERALL_SUMMARY_OUTPUT",
+            payload={"raw_output": response}
+        )
+
+        blocks = LlmSanitizer.extract_tagged_blocks(response)
+        summary = (
+            blocks.get("Summary") or blocks.get("summary") or 
+            blocks.get("SUMMARY") or blocks.get("__raw_content__") or 
+            LlmSanitizer.clean_text(response)
+        )
+        
+        # Strip any accidental CVML just in case
+        return LlmSanitizer.strip_cvml(summary.strip())
+
     async def analyze_template_metadata(self, content: bytes, filename: str) -> 'TemplateAnalysisResult':
         """
         Analyzes a CV template to understand its structure, tone, and formatting requirements.
@@ -211,6 +260,45 @@ class ResumeAiService:
         # Parse strict JSON
         try:
             result = LlmSanitizer.parse_json_object(response)
+            
+            # PROACTIVE SANITIZATION: Flatten any dicts into strings before Pydantic validation.
+            # The LLM sometimes returns nested objects for fields that must be plain strings.
+            import json
+
+            # 1. Top-level guidance fields
+            guidance_keys = ["global_guidance", "summary_guidance", "formatting_guidance"]
+            for gk in guidance_keys:
+                if gk in result and isinstance(result[gk], dict):
+                    result[gk] = json.dumps(result[gk], indent=2)
+                    logger.warning(f"Flattened dict guidance field '{gk}' in template analysis.")
+
+            # 2. Per-manifest-item string fields
+            # These must be plain strings per TemplateAnalysisResult schema
+            MANIFEST_STRING_FIELDS = [
+                "structure_expectation", "content_expectation", "constraints",
+                "ambiguity_note", "field_intent", "source_hints", "meaning",
+                "fieldname", "tag", "field_type",
+            ]
+            manifest_items = result.get("field_extraction_manifest", [])
+            if isinstance(manifest_items, list):
+                for idx, item in enumerate(manifest_items):
+                    if not isinstance(item, dict):
+                        continue
+                    for field_key in MANIFEST_STRING_FIELDS:
+                        val = item.get(field_key)
+                        if isinstance(val, dict):
+                            item[field_key] = json.dumps(val)
+                            logger.warning(
+                                f"Flattened dict manifest field '{field_key}' at index {idx} in template analysis."
+                            )
+                        elif isinstance(val, list):
+                            # Join list of strings into a comma-separated string
+                            item[field_key] = ", ".join(str(v) for v in val)
+                            logger.warning(
+                                f"Flattened list manifest field '{field_key}' at index {idx} in template analysis."
+                            )
+
+                    
         except ValueError as e:
             # Re-raise as domain error
             raise self.TemplateAnalysisError(str(e))
@@ -240,6 +328,7 @@ class ResumeAiService:
         transformed_data: Dict[str, Any], 
         guidance: str, 
         extracted_text: str = "",
+        linearized_data: str = "",
         job_id: Optional[str] = None
     ) -> Dict[str, Any]:
 
@@ -250,8 +339,10 @@ class ResumeAiService:
             "validation",
             transformed_data_json=json.dumps(transformed_data, indent=2),
             extracted_text=extracted_text[:12000],
+            linearized_data=linearized_data,
             guidance=guidance,
         )
+
 
 
         from app.services.audit_service import AuditService
@@ -298,7 +389,9 @@ class ResumeAiService:
         AI HARMONIZATION: Transforms raw JSON into polished, human-readable prose 
         optimized for Word documents. Strictly prevents technical data dumps.
         """
+        import re
         system_prompt, prompt = prompt_manager.get_chat_prompt(
+
             "data_linearization",
             structured_data_json=json.dumps(structured_data, indent=2),
             detected_placeholders_list=detected_placeholders or [],
@@ -334,11 +427,43 @@ class ResumeAiService:
             # 1. CORE STRATEGY: Tagged Block Extraction
             harmonized_data = LlmSanitizer.extract_tagged_blocks(response)
             
-            if not harmonized_data:
+            # 2. META-TALK SCRUBBING: Total suppression of AI reasoning/residue
+            meta_talk_patterns = [
+                r'(?i)\(no .*? provided\)',
+                r'(?i)Note: .*? remain empty',
+                r'(?i)No .*? found in source',
+                r'(?i)Since no .*? data exists',
+                r'(?i)This section has been left blank',
+                r'(?i)The following .*? is blank',
+                r'(?i)There is no .*? listed',
+                r'(?i)candidate has not provided'
+            ]
+            
+            clean_data = {}
+            for k, v in harmonized_data.items():
+                if not isinstance(v, str):
+                    clean_data[k] = v
+                    continue
+                    
+                cur_val = v
+                # Remove common empty-section indicators
+                for pattern in meta_talk_patterns:
+                    cur_val = re.sub(pattern, '', cur_val, flags=re.IGNORECASE).strip()
+                
+                # Clean up tiny residue like ":" or "(): "
+                if len(cur_val) < 5 and any(c in cur_val for c in "(): "):
+                    cur_val = ""
+                    
+                clean_data[k] = cur_val
+
+            if not clean_data:
                 logger.error("AI harmonization FAILED to return any markers.")
                 return structured_data
 
-            return harmonized_data
+            return clean_data
+
+
         except Exception as e:
             logger.error(f"Critical failure in harmonization node: {e}")
-            raise e
+            logger.warning("Falling back to raw structured_data — document will still render.")
+            return structured_data

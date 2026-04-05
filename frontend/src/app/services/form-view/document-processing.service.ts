@@ -125,6 +125,10 @@ export class DocumentProcessingService {
              this.validationReport.set(res.validation_report);
           }
 
+          if (res.summary) {
+             this.summary.set(res.summary);
+          }
+
           setTimeout(() => this.pollJobStatus(jobId), 2000);
         }
 

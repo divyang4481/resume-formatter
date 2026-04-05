@@ -25,8 +25,10 @@ def create_validate_node(ai_service: ResumeAiService):
                 transformed_data=transformed_data,
                 guidance=validation_guidance,
                 extracted_text=state.get("extracted_text", ""),
+                linearized_data=state.get("linearized_data", ""),
                 job_id=state.get("session_id")
             )
+
 
             
             passed = validation_result.get("status") == "PASS"

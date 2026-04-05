@@ -1,6 +1,6 @@
-import { Component, OnInit, OnDestroy } from '@angular/core';
+import { Component, OnInit, OnDestroy, ViewChild, TemplateRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { ActivatedRoute, Router } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink, RouterOutlet } from '@angular/router';
 import { MatTabsModule } from '@angular/material/tabs';
 import { MatCardModule } from '@angular/material/card';
 import { MatButtonModule } from '@angular/material/button';
@@ -10,22 +10,25 @@ import { MatInputModule } from '@angular/material/input';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatTableModule } from '@angular/material/table';
-import { RouterModule } from '@angular/router';
 import { MatChipsModule } from '@angular/material/chips';
 import { MatExpansionModule } from '@angular/material/expansion';
 import { MatDialogModule, MatDialog } from '@angular/material/dialog';
-import { ReactiveFormsModule, FormBuilder, FormGroup } from '@angular/forms';
+import { ReactiveFormsModule, FormBuilder, FormGroup, FormsModule } from '@angular/forms';
 
 import { animate, state, style, transition, trigger } from '@angular/animations';
 import { AdminTemplateApiService } from '../../../../services/admin-template-api.service';
 import { AdminTemplateTestingService } from '../../../../services/admin-template-testing.service';
-import { ViewChild, TemplateRef } from '@angular/core';
+
 
 @Component({
   selector: 'app-template-detail',
   standalone: true,
   imports: [
     CommonModule,
+    FormsModule,
+    ReactiveFormsModule,
+    RouterLink,
+    RouterOutlet,
     MatTabsModule,
     MatCardModule,
     MatButtonModule,
@@ -35,10 +38,8 @@ import { ViewChild, TemplateRef } from '@angular/core';
     MatSlideToggleModule,
     MatProgressSpinnerModule,
     MatTableModule,
-    RouterModule,
     MatChipsModule,
     MatExpansionModule,
-    ReactiveFormsModule,
     MatDialogModule
   ],
   templateUrl: './template-detail.component.html',
@@ -60,17 +61,45 @@ export class TemplateDetailComponent implements OnInit, OnDestroy {
   displayedColumns: string[] = ['created_at', 'status', 'decision', 'warnings', 'actions'];
   expandedElement: any | null = null;
 
+  // Stage IDs must exactly match backend stage_map values in graph.py
   pipelineStages = [
-    { id: 'ingest', name: 'Ingestion', icon: 'cloud_upload' },
-    { id: 'parse', name: 'Document Parsing', icon: 'document_scanner' },
-    { id: 'triage', name: 'Triage/Kind', icon: 'rule' },
+    { id: 'ingest',    name: 'Ingestion',         icon: 'cloud_upload' },
+    { id: 'parse',     name: 'Document Parsing',   icon: 'document_scanner' },
+    { id: 'triage',    name: 'Triage/Kind',        icon: 'rule' },
     { id: 'normalize', name: 'Skill Normalization', icon: 'schema' },
-    { id: 'privacy', name: 'Privacy/PII', icon: 'security' },
-    { id: 'classify', name: 'Template Matching', icon: 'category' },
-    { id: 'transform', name: 'AI Extraction', icon: 'auto_awesome' },
-    { id: 'render', name: 'Document Rendering', icon: 'picture_as_pdf' },
-    { id: 'validate', name: 'AI Audit/Quality', icon: 'fact_check' }
+    { id: 'privacy',   name: 'Privacy/PII',        icon: 'security' },
+    { id: 'classify',  name: 'Template Matching',  icon: 'category' },
+    { id: 'summarize', name: 'Summarize',          icon: 'summarize' },
+    { id: 'transform', name: 'AI Extraction',      icon: 'auto_awesome' },
+    { id: 'render',    name: 'Document Rendering', icon: 'picture_as_pdf' },
+    { id: 'validate',  name: 'AI Audit/Quality',   icon: 'fact_check' }
   ];
+
+  getStageStatus(stageId: string): 'completed' | 'running' | 'failed' | 'pending' {
+    if (!this.jobStatus) return 'pending';
+
+    const jobOverallStatus = (this.jobStatus.status || '').toLowerCase();
+    const currentStage = (this.jobStatus.stage || '').toLowerCase();
+
+    // If the whole job failed, mark the current (or last) stage as failed
+    if (jobOverallStatus === 'failed') {
+      return currentStage === stageId ? 'failed' : 
+        this.stageIndex(stageId) < this.stageIndex(currentStage) ? 'completed' : 'pending';
+    }
+
+    const stageIdx  = this.stageIndex(stageId);
+    const currentIdx = this.stageIndex(currentStage);
+
+    if (stageIdx < currentIdx)  return 'completed';
+    if (stageIdx === currentIdx) {
+      return jobOverallStatus === 'completed' ? 'completed' : 'running';
+    }
+    return 'pending';
+  }
+
+  private stageIndex(stageId: string): number {
+    return this.pipelineStages.findIndex(s => s.id === stageId.toLowerCase());
+  }
 
 
 
@@ -78,6 +107,8 @@ export class TemplateDetailComponent implements OnInit, OnDestroy {
   requirementsForm: FormGroup;
   notesForm: FormGroup;
   testForm: FormGroup;
+  isManifestEditing: boolean = false;
+  manifestFields: any[] = [];
 
 
   selectedFile: File | null = null;
@@ -158,6 +189,8 @@ export class TemplateDetailComponent implements OnInit, OnDestroy {
         validation_guidance: this.template.validation_guidance,
         pii_guidance: this.template.pii_guidance
       });
+      
+      this.manifestFields = this.template.field_extraction_manifest || [];
     });
   }
 
@@ -176,6 +209,7 @@ export class TemplateDetailComponent implements OnInit, OnDestroy {
           if (res.suggestions.field_extraction_manifest) {
              if (!this.template) this.template = {};
              this.template.field_extraction_manifest = res.suggestions.field_extraction_manifest;
+             this.manifestFields = [...res.suggestions.field_extraction_manifest];
           }
 
           this.requirementsForm.patchValue({
@@ -199,6 +233,35 @@ export class TemplateDetailComponent implements OnInit, OnDestroy {
 
   saveRequirements() {
     this.templateApi.updateTemplate(this.templateId, this.requirementsForm.value).subscribe(() => {
+      this.loadTemplate();
+    });
+  }
+
+  toggleManifestEdit() {
+    this.isManifestEditing = !this.isManifestEditing;
+    if (!this.isManifestEditing) {
+       // Reset if cancelled
+       this.manifestFields = [...(this.template?.field_extraction_manifest || [])];
+    }
+  }
+
+  addManifestField() {
+    this.manifestFields.push({
+      fieldname: '',
+      description: '',
+      source_hint: ''
+    });
+  }
+
+  removeManifestField(index: number) {
+    this.manifestFields.splice(index, 1);
+  }
+
+  saveManifest() {
+    this.templateApi.updateTemplate(this.templateId, {
+      field_extraction_manifest: this.manifestFields
+    }).subscribe(() => {
+      this.isManifestEditing = false;
       this.loadTemplate();
     });
   }
@@ -229,23 +292,7 @@ export class TemplateDetailComponent implements OnInit, OnDestroy {
     }
   }
 
-  getStageStatus(stageId: string): string {
-    if (!this.jobStatus) return 'pending';
 
-    const status = this.jobStatus.status;
-    const currentStage = this.jobStatus.stage;
-
-    const stageIndex = this.pipelineStages.findIndex(s => s.id === stageId);
-    const currentIndex = this.pipelineStages.findIndex(s => s.id === currentStage);
-
-    if (status === 'failed' && currentStage === stageId) return 'failed';
-    if (status === 'completed') return 'completed';
-
-    if (stageIndex < currentIndex) return 'completed';
-    if (stageIndex === currentIndex) return 'running';
-
-    return 'pending';
-  }
 
   getValidationWarningsCount(run: any): number {
     if (!run || !run.validation_result || !run.validation_result.warnings) return 0;
@@ -281,7 +328,17 @@ export class TemplateDetailComponent implements OnInit, OnDestroy {
 
     const formData = new FormData();
     formData.append('file', this.selectedFile);
-    formData.append('industry_id', this.testForm.value.industry_id);
+    
+    // Explicitly fallback to template industry if override is empty
+    const industryId = this.testForm.value.industry_id || this.template?.industry || '';
+    formData.append('industry_id', industryId);
+    
+    if (this.testForm.value.redact_pii) {
+      formData.append('redact_pii', 'true');
+    }
+    if (this.testForm.value.generate_summary) {
+      formData.append('generate_summary', 'true');
+    }
 
     this.testApi.runTemplateTest(formData, this.templateId).subscribe({
       next: (res) => {

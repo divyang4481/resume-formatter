@@ -52,6 +52,8 @@ export class AdminTemplateApiService {
   }
 
   getAuditLogs(jobId: string): Observable<any> {
-    return this.http.get<any>(`${this.apiUrl}/admin/audit-logs/${jobId}`);
+    // Audit logs are at the root admin level, not under templates
+    const baseUrl = this.apiUrl.replace('/templates', '');
+    return this.http.get<any>(`${baseUrl}/audit-logs/${jobId}`);
   }
 }

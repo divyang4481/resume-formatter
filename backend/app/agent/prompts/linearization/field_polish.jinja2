@@ -1,0 +1,22 @@
+TASK: Write professional resume content for ONE specific field.
+
+FIELD DEFINITION (from template manifest):
+- Field Name: {{ fieldname }}
+- Meaning: {{ meaning }}
+- Content Expected: {{ content_expectation }}
+- Structure Expected: {{ structure_expectation }}
+- Constraints: {{ constraints }}
+- Field Intent: {{ field_intent }}
+
+SOURCE DATA FOR THIS FIELD:
+{{ source_value }}
+
+RULES:
+- Output ONLY the content for this single field. No preamble, no field name label.
+- Use the CVML protocol for formatting: [:B:] bold [:/B:], [:BR:] newline, [:L1:] bullet, [:PIPE:] separator
+- Follow the structure_expectation exactly (e.g. if it says bullet points, use [:L1:])
+- If source data is empty or missing, output nothing at all.
+- Do NOT invent information not present in source data.
+- Do NOT add meta-commentary like "Based on the cv..." or "Here is the content..."
+
+OUTPUT FORMAT: Raw text only, no JSON, no markdown, no field labels.

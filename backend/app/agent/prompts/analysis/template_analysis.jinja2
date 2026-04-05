@@ -39,10 +39,25 @@ CRITICAL INSTRUCTIONS FOR PLACEHOLDERS:
 - Each manifest item MUST have: 'fieldname', 'meaning', 'field_type', 'field_intent', 'source_hints', 'content_expectation', 'structure_expectation', 'constraints', and 'tag'.
 - Do not provide generic resume advice. Only provide instructions specific to populating this exact template based on its layout and headers.
 
+HIGH-FIDELITY EXAMPLE FOR STEERING:
+[
+  {
+    "fieldname": "professional_summary",
+    "meaning": "A brief overview of the candidate's background and expertise",
+    "field_type": "narrative",
+    "field_intent": "Capture candidate's core value proposition",
+    "source_hints": "summary, overview, introduction",
+    "content_expectation": "Action-oriented professional overview",
+    "structure_expectation": "One cohesive paragraph",
+    "constraints": "Keep under 500 characters",
+    "tag": "<< PROFESSIONAL_SUMMARY >>",
+    "confidence": 0.95
+  }
+]
 
 Provide recommendations in the following JSON format:
-1. 'purpose': A concise description of the ideal profile for this template.
-2. 'expected_sections': A comma-separated string of the literal headers found.
+1. 'purpose': A concise description of the ideal profile for this template (string).
+2. 'expected_sections': A comma-separated string of the literal headers found (string).
 3. 'field_extraction_manifest': A list of objects, one for each physical marker in the doc.
    Each object MUST have:
    - 'fieldname': The unique logical key for the marker (e.g., 'technical_skills').
@@ -51,13 +66,16 @@ Provide recommendations in the following JSON format:
    - 'field_intent': What kind of information should be conveyed here (e.g., 'To show career progression', 'To list hard skills').
    - 'source_hints': Keywords from the template to help the extractor locate this field.
    - 'content_expectation': What kind of content is expected (e.g., 'Action-oriented bullet points', 'A short paragraph').
-   - 'structure_expectation': Expected structure (e.g., 'Bullet points starting with verbs', 'Key-value pairs').
-   - 'constraints': Any constraints (e.g., 'Maximum 5 bullet points', 'Do not use first person').
-   - 'confidence': (Optional) Float between 0.0 and 1.0 indicating confidence in the inferred semantics.
-   - 'ambiguity_note': (Optional) A brief string explaining any uncertainty about this field's purpose.
-   - 'tag': The literal text of the marker.
-4. 'global_guidance': Specific rules for how the AI should approach filling this template overall.   
-5. 'summary_guidance': Style rules for the summary.
-6. 'formatting_guidance': Specific rules for how the AI should format the harmonized text for these fields.
+   - 'structure_expectation': MUST be a plain descriptive string (e.g., 'Title on line 1 bold, Company | Location on line 2, bullet points below'). NEVER output an object like {"degree_name": "..."}.
+   - 'constraints': MUST be a plain string describing limits (e.g., 'Max 5 bullet points'). NEVER an object.
+   - 'ambiguity_note': (Optional) A plain string explaining any uncertainty. NEVER an object.
+   - 'tag': The literal text of the marker as it appears in the template.
+4. 'global_guidance': Specific rules for the AI overall. MUST be a plain string, NO objects. 
+5. 'summary_guidance': Style rules for the summary. MUST be a plain string, NO objects.
+6. 'formatting_guidance': Formatting rules for fields. MUST be a plain string, NO objects.
+
+CRITICAL STRING RULE: Every field in 'field_extraction_manifest' items that is described above as a string MUST be a JSON string.
+INVALID (never do this): "structure_expectation": {"degree_name": "", "institution": ""}
+VALID (always do this): "structure_expectation": "Degree name on first line, institution on second line, dates on third line"
 
 OUTPUT FORMAT: Return ONLY a valid JSON object. No markdown, no preamble.

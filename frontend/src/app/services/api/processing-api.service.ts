@@ -64,7 +64,7 @@ export class ProcessingApiService {
   }> {
     const formData = new FormData();
     formData.append('file', file);
-    if (industry) formData.append('industry', industry);
+    if (industry) formData.append('industry_id', industry);
     if (templateId) formData.append('template_id', templateId);
 
     return this.http.post<any>(`${this.apiUrl}/documents/submit`, formData);

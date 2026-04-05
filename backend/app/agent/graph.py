@@ -6,6 +6,7 @@ from app.agent.state import AgentState
 from app.domain.interfaces import LlmRuntimeAdapter
 from app.domain.interfaces import DocumentExtractionService, ExtractionContext
 from app.agent.nodes.transformation_node import create_schema_builder_node, create_context_aware_extraction_node
+from app.agent.nodes.summarize_node import create_resume_summarizer_node
 from app.services.resume_parsing_service import ResumeParsingService
 from app.dependencies import get_storage_provider
 from app.services.audit_service import AuditService
@@ -84,6 +85,7 @@ def build_workflow_graph(llm_runtime: LlmRuntimeAdapter, doc_parser: DocumentExt
         "ingest": "ingest",
         "parse": "parse",
         "triage": "triage",
+        "summarize": "summarize",
         "normalize": "normalize",
         "privacy_transform": "privacy",
         "template_resolution": "classify",
@@ -126,6 +128,9 @@ def build_workflow_graph(llm_runtime: LlmRuntimeAdapter, doc_parser: DocumentExt
                         if merged_data.get("summary_text"):
                             job.generated_summary = merged_data.get("summary_text")
                             
+                        if merged_data.get("overall_resume_summary"):
+                            job.generated_summary = merged_data.get("overall_resume_summary")
+                            
                         if merged_data.get("validation_report"):
                             job.validation_report = merged_data.get("validation_report")
                         
@@ -152,6 +157,7 @@ def build_workflow_graph(llm_runtime: LlmRuntimeAdapter, doc_parser: DocumentExt
     workflow.add_node("parse", with_progress("parse", create_parse_node(doc_parser, storage)))
     workflow.add_node("triage", with_progress("triage", create_triage_node(ai_service)))
     workflow.add_node("normalize", with_progress("normalize", lambda state: {"status": "normalized"}))
+    workflow.add_node("summarize", with_progress("summarize", create_resume_summarizer_node(ai_service)))
     workflow.add_node("privacy_transform", with_progress("privacy_transform", lambda state: {"status": "privacy_applied"}))
 
     # Agentic reasoning nodes
@@ -189,7 +195,8 @@ def build_workflow_graph(llm_runtime: LlmRuntimeAdapter, doc_parser: DocumentExt
 
     workflow.add_edge("normalize", "privacy_transform")
     workflow.add_edge("privacy_transform", "template_resolution")
-    workflow.add_edge("template_resolution", "transform")
+    workflow.add_edge("template_resolution", "summarize")
+    workflow.add_edge("summarize", "transform")
     workflow.add_edge("transform", "render")
     workflow.add_edge("render", "validate")
     workflow.add_edge("validate", END)

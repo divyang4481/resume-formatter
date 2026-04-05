@@ -21,6 +21,18 @@ class TemplatePublishGuard:
         if not template.name or not template.language:
             return PublishCheckResult(False, "Template metadata is incomplete (missing name or language).")
 
+        # Mandatory Field Extraction Manifest
+        import json
+        manifest = []
+        if getattr(template, "field_extraction_manifest", None):
+            try:
+                manifest = json.loads(template.field_extraction_manifest)
+            except:
+                pass
+        
+        if not manifest or len(manifest) == 0:
+            return PublishCheckResult(False, "Wait! Template activation is blocked. You MUST define at least one manifest field for AI extraction to work.")
+
         if not latest_test_run:
             return PublishCheckResult(False, "At least one sample resume test run is required.")
 
