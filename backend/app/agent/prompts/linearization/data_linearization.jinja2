@@ -30,20 +30,23 @@ WRITER'S MANDATE (STRICT):
 3. ISOLATION: Each section (marker) must be independent.
 4. LINEARIZATION (FIDELITY): 
    - **DO NOT SUMMARIZE**: Each job entry, degree, and certification MUST be its own distinct entry.
-   - **EDUCATION MANDATE**: For every Education entry, you MUST include the **Institution Name**, **Degree**, and **Duration (Dates)** in a clear, formatted line using [:B:] and [:PIPE:].
-   - **EXPERIENCE ARCHITECTURE (ANTI-WALL-OF-TEXT)**: 
-     - Each job header MUST use the format: [:B:]Role | Company | Dates[:/B:] (Use [:PIPE:] as the separator).
-     - Every achievement/duty MUST be its own line starting with **[:L1:]**.
-     - DO NOT merge multiple job achievements into a single paragraph.
-   - For every distinct entry in the source data, you MUST generate a corresponding output entry.
-   - DO NOT omit specific company names, dates, or institution names.
-   - For lists (like Skills or Certifications), you MUST list EVERY item provided in the source data. DO NOT truncate.
+   - **NO PLACEHOLDERS (CRITICAL)**: NEVER output placeholders like '[Institution Name]', '[Dates]', or '[Degree]'. 
+     - If the source data has a value, use it. 
+     - If the source data is missing a specific detail (like a date), OMIT that part of the line entirely. 
+     - NEVER use brackets [] to indicate missing info.
+   - **EDUCATION MANDATE**: For every Education entry, include the **Institution Name**, **Degree**, and **Duration (Dates)** in a clear, formatted line using [:B:] and [:PIPE:] ONLY IF THEY EXIST in the source.
+   - **EXPERIENCE ARCHITECTURE**: 
+     - Each job header MUST be on a new line: [:B:]Role | Company | Dates[:/B:]
+     - EVERY single achievement/bullet MUST start with **[:L1:]**.
+     - DO NOT ever merge two job entries into the same paragraph.
+   - For lists (like Skills or Certifications), use [:PIPE:] or [:L1:] to keep them clean and professional.
 
 5. STRUCTURAL HIERARCHY:
    - Obey the structure_expectation for each field.
-   - Job entries should have clear headers followed by bulleted achievements using [:L1:].
-   - Map to Visuals: Use [:L1:] for primary achievements/milestones. Use [:L2:] for specific sub-projects or technical details nested under a primary achievement.
-6. TONE: Senior-level, impact-driven, and active. Match the candidate's seniority level.
+   - Job entries should have clear headers followed by bulleted achievements using [:L1:] for every single point.
+   - Map to Visuals: Use [:L1:] for primary achievements/milestones. Use [:L2:] for specific sub-projects.
+6. TONE: Senior-level, impact-driven, and active.
+
 
 
 

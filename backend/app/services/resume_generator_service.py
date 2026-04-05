@@ -185,46 +185,48 @@ class ResumeGeneratorService:
         return dict(items)
 
     def _apply_rendering_actions(self, content: Any) -> Any:
-        """
-        Hyper-Fidelity Composition Node: Recursively translatesproprietary
-        CVML ([:B:], [:L1:], etc.) into native DOCX RichText runs.
-        """
-        # 1. Recursive handling for nested structures (Jobs, Projects, etc)
+        # 1. Recursive nested handling
         if isinstance(content, dict):
             return {k: self._apply_rendering_actions(v) for k, v in content.items()}
         elif isinstance(content, list):
+            if not content: return ""
             return [self._apply_rendering_actions(v) for v in content]
         elif not isinstance(content, str):
             return content
 
-        # 2. String Composition (The CVML Engine)
-        if not any(tag in content for tag in ["[:B:]", "[:PIPE:]", "[:BR:]", "[:L1:]", "[:L2:]"]):
+        # 2. Composition Logic
+        # Normalize bullets characters to Protocol tags
+        content = re.sub(r'(?m)^[ \t]*[•\-\*][ \t]*', '[:L1:] ', content)
+
+        # Splitting on ANY tag (opening or closing)
+        tag_pattern = r'(?i)(\[:B:\]|\[:/B:\]|\[:PIPE:\]|\[:BR:\]|\[:L1:\]|\[:L2:\])'
+        if not re.search(tag_pattern, content):
             return content
 
         rt = RichText()
         content = content.replace("\r\n", "\n")
+        parts = re.split(tag_pattern, content)
         
-        # Split into tokens: keep tags for processing
-        parts = re.split(r'(\[:B:\].*?\[:/B:\]|\[:PIPE:\]|\[:BR:\]|\[:L1:\]|\[:L2:\])', content, flags=re.DOTALL)
-        
+        is_bold = False
         for part in parts:
-            if not part:
-                continue
-                
-            if part.startswith("[:B:]"):
-                # [:B:]Bold Text[:/B:]
-                inner = part[5:-6]
-                rt.add(inner, bold=True)
-            elif part == "[:PIPE:]":
-                rt.add("  |  ")
-            elif part == "[:BR:]":
+            if not part: continue
+            
+            p_lower = part.lower()
+            if p_lower == "[:b:]":
+                is_bold = True
+            elif p_lower == "[:/b:]":
+                is_bold = False
+            elif p_lower == "[:pipe:]":
+                rt.add("  |  ", bold=is_bold)
+            elif p_lower == "[:br:]":
                 rt.add("\n")
-            elif part == "[:L1:]":
-                rt.add("\n• ")
-            elif part == "[:L2:]":
-                rt.add("\n    - ")
+            elif p_lower == "[:l1:]":
+                rt.add("\n• ", bold=is_bold)
+            elif p_lower == "[:l2:]":
+                rt.add("\n    - ", bold=is_bold)
             else:
-                # Standard text run
-                rt.add(part)
+                rt.add(part, bold=is_bold)
                 
         return rt
+
+

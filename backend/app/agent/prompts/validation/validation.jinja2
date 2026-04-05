@@ -19,9 +19,11 @@ INSTRUCTIONS:
    - In the report, clearly note when data was absent in the source (e.g., "Candidate has no certifications in source resume").
 
 2. **LINEARIZATION & FORMATTING CHECK**:
-   - **NO WALLS OF TEXT**: Does 'Professional Experience' look like a single block in the LINEARIZED NARRATIVE? If it lacks [:L1:] markers, it is a failure.
+   - **NO WALLS OF TEXT**: Does 'Professional Experience' look like a single block in the LINEARIZED NARRATIVE? If it lacks [:L1:] markers or newlines between jobs, it is a failure.
+   - **NO HALLUCINATED PLACEHOLDERS**: Check for literal placeholders like '[Institution Name]', '[Dates]', or '[Degree]'. If these bracketed words are present (indicating the AI copied examples from your instructions instead of using source data), you MUST [[STATUS :: FAIL]].
    - **EDUCATION COMPLETENESS**: Ensure university names and dates appear in the narrative if they were in the source.
    - **TAG INTEGRITY**: Check for raw JSON residue or missing visual protocol tags like [:B:], [:PIPE:], etc.
+
 
 3. **OUTPUT PROTOCOL**: 
    - Overall status: [[STATUS :: PASS]] or [[STATUS :: FAIL]]
