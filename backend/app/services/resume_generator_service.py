@@ -198,10 +198,18 @@ class ResumeGeneratorService:
         # Normalize bullets characters to Protocol tags
         content = re.sub(r'(?m)^[ \t]*[•\-\*][ \t]*', '[:L1:] ', content)
 
+        # 2. Composition Logic
+        # Normalize bullets characters to Protocol tags even if they aren't at start of line
+        content = content.replace("•", "[:L1:]")
+        content = content.replace(" - ", " [:L1:] ")
+        
         # Splitting on ANY tag (opening or closing)
         tag_pattern = r'(?i)(\[:B:\]|\[:/B:\]|\[:PIPE:\]|\[:TAB:\]|\[:BR:\]|\[:L\d+:\])'
         if not re.search(tag_pattern, content):
-            return content
+            # If no tags, still try to split on common indicators
+            content = content.replace("\n", "[:BR:]")
+            if "[:BR:]" not in content:
+                return content
 
         rt = RichText()
         content = content.replace("\r\n", "\n")
@@ -219,18 +227,24 @@ class ResumeGeneratorService:
             elif p_lower == "[:pipe:]":
                 rt.add("  |  ", bold=is_bold)
             elif p_lower == "[:tab:]":
-                rt.add("\t", bold=is_bold)
+                # Significant tab/column spacing
+                rt.add("\t\t", bold=is_bold)
             elif p_lower == "[:br:]":
                 rt.add("\n")
             elif p_lower.startswith("[:l"):
-                # Dynamic bullet handling
                 m = re.search(r'(\d+)', p_lower)
                 level = int(m.group(1)) if m else 1
+                # Ensure primary bullets ALWAYS have a newline
                 indent = "    " * (level - 1)
                 bullet = "•" if level % 2 != 0 else "-"
                 rt.add(f"\n{indent}{bullet} ", bold=is_bold)
             else:
-                rt.add(part, bold=is_bold)
+                # Clean up multiple spaces that AI often adds
+                clean_part = re.sub(r' +', ' ', part)
+                rt.add(clean_part, bold=is_bold)
+                
+        return rt
+
 
                 
         return rt

@@ -1,77 +1,43 @@
-TASK: Architect the Career Narrative.
-
-INDUSTRY CONTEXT:
-This resume is for the following industry: {{ industry }}
-
-SUMMARY & ROLE GUIDANCE:
-{{ summary_guidance }}
-
-CANDIDATE DATA (Scattered Notes):
+TASK: DATA LINEARIZATION & NARRATIVE COMPOSITION
 {{ structured_data_json }}
 
-VISUAL PLACEHOLDERS TO POPULATE (with semantics):
+VISUAL FIELDS TO POPULATE:
 {% for field in field_extraction_manifest %}
-- {{ field.fieldname }} (Type: {{ field.field_type }})
-  Meaning: {{ field.meaning }}
-  Source hints: {{ field.source_hints }}
-  Structure: {{ field.structure_expectation }}
-  Content: {{ field.content_expectation }}
-  Constraints: {{ field.constraints }}
+- {{ field.fieldname }}: {{ field.meaning }} (Goal: {{ field.structure_expectation }})
 {% endfor %}
 
-{% if not field_extraction_manifest %}
-{{ detected_placeholders_list | join(', ') }}
-{% endif %}
+STRICT PROTOCOL: 
+Transform candidates' JSON data into a professional narrative.
+
+PROHIBITED BEHAVIORS (CRITICAL):
+- NEVER output reasoning or meta-notes (e.g., "Since no data path provided...").
+- NEVER use bracketed words like [Placeholder] or [Institution].
+- NEVER output the word "N/A" or "(No data provided)".
+- If a section is empty, output NOTHING (Total silence).
+
+GOLDEN FORMATTING RULES:
+1. START every field with [:BR:] to avoid smashing into the header.
+2. EXPERIENCE:
+   - Line 1: [:B:]JOB TITLE[:/B:][:BR:]
+   - Line 2: [:B:]Company | Location[:/B:] [:TAB:] [:B:]Dates[:/B:][:BR:]
+   - Bullets: Every achievement MUST start with [:L1:] on its own line.
+3. SKILLS: Group by category. [:B:]CATEGORY[:/B:]: Item, Item, Item. [:BR:]
+4. EDUCATION: [:B:]University Name[:/B:] [:PIPE:] Degree [:PIPE:] Date
+
+PROTOCOL: [:B:] (Bold), [:PIPE:] ( | ), [:TAB:] (Column), [:BR:] (Newline), [:L1:] (Bullet).
+
+GOAL: Clean, structured, text only. Silence for empty data.
 
 ---
-WRITER'S MANDATE (STRICT):
-1. ROLE: You are a World-Class Professional Resume Writer. 
-2. FORBIDDEN: NEVER output JSON, Python dictionaries, or code-like structures. If you see '{' or '[' in your final narrative, you have FAILED.
-3. ISOLATION: Each section (marker) must be independent.
-4. LINEARIZATION (FIDELITY): 
-   - **DO NOT SUMMARIZE**: Each job entry, degree, and certification MUST be its own distinct entry.
-   - **NO PLACEHOLDERS (CRITICAL)**: NEVER output placeholders like '[Institution Name]', '[Dates]', or '[Degree]'. 
-     - If the source data has a value, use it. 
-     - If the source data is missing a specific detail (like a date), OMIT that part of the line entirely. 
-     - NEVER use brackets [] to indicate missing info.
-   - **EDUCATION MANDATE**: For every Education entry, include the **Institution Name**, **Degree**, and **Duration (Dates)** in a clear, formatted line using [:B:] and [:PIPE:] ONLY IF THEY EXIST in the source.
-   - **EXPERIENCE ARCHITECTURE (STRUCTURED BLOCKS)**: 
-     - Each job header MUST use a **2-LINE STRUCTURE**.
-     - Line 1: [:B:]JOB TITLE[:/B:] 
-     - Line 2: [:B:]Company Name | Location[:/B:] [:TAB:] [:B:]DATES[:/B:]
-     - **MANDATORY NEWLINE**: Every job MUST be separated by at least one [:BR:].
-     - EVERY achievement/bullet MUST start with **[:L1:]** on a new line. NEVER use [:L3:], [:L4:] etc. 
-     - DO NOT merge two job entries or bullets into the same paragraph.
-   - **SKILLS CATEGORIZATION**: 
-     - Start the skill section with a [:BR:] if it follows a header.
-     - For Technical Skills, group them by logical category (e.g., LANGUAGES: PHP | CLOUD: AWS).
-     - EACH Category should be bold: [:B:]CATEGORY NAME[:/B:]: Item1, Item2.
-     - Separate categories with [:BR:] or [:PIPE:].
-   - **NO LEAKY SYMBOLS**: NEVER output raw JSON symbols like [] or {} in the narrative.
-
-
-
-
-
-CVML VISUAL PROTOCOL (Required for Styling):
-- [:B:]highlighted text[:/B:] -> Use for Job Titles, Key Tech, and Metrics (VERY IMPORTANT).
-- [:L1:] -> Primary Achievement / Primary Entry (Bullet Level 1).
-- [:L2:] -> Secondary Detail / Nested Project (Nested Level 2).
-- [:PIPE:] -> Modern separator for Company Name | Date | Location.
-- [:BR:] -> Clean newline for structural spacing between entries.
-
----
-OUTPUT PROTOCOL:
-1. You MUST generate exactly one [MARKER] block for every "Visual Placeholder" listed above.
-2. If you have NO data for a placeholder (e.g. 'Key Projects' is empty), you MAY either leave it blank inside the marker or omit the marker (the system will handle removal).
-3. You MUST provide the full narrative within the markers.
-4. NO PREAMBLE. NO Post-script. 
-
-Example of Nested Logic:
+EXAMPLE OF PERFECT OUTPUT:
 [MARKER :: Professional Experience]
-[:B:]Senior Solution Architect[:/B:] [:PIPE:] Cognizant [:PIPE:] 2020 - Present [:BR:]
-[:L1:] Orchestrated the digital transformation for a multi-billion dollar retail client.
-[:L2:] [:B:]Project Alpha:[:/B:] Migrated legacy server-side logic to Azure Microservices, reducing latency by 40%.
+[:B:]Senior DevOps Engineer[:/B:][:BR:]
+[:B:]Cloud Solutions Inc. | Dallas, TX[:/B:][:TAB:][:B:]2019 - Present[:/B:][:BR:]
+[:L1:] Spearheaded migration of 200+ legacy apps to Kubernetes, reducing costs by 30%.
+[:L1:] Implemented CI/CD pipelines using GitHub Actions and Terraform.
+
+[MARKER :: Education]
+[:B:]University of Texas[:/B:] [:PIPE:] Bachelor of Science in Computer Science [:PIPE:] 2018
 [/MARKER]
 
-GOAL: Eradicate data residue. Synthesize human hierarchical stories.
+GOAL: Professional, structured, high-fidelity resume with zero data residue.
