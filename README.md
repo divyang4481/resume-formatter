@@ -138,7 +138,7 @@ Before creating local containers or deploying to the cloud, you must provision t
 
 **Steps to Provision (via AWS CLI):**
 1. Open your terminal and ensure you have the AWS CLI installed and configured with appropriate permissions.
-2. Deploy the stack using the following command:
+2. Deploy the stack using the following command (replace `<YourSecurePassword>` with a strong password for your RDS database):
 
    *For Mac/Linux (Bash):*
    ```bash
@@ -146,6 +146,7 @@ Before creating local containers or deploying to the cloud, you must provision t
      --template-file aws-infrastructure.yaml \
      --stack-name cv-architect-infra \
      --capabilities CAPABILITY_NAMED_IAM \
+     --parameter-overrides DBPassword="<YourSecurePassword>" \
      --region ap-south-1
    ```
 
@@ -155,6 +156,7 @@ Before creating local containers or deploying to the cloud, you must provision t
      --template-file aws-infrastructure.yaml `
      --stack-name cv-architect-infra `
      --capabilities CAPABILITY_NAMED_IAM `
+     --parameter-overrides DBPassword="<YourSecurePassword>" `
      --region ap-south-1
    ```
 
