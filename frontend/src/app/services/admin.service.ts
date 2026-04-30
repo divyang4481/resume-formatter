@@ -65,4 +65,8 @@ export class AdminService {
 
     return this.http.post(`${this.apiUrl}/templates/upload`, formData);
   }
+
+  getTemplateDetail(templateId: string): Observable<any> {
+    return this.http.get(`${this.apiUrl}/templates/${templateId}`);
+  }
 }

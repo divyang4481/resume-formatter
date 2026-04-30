@@ -40,20 +40,19 @@ def create_schema_builder_node():
     return schema_builder_node
 
 
-def create_context_aware_extraction_node(llm_runtime: LlmRuntimeAdapter):
+def create_resume_to_template_mapping_node():
     """
-    The core extraction node that uses all available context (Raw Text + Structured Data + Schema).
+    Node that uses Agentic Core to map parsed resume data to the template contract.
     """
-    async def context_aware_extraction_node(state: AgentState) -> dict:
-        logger.info("Executing Context-Aware Extraction Node (Subgraph)...")
+    async def resume_to_template_mapping_node(state: AgentState) -> dict:
+        logger.info("Executing Resume to Template Mapping Node...")
         
         extracted_text = state.get("extracted_text", "")
         raw_parsed_data = state.get("raw_parsed_data") or {}
-        dynamic_schema = state.get("canonical_model") or {}
-        template_text = state.get("template_text") or "Not provided"
+        template_contract = state.get("canonical_model") or {}
         formatting_guidance = state.get("formatting_guidance") or ""
         
-        # Format structured metadata (tables/sections) for the prompt
+        # Format structured metadata (tables/sections)
         structured_context = ""
         if raw_parsed_data:
             sections = raw_parsed_data.get("sections", [])
@@ -61,24 +60,10 @@ def create_context_aware_extraction_node(llm_runtime: LlmRuntimeAdapter):
             if sections:
                 structured_context += "\nDETECTED SECTIONS:\n" + "\n".join([f"- {s.get('title')}" for s in sections])
             if tables:
-                structured_context += f"\nDETECTED TABLES: {len(tables)} tables found. Use table content for precise facts like dates and roles."
+                structured_context += f"\nDETECTED TABLES: {len(tables)} tables found."
 
-        # RENDER EXTERNALIZED PROMPT
-        prompt = prompt_manager.get_prompt(
-            "context_aware_extraction.jinja2",
-            dynamic_schema_json=json.dumps(dynamic_schema, indent=2),
-            template_text_excerpt=template_text[:3000],
-            structured_context=structured_context,
-            extracted_text=extracted_text,
-            formatting_guidance=formatting_guidance
-        )
-        
-        try:
-            from app.dependencies import get_agent_provider
+        from app.dependencies import get_agent_provider
         agent = get_agent_provider()
-
-        # We simulate the template contract structure here
-        template_contract = dynamic_schema
 
         try:
             mapped_data = agent.map_resume_to_template(
@@ -88,13 +73,13 @@ def create_context_aware_extraction_node(llm_runtime: LlmRuntimeAdapter):
                 pii_policy={},
                 job_context={"job_id": state.get("session_id", "default")}
             )
+            # Store as string if needed, or keep dict
             return {
                 "transformed_document_json": mapped_data,
                 "status": "extracted"
             }
-
         except Exception as e:
-            logger.error(f"Extraction node failed: {e}")
+            logger.error(f"Mapping node failed: {e}")
             return {"status": "extraction_error"}
 
-    return context_aware_extraction_node
+    return resume_to_template_mapping_node

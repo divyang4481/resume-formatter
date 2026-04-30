@@ -56,3 +56,78 @@ class BedrockResumeFormattingAgent(ResumeFormattingAgent):
         except Exception as e:
             logger.error(f"Failed to invoke Bedrock Agent: {e}")
             raise
+
+    def generate_template_contract(
+        self,
+        *,
+        template_text: str,
+        template_metadata: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        session_id = "template-contract-" + template_metadata.get("template_id", "default")
+
+        prompt = json.dumps({
+            "instruction": "Analyze the template text and generate a structured JSON contract matching the required format. Include sections, placeholders, quality_rules, and rendering_rules.",
+            "template_text": template_text,
+            "template_metadata": template_metadata
+        })
+
+        try:
+            response = self.client.invoke_agent(
+                agentId=self.agent_id,
+                agentAliasId=self.agent_alias_id,
+                sessionId=session_id,
+                inputText=prompt
+            )
+
+            completion = ""
+            for event in response.get('completion', []):
+                if 'chunk' in event:
+                    completion += event['chunk']['bytes'].decode('utf-8')
+
+            if completion.startswith("```json"):
+                completion = completion[7:]
+            if completion.endswith("```"):
+                completion = completion[:-3]
+
+            return json.loads(completion.strip())
+        except Exception as e:
+            logger.error(f"Failed to invoke Bedrock Agent for contract generation: {e}")
+            raise
+
+    def evaluate_output_quality(
+        self,
+        *,
+        mapped_data: Dict[str, Any],
+        template_contract: Dict[str, Any],
+        job_context: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        session_id = job_context.get("job_id", "default-session")
+
+        prompt = json.dumps({
+            "instruction": "Evaluate the quality of the mapped resume data against the template contract. Provide a quality assessment JSON with 'needs_review', 'reason', 'suggested_admin_action', and 'confidence'.",
+            "mapped_data": mapped_data,
+            "template_contract": template_contract
+        })
+
+        try:
+            response = self.client.invoke_agent(
+                agentId=self.agent_id,
+                agentAliasId=self.agent_alias_id,
+                sessionId=session_id,
+                inputText=prompt
+            )
+
+            completion = ""
+            for event in response.get('completion', []):
+                if 'chunk' in event:
+                    completion += event['chunk']['bytes'].decode('utf-8')
+
+            if completion.startswith("```json"):
+                completion = completion[7:]
+            if completion.endswith("```"):
+                completion = completion[:-3]
+
+            return json.loads(completion.strip())
+        except Exception as e:
+            logger.error(f"Failed to invoke Bedrock Agent for quality evaluation: {e}")
+            raise
