@@ -39,10 +39,10 @@ def get_document_extraction_service():
 
 def get_llm_runtime():
     from app.adapters.llm.aws_bedrock_runtime import AwsBedrockLlmRuntime
-    from app.adapters.llm.ollama_runtime import OllamaLlmRuntime
+    from app.adapters.llm.ollama_runtime import LocalOllamaLlmRuntime
     if settings.llm_backend == "aws_bedrock":
         return AwsBedrockLlmRuntime()
-    return OllamaLlmRuntime()
+    return LocalOllamaLlmRuntime()
 
 def get_agent_provider():
     from app.adapters.agent.bedrock_agent import BedrockResumeFormattingAgent

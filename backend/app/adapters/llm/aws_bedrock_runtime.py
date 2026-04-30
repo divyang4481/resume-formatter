@@ -19,6 +19,7 @@ class AwsBedrockLlmRuntime(LlmRuntimeAdapter):
         """
         self.model_id = model_id
         # Creates a bedrock-runtime client
+        region_name = region_name or 'us-east-1'
         if region_name:
             self.client = boto3.client(service_name='bedrock-runtime', region_name=region_name)
         else:
