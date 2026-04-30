@@ -1,17 +1,37 @@
 from pydantic_settings import BaseSettings
 
-
 class Settings(BaseSettings):
     """
     Application Settings configured via environment variables.
     """
-
     project_name: str = "Agentic Document Platform"
 
-    # Cloud and Adapter Selection
-    cloud: str = "aws"  # "aws", "azure", "gcp", "ibm", "local"
+    # Architecture Config
+    cloud_provider: str = "aws"  # "aws", "azure", "gcp", "local"
+    runtime_mode: str = "local" # "local" or "aws"
+    processing_mode: str = "async" # "sync" or "async"
+    queue_provider: str = "local" # "local", "sqs"
+    storage_provider: str = "local" # "local", "s3"
+    knowledge_provider: str = "local" # "local", "bedrock_kb"
+    agent_provider: str = "local_llm" # "local_llm", "bedrock_agent"
 
-    # Document Parsing Routing & Thresholds
+    # AWS Specific Config
+    aws_region: str = "us-east-1"
+    s3_bucket_input: str = "agentic-document-input-bucket"
+    s3_bucket_output: str = "agentic-document-output-bucket"
+    sqs_processing_queue_url: str = ""
+    bedrock_agent_id: str = ""
+    bedrock_agent_alias_id: str = ""
+    bedrock_kb_id: str = ""
+
+    # Document Parsing Routing & Guard
+    enable_docling: bool = True
+    enable_tika_fallback: bool = True
+    enable_gpu_worker: bool = False
+    parser_timeout_seconds: int = 300
+    max_file_size_mb: int = 10
+
+    # Legacy Document Parsing Routing & Thresholds (Keep for fallback)
     document_parser_primary_pdf: str = "docling"
     document_parser_fallback_pdf: str = "tika"
     document_parser_primary_docx: str = "docling"
@@ -21,50 +41,24 @@ class Settings(BaseSettings):
     parser_min_text_chars: int = 300
     parser_min_section_count: int = 3
     parser_min_confidence: float = 0.65
-    parser_timeout_seconds: int = 45
 
     # LLM Settings
-    llm_backend: str = (
-        "aws_bedrock"  # "aws_bedrock", "gcp_vertex", "azure_openai", "local_ollama", "gemini"
-    )
-    llm_model_name: str = (
-        "meta.llama3-8b-instruct-v1:0"  # Default Bedrock Llama 3 model
-    )
-    ollama_endpoint: str = (
-        "http://localhost:11434/api/generate"  # Default for local Ollama
-    )
-    gemini_api_key: str = (
-        ""  # Key for Google Gemini API
-    )
-
-    # AWS Settings
-    aws_region: str = "us-east-1"
-    sqs_queue_url: str = "" # URL for AWS SQS Queue
-
-    # GCP Settings
-    gcp_project_id: str = ""
-    gcp_location: str = "us-central1"
-
-    # Azure Settings
-    azure_openai_endpoint: str = ""
-    azure_openai_api_key: str = ""
-    azure_openai_deployment_name: str = ""
-    azure_openai_api_version: str = "2024-02-15-preview"
+    llm_backend: str = "aws_bedrock"
+    llm_model_name: str = "meta.llama3-8b-instruct-v1:0"
+    ollama_endpoint: str = "http://localhost:11434/api/generate"
+    gemini_api_key: str = ""
 
     # Storage Settings
-    storage_backend: str = "s3"  # "local", "s3"
     local_storage_path: str = "./data"
-    s3_bucket: str = "agentic-document-platform-bucket"
 
     # Vector search and shadow mode feature flags
     vector_search_enabled: bool = False
-    template_selector_mode: str = "legacy"  # "legacy", "shadow", "hybrid"
+    template_selector_mode: str = "legacy"
 
     # Example standard settings
     log_level: str = "INFO"
 
     class Config:
         env_file = ".env"
-
 
 settings = Settings()

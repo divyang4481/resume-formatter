@@ -1,0 +1,20 @@
+FROM public.ecr.aws/docker/library/python:3.11-slim
+
+WORKDIR /app
+
+# Install dependencies
+RUN apt-get update && apt-get install -y gcc g++ && rm -rf /var/lib/apt/lists/*
+
+COPY pyproject.toml poetry.lock ./
+RUN pip install poetry
+RUN poetry config virtualenvs.create false
+RUN poetry install --no-interaction --no-ansi --without dev
+
+# Copy the application code
+COPY ./app ./app
+COPY ./init_db.py ./init_db.py
+
+# Create a local DB dir in case sqlite is initialized as fallback
+RUN mkdir -p .data
+
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

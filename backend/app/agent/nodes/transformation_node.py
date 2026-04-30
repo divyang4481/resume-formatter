@@ -74,13 +74,25 @@ def create_context_aware_extraction_node(llm_runtime: LlmRuntimeAdapter):
         )
         
         try:
-            response = llm_runtime.generate(prompt=prompt, temperature=0.1)
-            cleaned = LlmSanitizer.clean_json(response)
-                
+            from app.dependencies import get_agent_provider
+        agent = get_agent_provider()
+
+        # We simulate the template contract structure here
+        template_contract = dynamic_schema
+
+        try:
+            mapped_data = agent.map_resume_to_template(
+                parsed_resume={"text": extracted_text, "structured_context": structured_context},
+                template_contract=template_contract,
+                template_rules={"formatting_guidance": formatting_guidance},
+                pii_policy={},
+                job_context={"job_id": state.get("session_id", "default")}
+            )
             return {
-                "transformed_document_json": cleaned,
+                "transformed_document_json": mapped_data,
                 "status": "extracted"
             }
+
         except Exception as e:
             logger.error(f"Extraction node failed: {e}")
             return {"status": "extraction_error"}
