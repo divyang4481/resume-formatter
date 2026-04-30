@@ -40,6 +40,13 @@ ENV PATH="/app/.venv/bin:$PATH"
 
 WORKDIR /app
 
+# Install runtime system dependencies for ML/Docling (libgl1, libglib2.0-0) and Tika (default-jre-headless)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libgl1 \
+    libglib2.0-0 \
+    default-jre-headless \
+    && rm -rf /var/lib/apt/lists/*
+
 # Copy the virtual environment from builder
 COPY --from=builder /app/.venv /app/.venv
 

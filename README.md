@@ -23,6 +23,8 @@ This will automatically execute the tasks to boot both the frontend and backend 
 
 ### Option 2: Running Manually from the Terminal
 
+> **Note:** If you are connecting to real AWS resources (S3, SQS, Bedrock), you must still provision the AWS infrastructure (see **Step 1** under *Docker & AWS Setup*) and populate your `.env` file first.
+
 **Frontend (Angular)**
 1. Open a terminal and navigate to the frontend directory:
    ```bash
@@ -118,8 +120,8 @@ npx playwright test
 
 You can run the entire system locally using Docker Compose, configured to perfectly mirror the cloud environment by connecting directly to real AWS resources (S3, SQS, RDS, and Bedrock).
 
-### Provisioning AWS Infrastructure (Used for both Local & Prod)
-We provide an `aws-infrastructure.yaml` CloudFormation template to spin up the necessary backing services in AWS. This template creates:
+### Step 1: Provisioning AWS Infrastructure (Required for both Local & Prod)
+Before creating local containers or deploying to the cloud, you must provision the necessary AWS resources. We provide an `aws-infrastructure.yaml` CloudFormation template to spin up the necessary backing services in AWS. This template creates:
 - **S3 Bucket** (for document storage)
 - **SQS Queue** (for asynchronous messaging between the API and Worker)
 - **RDS PostgreSQL Database** (for job state and metadata)
@@ -136,8 +138,10 @@ We provide an `aws-infrastructure.yaml` CloudFormation template to spin up the n
    - `DeveloperAccessKeyId`
    - `DeveloperSecretAccessKey`
 
-### Local Setup via Docker Compose (Windows/Mac/Linux)
+### Step 2: Local Setup via Docker Compose (Windows/Mac/Linux)
 Because `Docling` requires heavy machine learning libraries (like PyTorch) and system dependencies (like `libgl1`, `libglib2.0-0`), running via Docker is highly recommended to isolate the environment.
+
+**Note:** You must have completed Step 1 to run the containers locally with AWS resources.
 
 We use a 3-container setup that connects directly to your newly created AWS resources:
 1. **API Container**: FastAPI Control Plane
@@ -167,17 +171,17 @@ We use a 3-container setup that connects directly to your newly created AWS reso
 
 *How it works locally:* Instead of relying on local mock services (like LocalStack or SQLite), your local 3-container setup uses your exact `aws-infrastructure.yaml` configuration. When a file is uploaded, it goes straight to the real S3 bucket. The message is pushed to the real SQS queue, picked up by your local worker container, and LLM reasoning uses the real AWS Bedrock models.
 
-### Full AWS Cloud Deployment
+### Step 3: Full AWS Cloud Deployment
 The system is built for a scalable, cost-effective AWS setup separating the web server from heavy processing. Since your local containers already use the real AWS backing services (S3, SQS, RDS, Bedrock), the code requires **no changes** for production.
 
 **Deployment Steps for AWS:**
-1. **Infrastructure:** You have already deployed `aws-infrastructure.yaml`. Keep the outputs handy.
+1. **Infrastructure:** You have already completed Step 1 and deployed `aws-infrastructure.yaml`. Keep the outputs handy.
 2. **ECR (Elastic Container Registry):** Build and push the backend `docker/Dockerfile` and frontend `Dockerfile` images to your ECR.
 3. **Fargate (Control Plane):** Deploy the API image to an ECS Fargate cluster via `cloudformation.yaml`. Map it behind an Application Load Balancer. It handles fast HTTP traffic.
 4. **Fargate/ECS (Execution Plane):** Deploy the Worker image as an ECS Service reading from the SQS queue. Configure Auto-Scaling based on queue depth to keep costs low (it scales to 0 when idle).
 5. **Agentic Core / Bedrock:** Ensure your AWS Bedrock Agent using `meta.llama3-8b-instruct-v1:0` (or similar) is active. The ECS tasks will use their assigned IAM Task Role instead of IAM User keys.
 
-### Resource Mapping
+## Resource Mapping
 | Component | Implementation (Local Docker & AWS Cloud) |
 | :--- | :--- |
 | **Worker Compute** | Docker Container (Local) / ECS Fargate Tasks (Cloud) |
