@@ -20,18 +20,26 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Install poetry
 RUN curl -sSL https://install.python-poetry.org | python3 -
 
+
 WORKDIR /app
 
 # Copy dependency files
 COPY pyproject.toml poetry.lock ./
 
 # Install core dependencies.
+
 # In CI/CD pipelines targeting specific clouds, you would add `--extras "cloud-aws-native"` or `--extras "cloud-azure-native"` here.
 ARG EXTRA_DEPENDENCIES=""
 RUN if [ -z "$EXTRA_DEPENDENCIES" ]; then \
       poetry install --no-root --only main; \
     else \
       poetry install --no-root --only main --extras "$EXTRA_DEPENDENCIES"; \
+    fi
+
+# Override PyTorch with the CPU-only version inside the venv if no GPU is used
+ARG USE_GPU="false"
+RUN if [ "$USE_GPU" = "false" ]; then \
+      /app/.venv/bin/pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu; \
     fi
 
 FROM python:3.11-slim as runtime

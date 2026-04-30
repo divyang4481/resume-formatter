@@ -120,6 +120,15 @@ npx playwright test
 
 You can run the entire system locally using Docker Compose, configured to perfectly mirror the cloud environment by connecting directly to real AWS resources (S3, SQS, RDS, and Bedrock).
 
+
+### Docker Images and PyTorch (CPU vs GPU)
+By default, compiling the Docker images pulls a lightweight, CPU-only version of PyTorch. This is intentional to keep the image sizes small and to ensure cost-effective deployments on serverless architectures like AWS ECS Fargate, which do not currently support GPUs.
+
+If you are deploying to EC2 (e.g., `g4dn`) or have a local GPU and wish to leverage CUDA for faster OCR with Docling, you can build the images with GPU support by passing the `USE_GPU=true` build argument:
+```bash
+docker build -t cv-architect-worker -f backend/Dockerfile.worker --build-arg USE_GPU=true .
+```
+
 ### Step 1: Provisioning AWS Infrastructure (Required for both Local & Prod)
 Before creating local containers or deploying to the cloud, you must provision the necessary AWS resources. We provide an `aws-infrastructure.yaml` CloudFormation template to spin up the necessary backing services in AWS. This template creates:
 - **S3 Bucket** (for document storage)

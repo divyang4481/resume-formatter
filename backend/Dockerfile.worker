@@ -7,11 +7,20 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc g++ libgl1 libglib2.0-0 default-jre-headless \
     && rm -rf /var/lib/apt/lists/*
 
+
 # Copy requirements and install
 COPY pyproject.toml poetry.lock ./
 RUN pip install poetry
+
 RUN poetry config virtualenvs.create false
+
 RUN poetry install --no-interaction --no-ansi --without dev
+
+# Override PyTorch with the CPU-only version if no GPU is used
+ARG USE_GPU="false"
+RUN if [ "$USE_GPU" = "false" ]; then \
+      pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu; \
+    fi
 
 # Copy the application code
 COPY ./app ./app
