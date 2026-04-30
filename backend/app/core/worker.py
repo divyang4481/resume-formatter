@@ -30,12 +30,11 @@ async def run_worker():
     doc_parser_service = get_document_extraction_service()
     storage_provider = get_storage_provider()
 
-    # Pre-initialize DB locally (SQLite)
-    if settings.cloud == "local":
-        from app.db.session import engine
-        from app.db.models import Base
-        Base.metadata.create_all(bind=engine)
-        logger.info("Worker local database initialized.")
+    # Initialize DB (SQLite)
+    from app.db.session import engine
+    from app.db.models import Base
+    Base.metadata.create_all(bind=engine)
+    logger.info("Worker database initialized.")
 
     while True:
         db = SessionLocal()
@@ -83,6 +82,63 @@ async def run_worker():
             await asyncio.sleep(5)
         finally:
             db.close()
+
+def sqs_handler(event, context):
+    """
+    AWS Lambda entrypoint for processing SQS messages.
+    """
+    logger.info("Starting Lambda SQS handler...")
+
+    # Initialize dependencies
+    llm_runtime = get_llm_runtime()
+    doc_parser_service = get_document_extraction_service()
+    storage_provider = get_storage_provider()
+
+    # Initialize DB (SQLite)
+    from app.db.session import engine
+    from app.db.models import Base
+    Base.metadata.create_all(bind=engine)
+
+    db = SessionLocal()
+    try:
+        job_repository = get_job_repository(db)
+        template_repository = get_template_repository(db)
+
+        workflow_service = resume_workflow_service_dependency(
+            llm=llm_runtime,
+            parser=doc_parser_service,
+            job_repo=job_repository,
+            template_repo=template_repository,
+            storage=storage_provider
+        )
+
+        for record in event.get('Records', []):
+            try:
+                import json
+                payload = json.loads(record['body'])
+                job_id = payload.get("job_id")
+
+                if job_id:
+                    logger.info(f"SQS Lambda Worker processing job_id: {job_id}")
+                    # Run the async execution within the sync handler
+                    asyncio.run(workflow_service.execute_job(job_id=job_id))
+                    logger.info(f"SQS Lambda Worker successfully processed job_id: {job_id}")
+            except Exception as e:
+                logger.error(f"Failed to process SQS record: {e}", exc_info=True)
+                if 'job_id' in locals() and job_id:
+                    try:
+                        job = job_repository.get_job(job_id)
+                        if job and job.status != "failed":
+                            job.status = "failed"
+                            job.error_message = str(e)
+                            job_repository.save_job(job)
+                    except Exception as db_e:
+                        logger.error(f"Failed to persist job failure state: {db_e}")
+                # We raise the exception to let SQS know the message failed (for DLQ processing)
+                raise
+    finally:
+        db.close()
+
 
 if __name__ == "__main__":
     asyncio.run(run_worker())

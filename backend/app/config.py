@@ -9,7 +9,7 @@ class Settings(BaseSettings):
     project_name: str = "Agentic Document Platform"
 
     # Cloud and Adapter Selection
-    cloud: str = "local"  # "aws", "azure", "gcp", "ibm", "local"
+    cloud: str = "aws"  # "aws", "azure", "gcp", "ibm", "local"
 
     # Document Parsing Routing & Thresholds
     document_parser_primary_pdf: str = "docling"
@@ -25,10 +25,10 @@ class Settings(BaseSettings):
 
     # LLM Settings
     llm_backend: str = (
-        "local_ollama"  # "aws_bedrock", "gcp_vertex", "azure_openai", "local_ollama", "gemini"
+        "aws_bedrock"  # "aws_bedrock", "gcp_vertex", "azure_openai", "local_ollama", "gemini"
     )
     llm_model_name: str = (
-        "llama3:latest"  # Default Ollama model. Override with Claude/Gemini/GPT for cloud.
+        "meta.llama3-8b-instruct-v1:0"  # Default Bedrock Llama 3 model
     )
     ollama_endpoint: str = (
         "http://localhost:11434/api/generate"  # Default for local Ollama
@@ -39,6 +39,7 @@ class Settings(BaseSettings):
 
     # AWS Settings
     aws_region: str = "us-east-1"
+    sqs_queue_url: str = "" # URL for AWS SQS Queue
 
     # GCP Settings
     gcp_project_id: str = ""
@@ -51,7 +52,7 @@ class Settings(BaseSettings):
     azure_openai_api_version: str = "2024-02-15-preview"
 
     # Storage Settings
-    storage_backend: str = "local"  # "local", "s3"
+    storage_backend: str = "s3"  # "local", "s3"
     local_storage_path: str = "./data"
     s3_bucket: str = "agentic-document-platform-bucket"
 

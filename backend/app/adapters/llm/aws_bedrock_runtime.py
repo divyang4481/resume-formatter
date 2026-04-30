@@ -9,12 +9,12 @@ class AwsBedrockLlmRuntime(LlmRuntimeAdapter):
     Requires AWS credentials to be configured in the environment.
     """
 
-    def __init__(self, model_id: str = "anthropic.claude-3-haiku-20240307-v1:0", region_name: Optional[str] = None):
+    def __init__(self, model_id: str = "meta.llama3-8b-instruct-v1:0", region_name: Optional[str] = None):
         """
         Initializes the Amazon Bedrock runtime.
 
         Args:
-            model_id: The specific foundation model to use. Defaults to Claude 3 Haiku.
+            model_id: The specific foundation model to use. Defaults to Llama 3.
             region_name: The AWS region. If not provided, boto3 defaults are used.
         """
         self.model_id = model_id
@@ -27,17 +27,37 @@ class AwsBedrockLlmRuntime(LlmRuntimeAdapter):
     def generate(self, prompt: str, **kwargs) -> str:
         """
         Invokes the Amazon Bedrock model.
-        Assumes the Anthropic Messages API format if using Claude 3 models.
+        Assumes the Converse API or direct invoke format for Llama 3 models.
         """
+        system_prompt = kwargs.get("system_prompt", "")
+        formatted_prompt = f"{system_prompt}\n\n{prompt}" if system_prompt else prompt
+
         # Determine format based on model family
-        if "anthropic.claude-3" in self.model_id:
+        if "meta.llama3" in self.model_id or "meta.llama2" in self.model_id:
+            # Llama 3 payload format for standard invoke_model
+            body = {
+                "prompt": formatted_prompt,
+                "max_gen_len": kwargs.get("max_tokens", 2048),
+                "temperature": kwargs.get("temperature", 0.5),
+                "top_p": kwargs.get("top_p", 0.9)
+            }
+
+            response = self.client.invoke_model(
+                modelId=self.model_id,
+                body=json.dumps(body)
+            )
+            response_body = json.loads(response.get('body').read())
+            # For Llama models on Bedrock, output is usually under 'generation'
+            return response_body.get('generation', '').strip()
+
+        elif "anthropic.claude-3" in self.model_id:
             body = {
                 "anthropic_version": "bedrock-2023-05-31",
                 "max_tokens": kwargs.get("max_tokens", 4096),
                 "messages": [
                     {
                         "role": "user",
-                        "content": prompt
+                        "content": formatted_prompt
                     }
                 ]
             }
@@ -55,7 +75,7 @@ class AwsBedrockLlmRuntime(LlmRuntimeAdapter):
         elif "anthropic.claude-v2" in self.model_id or "anthropic.claude-instant-v1" in self.model_id:
             # Fallback for older Claude Text Completions API
             body = {
-                "prompt": f"\n\nHuman: {prompt}\n\nAssistant:",
+                "prompt": f"\n\nHuman: {formatted_prompt}\n\nAssistant:",
                 "max_tokens_to_sample": kwargs.get("max_tokens", 4096)
             }
             if "temperature" in kwargs:
@@ -70,7 +90,7 @@ class AwsBedrockLlmRuntime(LlmRuntimeAdapter):
 
         elif "amazon.titan" in self.model_id:
              body = {
-                 "inputText": prompt,
+                 "inputText": formatted_prompt,
                  "textGenerationConfig": {
                      "maxTokenCount": kwargs.get("max_tokens", 4096),
                      "temperature": kwargs.get("temperature", 0.7)
