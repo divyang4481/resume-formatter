@@ -1,0 +1,123 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Agentic Document Platform (FastAPI + Worker) using SQS and S3
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues: [dev, prod]
+  ModelId:
+    Type: String
+    Default: meta.llama3-8b-instruct-v1:0
+    Description: Bedrock Model ID to use
+
+Resources:
+  # ---------------------------------------------------------
+  # S3 Bucket for Document Storage
+  # ---------------------------------------------------------
+  DocumentStorageBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "agentic-document-platform-${Environment}-${AWS::AccountId}"
+
+  # ---------------------------------------------------------
+  # SQS Queue for Background Processing
+  # ---------------------------------------------------------
+  ProcessingQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub "document-processing-queue-${Environment}"
+      VisibilityTimeout: 900 # 15 minutes, allowing LangGraph extraction to run
+      MessageRetentionPeriod: 86400 # 1 day
+
+  # ---------------------------------------------------------
+  # API Lambda Function (FastAPI)
+  # ---------------------------------------------------------
+  ApiFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "agentic-doc-api-${Environment}"
+      PackageType: Image
+      Timeout: 30
+      MemorySize: 1024
+      Environment:
+        Variables:
+          CLOUD: aws
+          STORAGE_BACKEND: s3
+          S3_BUCKET: !Ref DocumentStorageBucket
+          LLM_BACKEND: aws_bedrock
+          LLM_MODEL_NAME: !Ref ModelId
+          SQS_QUEUE_URL: !Ref ProcessingQueue
+      Policies:
+        - S3CrudPolicy:
+            BucketName: !Ref DocumentStorageBucket
+        - SQSSendMessagePolicy:
+            QueueName: !GetAtt ProcessingQueue.QueueName
+        - Statement:
+            - Effect: Allow
+              Action:
+                - bedrock:InvokeModel
+              Resource: "*"
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            Path: /{proxy+}
+            Method: ANY
+    Metadata:
+      Dockerfile: Dockerfile.aws
+      DockerContext: ./backend
+      DockerTag: api-latest
+
+  # ---------------------------------------------------------
+  # Worker Lambda Function (SQS Triggered)
+  # ---------------------------------------------------------
+  WorkerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "agentic-doc-worker-${Environment}"
+      PackageType: Image
+      ImageConfig:
+        Command: ["app.core.worker.sqs_handler"]
+      Timeout: 900 # 15 minutes max
+      MemorySize: 4096 # High memory due to Docling / PyTorch requirements
+      Environment:
+        Variables:
+          CLOUD: aws
+          STORAGE_BACKEND: s3
+          S3_BUCKET: !Ref DocumentStorageBucket
+          LLM_BACKEND: aws_bedrock
+          LLM_MODEL_NAME: !Ref ModelId
+          SQS_QUEUE_URL: !Ref ProcessingQueue
+      Policies:
+        - S3CrudPolicy:
+            BucketName: !Ref DocumentStorageBucket
+        - SQSPollerPolicy:
+            QueueName: !GetAtt ProcessingQueue.QueueName
+        - Statement:
+            - Effect: Allow
+              Action:
+                - bedrock:InvokeModel
+              Resource: "*"
+      Events:
+        SQSEvent:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt ProcessingQueue.Arn
+            BatchSize: 1
+    Metadata:
+      Dockerfile: Dockerfile.aws
+      DockerContext: ./backend
+      DockerTag: worker-latest
+
+Outputs:
+  ApiUrl:
+    Description: "API Gateway endpoint URL for Prod environment"
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/"
+  S3BucketName:
+    Description: "Name of the provisioned S3 Bucket"
+    Value: !Ref DocumentStorageBucket
+  SQSQueueUrl:
+    Description: "URL of the provisioned SQS Queue"
+    Value: !Ref ProcessingQueue

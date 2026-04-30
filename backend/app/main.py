@@ -16,13 +16,13 @@ def create_app() -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
-        if settings.cloud == "local":
-            from app.db.session import engine
-            from app.db.models import Base
+        # Always initialize SQLite since we are using it for the DB layer in all clouds
+        from app.db.session import engine
+        from app.db.models import Base
 
-            # Initialize DB tables locally
-            Base.metadata.create_all(bind=engine)
-            print("Local database initialized")
+        # Initialize DB tables
+        Base.metadata.create_all(bind=engine)
+        print("Database initialized")
         yield
 
     from fastapi.middleware.cors import CORSMiddleware
@@ -35,6 +35,11 @@ def create_app() -> FastAPI:
         docs_url="/docs",
         redoc_url="/redoc",
     )
+
+    # Force DB init during module load for TestClient compat if lifespan isn't awaited natively by the test runner
+    from app.db.session import engine
+    from app.db.models import Base
+    Base.metadata.create_all(bind=engine)
 
     # Initialize Model Context Protocol (MCP) support
     # This automatically turns FastAPI endpoints into discoverable AI tools
@@ -75,6 +80,12 @@ def create_app() -> FastAPI:
 
 
 app = create_app()
+
+try:
+    from mangum import Mangum
+    handler = Mangum(app)
+except ImportError:
+    pass
 
 if __name__ == "__main__":
     uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)

@@ -182,6 +182,9 @@ def get_validation_repository(db: Session = Depends(get_db_session)):
 
 
 def get_message_queue(db: Session = Depends(get_db_session)) -> MessageQueue:
+    if settings.cloud == "aws":
+        from app.adapters.queue.sqs_queue import SqsMessageQueue
+        return SqsMessageQueue()
     return SqlAlchemyMessageQueue(db=db)
 
 
