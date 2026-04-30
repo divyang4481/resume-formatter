@@ -1,0 +1,140 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Core AWS Infrastructure for Agentic Document Platform (S3, SQS, RDS, Bedrock Access)
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues: [dev, prod]
+  DBUsername:
+    Type: String
+    Default: dbadmin
+    Description: Master username for RDS PostgreSQL
+  DBPassword:
+    Type: String
+    NoEcho: true
+    Description: Master password for RDS PostgreSQL (Ensure to pass this securely during deployment, e.g., resumedemo@#123)
+
+Resources:
+  # ---------------------------------------------------------
+  # S3 Bucket
+  # ---------------------------------------------------------
+  PlatformStorageBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "agentic-platform-storage-${Environment}-${AWS::AccountId}-${AWS::Region}"
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  # ---------------------------------------------------------
+  # Security Group for Local RDS Access
+  # ---------------------------------------------------------
+  DatabaseSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: "Allow local developer access to RDS PostgreSQL"
+      # Assuming default VPC if not specified; for robust setups explicitly parameterize VpcId.
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          CidrIp: 0.0.0.0/0 # Open to all for local dev ease; narrow this down for production!
+
+  # ---------------------------------------------------------
+  # SQS Queue
+  # ---------------------------------------------------------
+  PlatformMessageQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub "agentic-platform-queue-${Environment}"
+      VisibilityTimeout: 900
+      MessageRetentionPeriod: 86400
+
+  # ---------------------------------------------------------
+  # RDS PostgreSQL Database
+  # ---------------------------------------------------------
+  PlatformDatabase:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBName: agenticdb
+      DBInstanceIdentifier: !Sub "agentic-platform-db-${Environment}"
+      AllocatedStorage: 20
+      DBInstanceClass: db.t3.micro
+      Engine: postgres
+      EngineVersion: "15"
+      MasterUsername: !Ref DBUsername
+      MasterUserPassword: !Ref DBPassword
+      PubliclyAccessible: true # To allow local developers to connect
+      VPCSecurityGroups:
+        - !Ref DatabaseSecurityGroup
+      StorageType: gp2
+      BackupRetentionPeriod: 1
+
+  # ---------------------------------------------------------
+  # IAM Policy (To be attached to User and Role)
+  # ---------------------------------------------------------
+  PlatformAccessPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      Description: "Allows access to S3, SQS, RDS, and Bedrock for the Agentic Platform"
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - s3:GetObject
+              - s3:PutObject
+              - s3:DeleteObject
+              - s3:ListBucket
+            Resource:
+              - !Sub "${PlatformStorageBucket.Arn}"
+              - !Sub "${PlatformStorageBucket.Arn}/*"
+          - Effect: Allow
+            Action:
+              - sqs:SendMessage
+              - sqs:ReceiveMessage
+              - sqs:DeleteMessage
+              - sqs:GetQueueUrl
+              - sqs:GetQueueAttributes
+            Resource: !GetAtt PlatformMessageQueue.Arn
+          - Effect: Allow
+            Action:
+              - bedrock:InvokeModel
+              - bedrock:InvokeModelWithResponseStream
+            Resource: "*"
+
+  # ---------------------------------------------------------
+  # IAM User (for Local Docker Compose Development)
+  # ---------------------------------------------------------
+  LocalDeveloperUser:
+    Type: AWS::IAM::User
+    Properties:
+      UserName: !Sub "agentic-local-dev-${Environment}"
+      ManagedPolicyArns:
+        - !Ref PlatformAccessPolicy
+
+  LocalDeveloperAccessKey:
+    Type: AWS::IAM::AccessKey
+    Properties:
+      UserName: !Ref LocalDeveloperUser
+
+Outputs:
+  S3BucketName:
+    Description: "S3 Bucket Name"
+    Value: !Ref PlatformStorageBucket
+  SQSQueueUrl:
+    Description: "SQS Queue URL"
+    Value: !Ref PlatformMessageQueue
+  RDSConnectionString:
+    Description: "PostgreSQL Database Connection String (Password omitted for security. You must insert it URL-encoded, e.g., %40%23 instead of @#)"
+    Value: !Sub "postgresql://${DBUsername}:<YOUR_URL_ENCODED_PASSWORD>@${PlatformDatabase.Endpoint.Address}:${PlatformDatabase.Endpoint.Port}/agenticdb"
+  DeveloperAccessKeyId:
+    Description: "AWS Access Key ID for Local Environment (.env)"
+    Value: !Ref LocalDeveloperAccessKey
+  DeveloperSecretAccessKeySecret:
+    Description: "AWS Secret Access Key for Local Environment (.env). THIS IS SENSITIVE. Note: In production, do not output secrets in CloudFormation."
+    # Outputting secret here because it's required for local development and IAM doesn't let you view it again later.
+    Value: !GetAtt LocalDeveloperAccessKey.SecretAccessKey
