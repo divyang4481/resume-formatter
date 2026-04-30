@@ -139,6 +139,8 @@ Before creating local containers or deploying to the cloud, you must provision t
 **Steps to Provision (via AWS CLI):**
 1. Open your terminal and ensure you have the AWS CLI installed and configured with appropriate permissions.
 2. Deploy the stack using the following command:
+
+   *For Mac/Linux (Bash):*
    ```bash
    aws cloudformation deploy \
      --template-file aws-infrastructure.yaml \
@@ -146,12 +148,33 @@ Before creating local containers or deploying to the cloud, you must provision t
      --capabilities CAPABILITY_NAMED_IAM \
      --region ap-south-1
    ```
+
+   *For Windows (PowerShell):*
+   ```powershell
+   aws cloudformation deploy `
+     --template-file aws-infrastructure.yaml `
+     --stack-name cv-architect-infra `
+     --capabilities CAPABILITY_NAMED_IAM `
+     --region ap-south-1
+   ```
+
 3. Once the deployment successfully completes, fetch the necessary outputs to populate your `.env` file:
+
+   *For Mac/Linux (Bash):*
    ```bash
    aws cloudformation describe-stacks \
      --stack-name cv-architect-infra \
      --region ap-south-1 \
      --query "Stacks[0].Outputs" \
+     --output table
+   ```
+
+   *For Windows (PowerShell):*
+   ```powershell
+   aws cloudformation describe-stacks `
+     --stack-name cv-architect-infra `
+     --region ap-south-1 `
+     --query "Stacks[0].Outputs" `
      --output table
    ```
    *You will map these outputs to variables like `S3_BUCKET_INPUT`, `SQS_PROCESSING_QUEUE_URL`, etc., in the next step.*
