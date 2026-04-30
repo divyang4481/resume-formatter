@@ -104,12 +104,50 @@ npx playwright test
 
 ---
 
-## AWS Agentic Core & ECS Deployment
-This application supports both local execution and an AWS Cloud Native architecture utilizing **Bedrock Agents**, **SQS**, and **ECS Fargate**.
+## Local Docker Setup & Deployment
 
-### Runtime Architecture Modes
-- **Local Mode**: Uses local memory Queues, SQLite, local file system, and local LLMs (`CLOUD_PROVIDER=local`). No cloud credentials required.
-- **AWS Mode**: Uses AWS SQS, Bedrock Agents, S3, and Bedrock Knowledge Base.
+You can run the entire system locally using Docker, ensuring parity with the cloud environment.
+
+### Running Locally via Docker
+Because `Docling` requires heavy machine learning libraries (like PyTorch) and system dependencies (like `libgl1`, `libglib2.0-0`), running via Docker is highly recommended to isolate the environment. The `docker-compose.yml` spins up:
+1. The **FastAPI API Server** (Control Plane)
+2. The **Asynchronous Python Worker** (Execution Plane)
+3. **LocalStack / Redis / Local File Storage** (Mock Infrastructure)
+
+**Steps:**
+1. Ensure Docker Desktop is running (works well on Windows WSL2 or macOS).
+2. Navigate to the `backend/` directory:
+   ```bash
+   cd backend
+   ```
+3. Run `docker-compose up --build`:
+   ```bash
+   docker-compose up --build
+   ```
+*Note for Windows users:* The Dockerfiles are optimized to run `docling` without crashing by pre-installing `libgl1` and `gcc`. Ensure Docker Desktop is allocated at least 4GB of RAM.
+
+### AWS Cloud Deployment
+The system is built for a scalable, cost-effective AWS setup separating the web server from heavy processing.
+
+**Deployment Steps for AWS:**
+1. **ECR (Elastic Container Registry):** Build and push the `Dockerfile.api` and `Dockerfile.worker` images to your ECR.
+2. **Fargate (Control Plane):** Deploy the `Dockerfile.api` image to an ECS Fargate cluster. Map it behind an Application Load Balancer. It handles fast HTTP traffic.
+3. **Fargate/ECS (Execution Plane):** Deploy the `Dockerfile.worker` image as an ECS Service reading from an SQS queue. Configure Auto-Scaling based on queue depth to keep costs low (it scales to 0 when idle).
+4. **Agentic Core / Bedrock:** Create an AWS Bedrock Agent using `meta.llama3-8b-instruct-v1:0` (or similar) and link an S3-backed Bedrock Knowledge Base.
+5. **Infrastructure:** Map environments to use S3 for Storage, SQS for Queues, and DynamoDB/Aurora/RDS for Job State.
+
+### Resource Mapping: Local vs AWS
+| Component | Local Development | AWS Cost-Effective Deployment |
+| :--- | :--- | :--- |
+| **Orchestrator** | LangGraph (Local Memory) | LangGraph (Python in Worker) |
+| **Worker Compute** | Docker Container | ECS Fargate Tasks (Auto-Scaling) |
+| **API Server** | Docker Container (Uvicorn) | ECS Fargate + ALB |
+| **Message Queue** | Local in-memory / SQLite | Amazon SQS |
+| **Database State** | SQLite | Amazon DynamoDB or RDS Serverless |
+| **Storage (Blobs)** | Local File System | Amazon S3 |
+| **Reasoning Agent** | Ollama / Mock Local Agent | AWS Bedrock Agents |
+| **Knowledge Base** | Local FAISS / Memory | AWS Bedrock Knowledge Bases |
+| **Extraction** | Docling (Local PyTorch) | Docling (Inside ECS Worker Container) |
 
 ### APIs
 The API is cleanly separated into two distinct spaces:

@@ -14,3 +14,24 @@ class ResumeFormattingAgent(ABC):
     ) -> Dict[str, Any]:
         """Maps parsed resume data to the structured schema required by the template."""
         pass
+
+    @abstractmethod
+    def generate_template_contract(
+        self,
+        *,
+        template_text: str,
+        template_metadata: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Analyzes template text and generates a structured contract/schema."""
+        pass
+
+    @abstractmethod
+    def evaluate_output_quality(
+        self,
+        *,
+        mapped_data: Dict[str, Any],
+        template_contract: Dict[str, Any],
+        job_context: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Evaluates mapping quality, reasoning about missing fields or formatting issues."""
+        pass

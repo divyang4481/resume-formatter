@@ -181,13 +181,38 @@ export class TemplateUploadDialogComponent {
 
     this.adminService.uploadTemplate(this.selectedFile, metadata).subscribe({
       next: (res) => {
-        this.snackBar.open('Template analyzed successfully', 'Close', { duration: 3000 });
-        this.dialogRef.close(res.asset_id);
+        const assetId = res.asset_id;
+        this.pollTemplateStatus(assetId);
       },
       error: (err) => {
         console.error('Upload failed', err);
-        this.snackBar.open('Analysis failed. Please try again.', 'Close', { duration: 5000 });
+        this.snackBar.open('Upload failed. Please try again.', 'Close', { duration: 5000 });
         this.isUploading = false;
+      }
+    });
+  }
+
+  private pollTemplateStatus(templateId: string) {
+    this.adminService.getTemplateDetail(templateId).subscribe({
+      next: (res) => {
+        // Status updates typically reflect in res.template.status
+        const status = res?.template?.status || 'DRAFT';
+
+        // If it's no longer just a 'DRAFT' and processing is done, we can assume READY_FOR_TESTING or equivalent success state
+        if (status === 'READY_FOR_TESTING' || status === 'ACTIVE' || status === 'ARCHIVED' || res?.template?.field_extraction_manifest?.length > 0) {
+          this.snackBar.open('Template processed successfully', 'Close', { duration: 3000 });
+          this.isUploading = false;
+          this.dialogRef.close(templateId);
+        } else {
+          // Keep polling every 3 seconds
+          setTimeout(() => this.pollTemplateStatus(templateId), 3000);
+        }
+      },
+      error: (err) => {
+        console.error('Failed to get template status', err);
+        this.snackBar.open('Processing failed. Please try again.', 'Close', { duration: 5000 });
+        this.isUploading = false;
+        this.dialogRef.close(templateId); // Return even on error so they can see the draft
       }
     });
   }

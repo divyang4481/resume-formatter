@@ -58,32 +58,66 @@ async def upload_asset(
     # Read the file content bytes
     content = await file.read()
 
-    # Run the template service
-    from app.services.resume_ai_service import ResumeAiService
-    from app.services.template_analysis_service import TemplateAnalysisService
-    ai_service = ResumeAiService(llm, extraction_service)
+    # 1. Store the raw file immediately
+    import uuid
+    from app.db.session import SessionLocal
+    from app.db.models import ProcessingJob, TemplateAsset
 
-    template_service = TemplateService(
-        storage_provider=storage_provider,
-        template_repository=template_repository,
-        event_bus=event_bus,
-        extraction_service=extraction_service,
-        knowledge_index=knowledge_index,
-        template_analysis_service=TemplateAnalysisService(ai_service)
-    )
+    asset_id = str(uuid.uuid4())
+    storage_key = f"templates/{asset_id}/{file.filename}"
+    storage_uri = storage_provider.put_bytes(storage_key, content)
 
-    asset_id = await template_service.upload_asset(
-        filename=file.filename,
-        content=content,
-        metadata=parsed_metadata,
-        content_type=file.content_type or "application/octet-stream",
-        uploaded_by="admin-user" # placeholder since auth isn't complete yet
-    )
+    db = SessionLocal()
+    try:
+        # 2. Create the Draft Template Record
+        template = TemplateAsset(
+            id=asset_id,
+            version="1.0.0",
+            asset_type=parsed_metadata.asset_type,
+            name=parsed_metadata.name or file.filename,
+            status=AssetStatus.DRAFT.value,
+            industry=parsed_metadata.industry,
+            role_family=parsed_metadata.role_family,
+            region=parsed_metadata.region,
+            language=parsed_metadata.language,
+            original_file_ref=storage_uri,
+            file_name=file.filename,
+            created_by="admin-user"
+        )
+        db.add(template)
+
+        # 3. Create a processing job for the worker
+        job_id = str(uuid.uuid4())
+        job = ProcessingJob(
+            id=job_id,
+            original_file_ref=storage_uri,
+            template_asset_id=asset_id,
+            template_version="1.0.0",
+            status="PROCESSING",
+            stage="init",
+            job_type="TEMPLATE_PROCESSING"
+        )
+        db.add(job)
+        db.commit()
+
+        # 4. Enqueue the Job
+        from app.dependencies import get_message_queue
+        queue = get_message_queue()
+        queue.publish({
+            "job_id": job_id,
+            "job_type": "TEMPLATE_PROCESSING",
+            "input_uri": storage_uri,
+            "template_id": asset_id,
+            "version_id": "1.0.0"
+        })
+
+    finally:
+        db.close()
 
     return AssetUploadResponse(
         asset_id=asset_id,
-        status=AssetStatus.DRAFT,
-        message="Asset uploaded successfully."
+        status=AssetStatus.DRAFT,  # The entity is still a draft while processing
+        message="Asset uploaded successfully. Processing in background."
     )
 
 @router.get("/templates")
