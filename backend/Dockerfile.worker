@@ -14,11 +14,10 @@ RUN pip install poetry
 
 RUN poetry config virtualenvs.create false
 
-RUN poetry install --no-interaction --no-ansi --without dev
-
-# Override PyTorch with the CPU-only version if no GPU is used
+# Override PyTorch with the CPU-only version in the same RUN layer to prevent image bloat
 ARG USE_GPU="false"
-RUN if [ "$USE_GPU" = "false" ]; then \
+RUN poetry install --no-interaction --no-ansi --without dev && \
+    if [ "$USE_GPU" = "false" ]; then \
       pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu; \
     fi
 

@@ -136,16 +136,25 @@ Before creating local containers or deploying to the cloud, you must provision t
 - **RDS PostgreSQL Database** (for job state and metadata)
 - **IAM User / Roles** (for permissions to Bedrock, S3, SQS, and RDS)
 
-**Steps to Provision:**
-1. Go to the AWS Console -> CloudFormation.
-2. Ensure your region is set to **ap-south-1 (Mumbai)**.
-3. Upload `aws-infrastructure.yaml` and create the stack.
-4. Once deployed, go to the **Outputs** tab of the stack. You will find:
-   - `S3BucketName`
-   - `SQSQueueUrl`
-   - `RDSConnectionString`
-   - `DeveloperAccessKeyId`
-   - `DeveloperSecretAccessKey`
+**Steps to Provision (via AWS CLI):**
+1. Open your terminal and ensure you have the AWS CLI installed and configured with appropriate permissions.
+2. Deploy the stack using the following command:
+   ```bash
+   aws cloudformation deploy \
+     --template-file aws-infrastructure.yaml \
+     --stack-name cv-architect-infra \
+     --capabilities CAPABILITY_NAMED_IAM \
+     --region ap-south-1
+   ```
+3. Once the deployment successfully completes, fetch the necessary outputs to populate your `.env` file:
+   ```bash
+   aws cloudformation describe-stacks \
+     --stack-name cv-architect-infra \
+     --region ap-south-1 \
+     --query "Stacks[0].Outputs" \
+     --output table
+   ```
+   *You will map these outputs to variables like `S3_BUCKET_INPUT`, `SQS_PROCESSING_QUEUE_URL`, etc., in the next step.*
 
 ### Step 2: Local Setup via Docker Compose (Windows/Mac/Linux)
 Because `Docling` requires heavy machine learning libraries (like PyTorch) and system dependencies (like `libgl1`, `libglib2.0-0`), running via Docker is highly recommended to isolate the environment.
