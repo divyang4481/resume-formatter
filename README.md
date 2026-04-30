@@ -26,6 +26,7 @@ This will automatically execute the tasks to boot both the frontend and backend 
 **Frontend (Angular)**
 1. Open a terminal and navigate to the frontend directory:
    ```bash
+   # Bash or PowerShell
    cd frontend
    npm install
    npm run start
@@ -38,7 +39,16 @@ This will automatically execute the tasks to boot both the frontend and backend 
    cd backend
    ```
 2. Activate your Conda environment and start the server:
+
+   *For Mac/Linux (Bash):*
    ```bash
+   conda activate cv-architect
+   poetry run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+   ```
+
+   *For Windows (PowerShell):*
+   ```powershell
+   # Ensure you are using the cv-architect conda environment
    conda activate cv-architect
    poetry run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
    ```
@@ -104,50 +114,80 @@ npx playwright test
 
 ---
 
-## Local Docker Setup & Deployment
+## Docker & AWS Setup (Local vs Cloud)
 
-You can run the entire system locally using Docker, ensuring parity with the cloud environment.
+You can run the entire system locally using Docker Compose, configured to perfectly mirror the cloud environment by connecting directly to real AWS resources (S3, SQS, RDS, and Bedrock).
 
-### Running Locally via Docker
-Because `Docling` requires heavy machine learning libraries (like PyTorch) and system dependencies (like `libgl1`, `libglib2.0-0`), running via Docker is highly recommended to isolate the environment. The `docker-compose.yml` spins up:
-1. The **FastAPI API Server** (Control Plane)
-2. The **Asynchronous Python Worker** (Execution Plane)
-3. **LocalStack / Redis / Local File Storage** (Mock Infrastructure)
+### Provisioning AWS Infrastructure (Used for both Local & Prod)
+We provide an `aws-infrastructure.yaml` CloudFormation template to spin up the necessary backing services in AWS. This template creates:
+- **S3 Bucket** (for document storage)
+- **SQS Queue** (for asynchronous messaging between the API and Worker)
+- **RDS PostgreSQL Database** (for job state and metadata)
+- **IAM User / Roles** (for permissions to Bedrock, S3, SQS, and RDS)
 
-**Steps:**
-1. Ensure Docker Desktop is running (works well on Windows WSL2 or macOS).
-2. Navigate to the `backend/` directory:
-   ```bash
-   cd backend
+**Steps to Provision:**
+1. Go to the AWS Console -> CloudFormation.
+2. Ensure your region is set to **ap-south-1 (Mumbai)**.
+3. Upload `aws-infrastructure.yaml` and create the stack.
+4. Once deployed, go to the **Outputs** tab of the stack. You will find:
+   - `S3BucketName`
+   - `SQSQueueUrl`
+   - `RDSConnectionString`
+   - `DeveloperAccessKeyId`
+   - `DeveloperSecretAccessKey`
+
+### Local Setup via Docker Compose (Windows/Mac/Linux)
+Because `Docling` requires heavy machine learning libraries (like PyTorch) and system dependencies (like `libgl1`, `libglib2.0-0`), running via Docker is highly recommended to isolate the environment.
+
+We use a 3-container setup that connects directly to your newly created AWS resources:
+1. **API Container**: FastAPI Control Plane
+2. **Worker Container**: Asynchronous Python Execution Plane
+3. **Frontend Container**: Angular Application
+
+**Step-by-Step for Windows (WSL2 / Docker Desktop):**
+1. **Prerequisites:** Ensure **WSL2** and **Docker Desktop** are installed and running. Allocate at least 4GB of RAM to Docker Desktop.
+2. **Configure Environment:** In the root directory, open your `.env` file and fill in the outputs from the CloudFormation stack:
+   ```env
+   AWS_REGION=ap-south-1
+   AWS_ACCESS_KEY_ID=<from_cloudformation>
+   AWS_SECRET_ACCESS_KEY=<from_cloudformation>
+   # Map the single S3 bucket created by CloudFormation to both input and output
+   S3_BUCKET_INPUT=<from_cloudformation>
+   S3_BUCKET_OUTPUT=<from_cloudformation>
+   SQS_PROCESSING_QUEUE_URL=<from_cloudformation>
+   DATABASE_URL=<from_cloudformation>
    ```
-3. Run `docker-compose up --build`:
+3. **Run Docker Compose:** Open your terminal in the root directory of the repository and run:
    ```bash
    docker-compose up --build
    ```
-*Note for Windows users:* The Dockerfiles are optimized to run `docling` without crashing by pre-installing `libgl1` and `gcc`. Ensure Docker Desktop is allocated at least 4GB of RAM.
+4. **Access the App:**
+   - Frontend: `http://localhost:4200`
+   - API: `http://localhost:8000/docs`
 
-### AWS Cloud Deployment
-The system is built for a scalable, cost-effective AWS setup separating the web server from heavy processing.
+*How it works locally:* Instead of relying on local mock services (like LocalStack or SQLite), your local 3-container setup uses your exact `aws-infrastructure.yaml` configuration. When a file is uploaded, it goes straight to the real S3 bucket. The message is pushed to the real SQS queue, picked up by your local worker container, and LLM reasoning uses the real AWS Bedrock models.
+
+### Full AWS Cloud Deployment
+The system is built for a scalable, cost-effective AWS setup separating the web server from heavy processing. Since your local containers already use the real AWS backing services (S3, SQS, RDS, Bedrock), the code requires **no changes** for production.
 
 **Deployment Steps for AWS:**
-1. **ECR (Elastic Container Registry):** Build and push the `Dockerfile.api` and `Dockerfile.worker` images to your ECR.
-2. **Fargate (Control Plane):** Deploy the `Dockerfile.api` image to an ECS Fargate cluster. Map it behind an Application Load Balancer. It handles fast HTTP traffic.
-3. **Fargate/ECS (Execution Plane):** Deploy the `Dockerfile.worker` image as an ECS Service reading from an SQS queue. Configure Auto-Scaling based on queue depth to keep costs low (it scales to 0 when idle).
-4. **Agentic Core / Bedrock:** Create an AWS Bedrock Agent using `meta.llama3-8b-instruct-v1:0` (or similar) and link an S3-backed Bedrock Knowledge Base.
-5. **Infrastructure:** Map environments to use S3 for Storage, SQS for Queues, and DynamoDB/Aurora/RDS for Job State.
+1. **Infrastructure:** You have already deployed `aws-infrastructure.yaml`. Keep the outputs handy.
+2. **ECR (Elastic Container Registry):** Build and push the backend `docker/Dockerfile` and frontend `Dockerfile` images to your ECR.
+3. **Fargate (Control Plane):** Deploy the API image to an ECS Fargate cluster via `cloudformation.yaml`. Map it behind an Application Load Balancer. It handles fast HTTP traffic.
+4. **Fargate/ECS (Execution Plane):** Deploy the Worker image as an ECS Service reading from the SQS queue. Configure Auto-Scaling based on queue depth to keep costs low (it scales to 0 when idle).
+5. **Agentic Core / Bedrock:** Ensure your AWS Bedrock Agent using `meta.llama3-8b-instruct-v1:0` (or similar) is active. The ECS tasks will use their assigned IAM Task Role instead of IAM User keys.
 
-### Resource Mapping: Local vs AWS
-| Component | Local Development | AWS Cost-Effective Deployment |
-| :--- | :--- | :--- |
-| **Orchestrator** | LangGraph (Local Memory) | LangGraph (Python in Worker) |
-| **Worker Compute** | Docker Container | ECS Fargate Tasks (Auto-Scaling) |
-| **API Server** | Docker Container (Uvicorn) | ECS Fargate + ALB |
-| **Message Queue** | Local in-memory / SQLite | Amazon SQS |
-| **Database State** | SQLite | Amazon DynamoDB or RDS Serverless |
-| **Storage (Blobs)** | Local File System | Amazon S3 |
-| **Reasoning Agent** | Ollama / Mock Local Agent | AWS Bedrock Agents |
-| **Knowledge Base** | Local FAISS / Memory | AWS Bedrock Knowledge Bases |
-| **Extraction** | Docling (Local PyTorch) | Docling (Inside ECS Worker Container) |
+### Resource Mapping
+| Component | Implementation (Local Docker & AWS Cloud) |
+| :--- | :--- |
+| **Worker Compute** | Docker Container (Local) / ECS Fargate Tasks (Cloud) |
+| **API Server** | Docker Container (Local) / ECS Fargate + ALB (Cloud) |
+| **Message Queue** | Amazon SQS (Provisioned via CFN) |
+| **Database State** | Amazon RDS PostgreSQL (Provisioned via CFN) |
+| **Storage (Blobs)** | Amazon S3 (Provisioned via CFN) |
+| **Reasoning Agent** | AWS Bedrock Agents |
+| **Knowledge Base** | AWS Bedrock Knowledge Bases |
+| **Extraction** | Docling (Inside Docker Containers) |
 
 ### APIs
 The API is cleanly separated into two distinct spaces:
