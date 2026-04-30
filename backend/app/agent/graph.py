@@ -24,10 +24,7 @@ def create_parse_node(doc_parser: DocumentExtractionService, storage):
         context = ExtractionContext(intent=intent, actor_role=actor_role)
 
         # Retrieve bytes from storage
-        try:
-            file_bytes = storage.get_bytes(file_path)
-        except Exception:
-            file_bytes = b"" # Fallback to empty if not found during dev
+        file_bytes = storage.get_bytes(file_path)
 
         parsing_service = ResumeParsingService(extractor=doc_parser)
         result = await parsing_service.ingest(

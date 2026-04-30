@@ -108,6 +108,16 @@ class MessageQueue(ABC):
         """Dequeues a message (if available)."""
         pass
 
+    @abstractmethod
+    def mark_completed(self, queue_name: str, message: Dict[str, Any]) -> None:
+        """Acknowledges successful message processing."""
+        pass
+
+    @abstractmethod
+    def mark_failed(self, queue_name: str, message: Dict[str, Any], error: Optional[str] = None) -> None:
+        """Marks processing failure and allows retry/dead-letter handling."""
+        pass
+
 class EventBus(ABC):
     @abstractmethod
     def publish(self, topic: str, event: Any) -> None:

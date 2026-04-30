@@ -1,3 +1,4 @@
+import logging
 import time
 from typing import Any, Dict, Optional, Tuple
 from app.config import settings
@@ -5,15 +6,15 @@ from app.domain.interfaces.document_parser import DocumentParser
 from app.schemas.parsed_document import ParsedDocument
 from app.schemas.parser_events import ParseResultTrace, ParserAttempt
 from app.adapters.parsers.docling_parser import DoclingParser
-from app.adapters.parsers.tika_parser import TikaParser
 from app.adapters.parsers.azure_document_intelligence_parser import AzureDocumentIntelligenceParser
+
+logger = logging.getLogger(__name__)
 
 class ParserRouter:
     def __init__(self):
         # In a real app, these would be injected via dependency injection
         self.parsers: Dict[str, DocumentParser] = {
             "docling": DoclingParser(),
-            "tika": TikaParser(),
             "azure_document_intelligence": AzureDocumentIntelligenceParser()
         }
 
@@ -24,12 +25,16 @@ class ParserRouter:
         elif ext in [".docx", ".doc"]:
             return settings.document_parser_primary_docx, settings.document_parser_fallback_docx
         else:
-            # Default to tika for unsupported/other formats as a fallback safety
-            return "tika", "tika"
+            # Default to docling for unsupported/other formats as a fallback safety
+            return "docling", "docling"
 
     async def route_and_parse(self, file_bytes: bytes, file_name: str, mime_type: str, file_id: str) -> Tuple[ParsedDocument, ParseResultTrace]:
         from app.services.parse_confidence_service import ParseConfidenceService
         import os
+
+        if not file_bytes:
+            raise RuntimeError(f"Input file bytes are empty for file {file_name}")
+
         ext = os.path.splitext(file_name)[1]
         primary_name, fallback_name = self._get_parsers_for_file(ext)
 
@@ -112,7 +117,14 @@ class ParserRouter:
             # Both failed or primary failed and no fallback
             trace.review_flagged = True
             trace.total_duration_seconds = time.time() - start_time
-            raise RuntimeError(f"All parsers failed to process file {file_name}")
+            error_details = [
+                f"{attempt.parser_name}: {attempt.error_message or 'unknown error'}"
+                for attempt in trace.attempts
+                if not attempt.success
+            ]
+            detail_text = "; ".join(error_details) if error_details else "no parser error details captured"
+            logger.error(f"All parsers failed for {file_name}. Details: {detail_text}")
+            raise RuntimeError(f"All parsers failed to process file {file_name}. Details: {detail_text}")
 
         trace.final_confidence = parsed_doc.confidence
         trace.total_duration_seconds = time.time() - start_time

@@ -1,0 +1,75 @@
+# Docker Compose for Local Development
+# Runs the same backend image used in production, connected to AWS services
+version: '3.8'
+
+services:
+  # Backend API Service
+  backend-api:
+    build:
+      context: ./backend
+      dockerfile: docker/Dockerfile.simple
+    container_name: resume-formatter-api-local
+    ports:
+      - "8000:8000"
+    env_file:
+      - backend/.env.local
+    environment:
+      - PYTHONUNBUFFERED=1
+      - LOG_LEVEL=DEBUG
+    volumes:
+      # Mount code for hot-reload during development (optional)
+      - ./backend/app:/app/app:ro
+      - ./backend/config:/app/config:ro
+      - ./backend/templates:/app/templates:ro
+      - ./backend/policies:/app/policies:ro
+      # Mount AWS credentials from Windows host (rw needed for SSO login token cache)
+      - ${USERPROFILE}/.aws:/root/.aws:rw
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    networks:
+      - resume-formatter-network
+    depends_on:
+      - worker
+    restart: unless-stopped
+
+  # Background Worker Service
+  worker:
+    build:
+      context: ./backend
+      dockerfile: docker/Dockerfile.simple
+    container_name: resume-formatter-worker-local
+    env_file:
+      - backend/.env.local
+    environment:
+      - PYTHONUNBUFFERED=1
+      - LOG_LEVEL=DEBUG
+    volumes:
+      # Mount code for hot-reload during development (optional)
+      - ./backend/app:/app/app:ro
+      - ./backend/config:/app/config:ro
+      - ./backend/templates:/app/templates:ro
+      - ./backend/policies:/app/policies:ro
+      # Mount AWS credentials from Windows host (rw needed for SSO login token cache)
+      - ${USERPROFILE}/.aws:/root/.aws:rw
+    command: python -m app.core.worker
+    networks:
+      - resume-formatter-network
+    restart: unless-stopped
+
+  # Frontend Service (Optional - can run with npm instead)
+  frontend:
+    image: node:20-alpine
+    container_name: resume-formatter-frontend-local
+    working_dir: /app
+    ports:
+      - "4200:4200"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules  # Prevent node_modules from being overwritten
+    command: sh -c "npm install && npm start -- --host 0.0.0.0"
+    networks:
+      - resume-formatter-network
+    restart: unless-stopped
+
+networks:
+  resume-formatter-network:
+    driver: bridge

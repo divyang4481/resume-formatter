@@ -1,0 +1,35 @@
+# Base image for Resume Formatter with heavy ML dependencies
+FROM --platform=linux/amd64 python:3.11-slim as base
+
+# Define environment variables
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    POETRY_VERSION=2.0.0 \
+    POETRY_VIRTUALENVS_IN_PROJECT=true \
+    POETRY_HOME="/opt/poetry" \
+    SENTENCE_TRANSFORMERS_HOME="/app/.cache"
+
+ENV PATH="$POETRY_HOME/bin:$PATH"
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    build-essential \
+    default-jre-headless \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install poetry
+RUN curl -sSL https://install.python-poetry.org | python3 -
+
+WORKDIR /app
+
+# Copy dependency files to install them in the base image
+COPY pyproject.toml poetry.lock ./
+
+# Install everything including heavy ML libraries
+RUN poetry lock && \
+    poetry install --no-root --only main --extras "cloud-aws-native parser-docling parser-tika"
+
+# Pre-download all models into the base image
+RUN poetry run python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2')" && \
+    poetry run python -c "from docling.document_converter import DocumentConverter; DocumentConverter()"

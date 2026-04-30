@@ -18,9 +18,9 @@ class Settings(BaseSettings):
 
     # Document Parsing Routing & Thresholds
     document_parser_primary_pdf: str = "docling"
-    document_parser_fallback_pdf: str = "tika"
+    document_parser_fallback_pdf: str = "docling"
     document_parser_primary_docx: str = "docling"
-    document_parser_fallback_docx: str = "tika"
+    document_parser_fallback_docx: str = "docling"
 
     # Thresholds for parsing confidence & routing
     parser_min_text_chars: int = 300
@@ -48,7 +48,7 @@ class Settings(BaseSettings):
     gemini_api_key: str = ""  # Key for Google Gemini API
 
     # AWS Settings
-    aws_region: str = "us-east-1"
+    aws_region: str = "ap-south-1"
 
     # GCP Settings
     gcp_project_id: str = ""
@@ -64,6 +64,7 @@ class Settings(BaseSettings):
     storage_backend: str = "local"  # "local", "s3"
     local_storage_path: str = str(PROJECT_ROOT / "backend" / ".data")
     sqlite_db_path: str = str(PROJECT_ROOT / "backend" / ".data" / "sqlite" / "app.db")
+    database_url: str = "" # e.g. postgresql://user:pass@host:port/db
     vector_db_path: str = str(PROJECT_ROOT / "backend" / ".data" / "vector_storage.vdb")
 
     s3_bucket: str = "agentic-document-platform-bucket"
@@ -75,12 +76,27 @@ class Settings(BaseSettings):
     # Audit Logging
     enable_audit_logging: bool = True
 
+    # CORS Settings
+    cors_origins: str = "*"  # Comma-separated list of allowed origins, or "*" for all
+
     # Example standard settings
     log_level: str = "INFO"
 
     # Worker and Asynchronous Settings
     max_parallel_jobs: int = 3
     message_queue_poll_interval: int = 2
+    message_queue_backend: str = "db"  # "db" or "sqs"
+    message_queue_visibility_timeout_seconds: int = 300
+    document_processing_queue_name: str = "document_processing"
+    enable_api_embedded_worker: bool = False
+    sqs_document_processing_queue_url: str = ""
+
+    @property
+    def cors_origins_list(self) -> list[str]:
+        """Parse CORS origins from string to list"""
+        if self.cors_origins == "*":
+            return ["*"]
+        return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
 
     class Config:
         env_file = ".env"

@@ -8,6 +8,12 @@ from app.agent.prompt_manager import prompt_manager
 
 logger = logging.getLogger(__name__)
 
+CLASSIFICATION_TEXT_BUDGET = 3200
+CLASSIFICATION_HEAD_BUDGET = 2200
+CLASSIFICATION_TAIL_BUDGET = 800
+CLASSIFICATION_OMISSION_MARKER = "\n...\n[content omitted for classification]\n...\n"
+CLASSIFICATION_MAX_TOKENS = 256
+
 
 class ResumeAiService:
     class TemplateAnalysisError(Exception):
@@ -21,6 +27,16 @@ class ResumeAiService:
     ):
         self.llm = llm
         self.extraction_service = extraction_service
+
+    @staticmethod
+    def _build_classification_excerpt(extracted_text: str) -> str:
+        normalized_text = (extracted_text or "").strip()
+        if len(normalized_text) <= CLASSIFICATION_TEXT_BUDGET:
+            return normalized_text
+
+        head = normalized_text[:CLASSIFICATION_HEAD_BUDGET].rstrip()
+        tail = normalized_text[-CLASSIFICATION_TAIL_BUDGET:].lstrip()
+        return f"{head}{CLASSIFICATION_OMISSION_MARKER}{tail}"
 
     async def classify_document(
         self,
@@ -43,13 +59,15 @@ class ResumeAiService:
         if tables:
             structured_context += f"\nDETECTED TABLES: {len(tables)}"
 
+        classification_excerpt = self._build_classification_excerpt(extracted_text)
+
         system_prompt, prompt = prompt_manager.get_chat_prompt(
             "document_classification",
             filename=filename,
             content_type=content_type,
             extraction_confidence=extraction_confidence if extraction_confidence is not None else "",
             structured_context=structured_context,
-            extracted_text=(extracted_text or "")[:12000],
+            extracted_text=classification_excerpt,
         )
         
         from app.services.audit_service import AuditService
@@ -59,7 +77,11 @@ class ResumeAiService:
             payload={"system_prompt": system_prompt, "user_prompt": prompt}
         )
 
-        response = self.llm.generate(prompt, system_prompt=system_prompt)
+        response = self.llm.generate(
+            prompt,
+            system_prompt=system_prompt,
+            max_tokens=CLASSIFICATION_MAX_TOKENS,
+        )
         
         AuditService.log_event(
             job_id=job_id,

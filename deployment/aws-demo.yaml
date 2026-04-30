@@ -1,0 +1,346 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'CloudFormation template for Resume Formatter Demo (Frontend: S3, API: App Runner, Worker: ECS Fargate, DB: RDS)'
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: resume-formatter-demo
+  BackendImage:
+    Type: String
+    Description: 'ECR Image URI for the backend (API and Worker)'
+  DBUser:
+    Type: String
+    Default: dbadmin
+  DBPassword:
+    Type: String
+    NoEcho: true
+    Default: DemoPassword123
+
+Resources:
+  # --- S3 Buckets (Unique-ified with Account ID) ---
+  FrontendBucket:
+    Type: 'AWS::S3::Bucket'
+    Properties:
+      BucketName: !Sub '${AWS::AccountId}-${AWS::StackName}-frontend'
+      WebsiteConfiguration:
+        IndexDocument: index.html
+        ErrorDocument: index.html
+      CorsConfiguration:
+        CorsRules:
+          - AllowedOrigins:
+              - '*'
+            AllowedMethods:
+              - GET
+              - HEAD
+            AllowedHeaders:
+              - '*'
+            MaxAge: 3600
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: false
+        BlockPublicPolicy: false
+        IgnorePublicAcls: false
+        RestrictPublicBuckets: false
+
+  FrontendBucketPolicy:
+    Type: 'AWS::S3::BucketPolicy'
+    Properties:
+      Bucket: !Ref FrontendBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: PublicReadForGetBucketObjects
+            Effect: Allow
+            Principal: '*'
+            Action: 's3:GetObject'
+            Resource: !Sub 'arn:aws:s3:::${FrontendBucket}/*'
+
+  StorageBucket:
+    Type: 'AWS::S3::Bucket'
+    Properties:
+      BucketName: !Sub '${AWS::AccountId}-${AWS::StackName}-storage'
+      CorsConfiguration:
+        CorsRules:
+          - AllowedOrigins:
+              - '*'
+            AllowedMethods:
+              - GET
+              - POST
+              - PUT
+              - DELETE
+              - HEAD
+            AllowedHeaders:
+              - '*'
+            ExposedHeaders:
+              - ETag
+            MaxAge: 3600
+
+  # --- Networking ---
+  VPC:
+    Type: 'AWS::EC2::VPC'
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-vpc'
+
+  PublicSubnet:
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.1.0/24
+      AvailabilityZone: !Select [ 0, !GetAZs "" ]
+      MapPublicIpOnLaunch: true
+
+  PublicSubnet2:
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.2.0/24
+      AvailabilityZone: !Select [ 1, !GetAZs "" ]
+      MapPublicIpOnLaunch: true
+
+  InternetGateway:
+    Type: 'AWS::EC2::InternetGateway'
+
+  GatewayToVpcAttachment:
+    Type: 'AWS::EC2::VPCGatewayAttachment'
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  PublicRouteTable:
+    Type: 'AWS::EC2::RouteTable'
+    Properties:
+      VpcId: !Ref VPC
+
+  PublicRoute:
+    Type: 'AWS::EC2::Route'
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  SubnetRouteTableAssociation:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    Properties:
+      SubnetId: !Ref PublicSubnet
+      RouteTableId: !Ref PublicRouteTable
+
+  SubnetRouteTableAssociation2:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    Properties:
+      SubnetId: !Ref PublicSubnet2
+      RouteTableId: !Ref PublicRouteTable
+
+  # --- Database ---
+  DBSubnetGroup:
+    Type: 'AWS::RDS::DBSubnetGroup'
+    Properties:
+      DBSubnetGroupDescription: 'Subnet group for RDS'
+      SubnetIds: [ !Ref PublicSubnet, !Ref PublicSubnet2 ]
+
+  DBSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: 'Enable PostgreSQL access'
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          CidrIp: 0.0.0.0/0 
+
+  RDSInstance:
+    Type: 'AWS::RDS::DBInstance'
+    Properties:
+      DBInstanceIdentifier: !Sub '${ProjectName}-db'
+      Engine: postgres
+      DBInstanceClass: db.t4g.micro
+      AllocatedStorage: '20'
+      MasterUsername: !Ref DBUser
+      MasterUserPassword: !Ref DBPassword
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      VPCSecurityGroups: [ !Ref DBSecurityGroup ]
+      PubliclyAccessible: true
+
+  # --- IAM Roles ---
+  BackendTaskRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: 
+                - ecs-tasks.amazonaws.com
+                - tasks.apprunner.amazonaws.com
+            Action: 'sts:AssumeRole'
+      Policies:
+        - PolicyName: BackendPermissions
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 's3:*'
+                Resource:
+                  - !Sub 'arn:aws:s3:::${StorageBucket}'
+                  - !Sub 'arn:aws:s3:::${StorageBucket}/*'
+              - Effect: Allow
+                Action:
+                  - 'bedrock:InvokeModel'
+                  - 'bedrock:InvokeModelWithResponseStream'
+                Resource: '*'
+
+  AppRunnerAccessRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: build.apprunner.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AWSAppRunnerServicePolicyForECRAccess'
+
+  # --- App Runner VPC Connector ---
+  AppRunnerVpcConnector:
+    Type: 'AWS::AppRunner::VpcConnector'
+    Properties:
+      Subnets: [ !Ref PublicSubnet, !Ref PublicSubnet2 ]
+      SecurityGroups: [ !Ref DBSecurityGroup ]
+
+  # --- App Runner (API) ---
+  AppRunnerService:
+    Type: 'AWS::AppRunner::Service'
+    Properties:
+      ServiceName: !Sub '${ProjectName}-api'
+      SourceConfiguration:
+        AuthenticationConfiguration:
+          AccessRoleArn: !GetAtt AppRunnerAccessRole.Arn
+        ImageRepository:
+          ImageIdentifier: !Ref BackendImage
+          ImageRepositoryType: ECR
+          ImageConfiguration:
+            Port: '8000'
+            RuntimeEnvironmentVariables:
+              - Name: DATABASE_URL
+                Value: !Sub 'postgresql://${DBUser}:${DBPassword}@${RDSInstance.Endpoint.Address}:5432/postgres'
+              - Name: CLOUD
+                Value: aws
+              - Name: STORAGE_BACKEND
+                Value: s3
+              - Name: S3_BUCKET
+                Value: !Ref StorageBucket
+              - Name: LLM_BACKEND
+                Value: aws_bedrock
+              - Name: LLM_MODEL_NAME
+                Value: meta.llama3-8b-instruct-v1:0
+              - Name: AWS_REGION
+                Value: !Ref AWS::Region
+              - Name: CORS_ORIGINS
+                Value: !Sub 'http://${AWS::AccountId}-${AWS::StackName}-frontend.s3-website.${AWS::Region}.amazonaws.com,https://${AWS::AccountId}-${AWS::StackName}-frontend.s3-website.${AWS::Region}.amazonaws.com'
+      NetworkConfiguration:
+        EgressConfiguration:
+          EgressType: VPC
+          VpcConnectorArn: !Ref AppRunnerVpcConnector
+      InstanceConfiguration:
+        InstanceRoleArn: !GetAtt BackendTaskRole.Arn
+        Cpu: '2 vCPU'
+        Memory: '6 GB'
+      HealthCheckConfiguration:
+        Protocol: HTTP
+        Path: /health
+        Interval: 20
+        Timeout: 10
+        HealthyThreshold: 1
+        UnhealthyThreshold: 5
+
+  # --- ECS Fargate (Worker) ---
+  ECSCluster:
+    Type: 'AWS::ECS::Cluster'
+    Properties:
+      ClusterName: !Sub '${ProjectName}-cluster'
+
+  WorkerTaskDefinition:
+    Type: 'AWS::ECS::TaskDefinition'
+    Properties:
+      Family: !Sub '${ProjectName}-worker'
+      RequiresCompatibilities:
+        - FARGATE
+      NetworkMode: awsvpc
+      Cpu: '1024' # 1 vCPU
+      Memory: '4096' # 4 GB
+      ExecutionRoleArn: !GetAtt ECSExecutionRole.Arn
+      TaskRoleArn: !GetAtt BackendTaskRole.Arn
+      ContainerDefinitions:
+        - Name: worker
+          Image: !Ref BackendImage
+          Command: ["python", "app/core/worker.py"]
+          Environment:
+            - Name: DATABASE_URL
+              Value: !Sub 'postgresql://${DBUser}:${DBPassword}@${RDSInstance.Endpoint.Address}:5432/postgres'
+            - Name: CLOUD
+              Value: aws
+            - Name: STORAGE_BACKEND
+              Value: s3
+            - Name: S3_BUCKET
+              Value: !Ref StorageBucket
+            - Name: LLM_BACKEND
+              Value: aws_bedrock
+            - Name: LLM_MODEL_NAME
+              Value: meta.llama3-8b-instruct-v1:0
+            - Name: AWS_REGION
+              Value: !Ref AWS::Region
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref WorkerLogGroup
+              awslogs-region: !Ref 'AWS::Region'
+              awslogs-stream-prefix: ecs
+
+  WorkerLogGroup:
+    Type: 'AWS::Logs::LogGroup'
+    Properties:
+      LogGroupName: !Sub '/ecs/${ProjectName}-worker'
+      RetentionInDays: 7
+
+  ECSExecutionRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy'
+
+  WorkerService:
+    Type: 'AWS::ECS::Service'
+    Properties:
+      Cluster: !Ref ECSCluster
+      TaskDefinition: !Ref WorkerTaskDefinition
+      LaunchType: FARGATE
+      DesiredCount: 1
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          Subnets: [ !Ref PublicSubnet ]
+          AssignPublicIp: ENABLED
+
+Outputs:
+  FrontendUrl:
+    Value: !GetAtt FrontendBucket.WebsiteURL
+  ApiUrl:
+    Value: !GetAtt AppRunnerService.ServiceUrl
+  StorageBucketName:
+    Value: !Ref StorageBucket
+  FrontendBucketName:
+    Value: !Ref FrontendBucket

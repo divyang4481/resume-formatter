@@ -1,0 +1,6 @@
+{
+    "chat.tools.terminal.autoApprove": {
+        "aws": true,
+        "docker-compose": true
+    }
+}

@@ -21,6 +21,7 @@ from app.domain.interfaces import (
 from app.adapters.repositories.template_repository import SqlAlchemyTemplateRepository
 from app.adapters.repositories.job_repository import SqlAlchemyJobRepository
 from app.adapters.queue.local_queue import SqlAlchemyMessageQueue
+from app.adapters.queue.sqs_queue import SqsMessageQueue
 from app.adapters.events.local_bus import LocalEventBus
 
 
@@ -144,10 +145,34 @@ def get_storage_provider() -> StorageProvider:
 def get_embedding_provider() -> 'EmbeddingProvider':
     """
     Dependency factory to resolve the EmbeddingProvider.
+    Uses AWS Bedrock Titan Embeddings when running on AWS or with Bedrock LLM.
+    Falls back to local embeddings for other environments.
     """
     from app.domain.interfaces import EmbeddingProvider
-    from app.adapters.embedding.local_embedding import LocalEmbeddingProvider
-    return LocalEmbeddingProvider(model_name="all-MiniLM-L6-v2")
+    import logging
+    
+    # Use AWS Bedrock embeddings if configured for AWS
+    if settings.llm_backend.lower() == "aws_bedrock" or settings.cloud.lower() == "aws":
+        try:
+            from app.adapters.embedding.bedrock_embedding import BedrockEmbeddingProvider
+            logging.info("Using AWS Bedrock Titan Embeddings")
+            return BedrockEmbeddingProvider(
+                model_id="amazon.titan-embed-text-v1",
+                region_name=settings.aws_region
+            )
+        except Exception as e:
+            logging.warning(f"Failed to initialize Bedrock embeddings: {e}. Falling back to local.")
+    
+    # Try local embeddings for non-AWS environments
+    try:
+        from app.adapters.embedding.local_embedding import LocalEmbeddingProvider
+        logging.info("Using local sentence-transformers embeddings")
+        return LocalEmbeddingProvider(model_name="all-MiniLM-L6-v2")
+    except (ImportError, ModuleNotFoundError, RuntimeError) as e:
+        # Final fallback to mock provider if dependencies are missing
+        logging.warning(f"Could not load LocalEmbeddingProvider: {e}. Using mock provider.")
+        from app.adapters.embedding.mock_embedding import MockEmbeddingProvider
+        return MockEmbeddingProvider()
 
 
 def get_knowledge_index() -> KnowledgeIndex:
@@ -191,7 +216,19 @@ def get_validation_repository(db: Session = Depends(get_db_session)):
     pass
 
 
-def get_message_queue(db: Session = Depends(get_db_session)) -> MessageQueue:
+def get_message_queue(db: Optional[Session] = None) -> MessageQueue:
+    backend = settings.message_queue_backend.lower()
+
+    if backend == "sqs":
+        if not settings.sqs_document_processing_queue_url:
+            raise RuntimeError("SQS queue URL is required when MESSAGE_QUEUE_BACKEND=sqs")
+        return SqsMessageQueue(
+            queue_url=settings.sqs_document_processing_queue_url,
+            region_name=settings.aws_region
+        )
+
+    if db is None:
+        raise RuntimeError("Database session is required for DB queue backend")
     return SqlAlchemyMessageQueue(db=db)
 
 
@@ -226,8 +263,8 @@ def template_lookup_service_dependency(template_repository: TemplateRepository =
 def job_repository_dependency(repo: JobRepository = Depends(get_job_repository)) -> JobRepository:
     return repo
 
-def message_queue_dependency(queue: MessageQueue = Depends(get_message_queue)) -> MessageQueue:
-    return queue
+def message_queue_dependency(db: Session = Depends(get_db_session)) -> MessageQueue:
+    return get_message_queue(db)
 
 def event_bus_dependency() -> EventBus:
     return get_event_bus()

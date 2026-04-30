@@ -72,6 +72,7 @@ async def upload_asset(
         template_analysis_service=TemplateAnalysisService(ai_service)
     )
 
+    print(f"--- [ADMIN API] Starting asset upload: {file.filename} ---")
     asset_id = await template_service.upload_asset(
         filename=file.filename,
         content=content,
@@ -79,6 +80,7 @@ async def upload_asset(
         content_type=file.content_type or "application/octet-stream",
         uploaded_by="admin-user" # placeholder since auth isn't complete yet
     )
+    print(f"--- [ADMIN API] Asset upload finished: {asset_id} ---")
 
     return AssetUploadResponse(
         asset_id=asset_id,

@@ -196,7 +196,7 @@ async def submit_document(
 
     if not requires_confirmation:
         # Enqueue job to the message queue instead of using BackgroundTasks in-memory
-        message_queue.enqueue("document_processing", {"job_id": job_id})
+        message_queue.enqueue(settings.document_processing_queue_name, {"job_id": job_id})
 
     return SubmitDocumentResponse(
         document_id=job_id,
@@ -268,7 +268,7 @@ async def confirm_document(
     job_repository.save_job(job)
 
     # Enqueue job to the message queue to resume processing
-    message_queue.enqueue("document_processing", {"job_id": id})
+    message_queue.enqueue(settings.document_processing_queue_name, {"job_id": id})
 
     return {"message": "Document confirmed", "job_id": id, "status": job.status}
 

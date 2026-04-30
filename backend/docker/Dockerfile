@@ -1,49 +1,25 @@
-# Use a python 3.11 base image suitable for cloud environments
-FROM python:3.11-slim as builder
+# Use the pre-built base image as a builder to extract the compiled environment
+ARG BASE_IMAGE=python:3.11-slim
+FROM ${BASE_IMAGE} as builder
 
-# Define environment variables
-ENV PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1 \
-    POETRY_VERSION=2.0.0 \
-    POETRY_VIRTUALENVS_IN_PROJECT=true \
-    POETRY_HOME="/opt/poetry"
+# Create a clean, minimal runtime image
+FROM --platform=linux/amd64 python:3.11-slim as runtime
 
-ENV PATH="$POETRY_HOME/bin:$PATH"
-
-# Install system dependencies (including potential requirements for local parsers like tika)
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl \
-    build-essential \
-    default-jre-headless \
-    && rm -rf /var/lib/apt/lists/*
-
-# Install poetry
-RUN curl -sSL https://install.python-poetry.org | python3 -
+RUN apt-get update && apt-get install -y --no-install-recommends default-jre-headless && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# Copy dependency files
-COPY pyproject.toml poetry.lock ./
+ENV PATH="/app/.venv/bin:$PATH" \
+    SENTENCE_TRANSFORMERS_HOME="/app/.cache"
 
-# Install core dependencies.
-# In CI/CD pipelines targeting specific clouds, you would add `--extras "cloud-aws-native"` or `--extras "cloud-azure-native"` here.
-ARG EXTRA_DEPENDENCIES=""
-RUN if [ -z "$EXTRA_DEPENDENCIES" ]; then \
-      poetry install --no-root --only main; \
-    else \
-      poetry install --no-root --only main --extras "$EXTRA_DEPENDENCIES"; \
-    fi
-
-FROM python:3.11-slim as runtime
-
-ENV PATH="/app/.venv/bin:$PATH"
-
-WORKDIR /app
-
-# Copy the virtual environment from builder
+# Copy ONLY the virtual environment and cached models from the heavy base image
 COPY --from=builder /app/.venv /app/.venv
+COPY --from=builder /app/.cache /app/.cache
 
-# Copy the application code
+# QUICK FIX: Install the missing database driver here
+RUN pip install psycopg2-binary==2.9.9
+
+# Copy the application code (This is the only part that changes often)
 COPY ./app /app/app
 COPY ./config /app/config
 COPY ./templates /app/templates
@@ -52,5 +28,9 @@ COPY ./policies /app/policies
 # Expose FastAPI port
 EXPOSE 8000
 
-# Start the FastAPI server (suitable for ECS, Cloud Run, Azure Container Apps)
+# Start the FastAPI server
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+
+
+
+
