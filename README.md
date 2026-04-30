@@ -23,6 +23,8 @@ This will automatically execute the tasks to boot both the frontend and backend 
 
 ### Option 2: Running Manually from the Terminal
 
+> **Note:** If you are connecting to real AWS resources (S3, SQS, Bedrock), you must still provision the AWS infrastructure (see **Step 1** under *Docker & AWS Setup*) and populate your `.env` file first.
+
 **Frontend (Angular)**
 1. Open a terminal and navigate to the frontend directory:
    ```bash
@@ -118,26 +120,46 @@ npx playwright test
 
 You can run the entire system locally using Docker Compose, configured to perfectly mirror the cloud environment by connecting directly to real AWS resources (S3, SQS, RDS, and Bedrock).
 
-### Provisioning AWS Infrastructure (Used for both Local & Prod)
-We provide an `aws-infrastructure.yaml` CloudFormation template to spin up the necessary backing services in AWS. This template creates:
+
+### Docker Images and PyTorch (CPU vs GPU)
+By default, compiling the Docker images pulls a lightweight, CPU-only version of PyTorch. This is intentional to keep the image sizes small and to ensure cost-effective deployments on serverless architectures like AWS ECS Fargate, which do not currently support GPUs.
+
+If you are deploying to EC2 (e.g., `g4dn`) or have a local GPU and wish to leverage CUDA for faster OCR with Docling, you can build the images with GPU support by passing the `USE_GPU=true` build argument:
+```bash
+docker build -t cv-architect-worker -f backend/Dockerfile.worker --build-arg USE_GPU=true .
+```
+
+### Step 1: Provisioning AWS Infrastructure (Required for both Local & Prod)
+Before creating local containers or deploying to the cloud, you must provision the necessary AWS resources. We provide an `aws-infrastructure.yaml` CloudFormation template to spin up the necessary backing services in AWS. This template creates:
 - **S3 Bucket** (for document storage)
 - **SQS Queue** (for asynchronous messaging between the API and Worker)
 - **RDS PostgreSQL Database** (for job state and metadata)
 - **IAM User / Roles** (for permissions to Bedrock, S3, SQS, and RDS)
 
-**Steps to Provision:**
-1. Go to the AWS Console -> CloudFormation.
-2. Ensure your region is set to **ap-south-1 (Mumbai)**.
-3. Upload `aws-infrastructure.yaml` and create the stack.
-4. Once deployed, go to the **Outputs** tab of the stack. You will find:
-   - `S3BucketName`
-   - `SQSQueueUrl`
-   - `RDSConnectionString`
-   - `DeveloperAccessKeyId`
-   - `DeveloperSecretAccessKey`
+**Steps to Provision (via AWS CLI):**
+1. Open your terminal and ensure you have the AWS CLI installed and configured with appropriate permissions.
+2. Deploy the stack using the following command:
+   ```bash
+   aws cloudformation deploy \
+     --template-file aws-infrastructure.yaml \
+     --stack-name cv-architect-infra \
+     --capabilities CAPABILITY_NAMED_IAM \
+     --region ap-south-1
+   ```
+3. Once the deployment successfully completes, fetch the necessary outputs to populate your `.env` file:
+   ```bash
+   aws cloudformation describe-stacks \
+     --stack-name cv-architect-infra \
+     --region ap-south-1 \
+     --query "Stacks[0].Outputs" \
+     --output table
+   ```
+   *You will map these outputs to variables like `S3_BUCKET_INPUT`, `SQS_PROCESSING_QUEUE_URL`, etc., in the next step.*
 
-### Local Setup via Docker Compose (Windows/Mac/Linux)
+### Step 2: Local Setup via Docker Compose (Windows/Mac/Linux)
 Because `Docling` requires heavy machine learning libraries (like PyTorch) and system dependencies (like `libgl1`, `libglib2.0-0`), running via Docker is highly recommended to isolate the environment.
+
+**Note:** You must have completed Step 1 to run the containers locally with AWS resources.
 
 We use a 3-container setup that connects directly to your newly created AWS resources:
 1. **API Container**: FastAPI Control Plane
@@ -146,6 +168,7 @@ We use a 3-container setup that connects directly to your newly created AWS reso
 
 **Step-by-Step for Windows (WSL2 / Docker Desktop):**
 1. **Prerequisites:** Ensure **WSL2** and **Docker Desktop** are installed and running. Allocate at least 4GB of RAM to Docker Desktop.
+   > **Tip:** For Windows users building these containers locally, we highly recommend using Docker Buildx (which is included in modern Docker Desktop) to ensure the images align perfectly with the target Linux execution environment, preventing ML compilation mismatches.
 2. **Configure Environment:** In the root directory, open your `.env` file and fill in the outputs from the CloudFormation stack:
    ```env
    AWS_REGION=ap-south-1
@@ -167,17 +190,17 @@ We use a 3-container setup that connects directly to your newly created AWS reso
 
 *How it works locally:* Instead of relying on local mock services (like LocalStack or SQLite), your local 3-container setup uses your exact `aws-infrastructure.yaml` configuration. When a file is uploaded, it goes straight to the real S3 bucket. The message is pushed to the real SQS queue, picked up by your local worker container, and LLM reasoning uses the real AWS Bedrock models.
 
-### Full AWS Cloud Deployment
+### Step 3: Full AWS Cloud Deployment
 The system is built for a scalable, cost-effective AWS setup separating the web server from heavy processing. Since your local containers already use the real AWS backing services (S3, SQS, RDS, Bedrock), the code requires **no changes** for production.
 
 **Deployment Steps for AWS:**
-1. **Infrastructure:** You have already deployed `aws-infrastructure.yaml`. Keep the outputs handy.
+1. **Infrastructure:** You have already completed Step 1 and deployed `aws-infrastructure.yaml`. Keep the outputs handy.
 2. **ECR (Elastic Container Registry):** Build and push the backend `docker/Dockerfile` and frontend `Dockerfile` images to your ECR.
 3. **Fargate (Control Plane):** Deploy the API image to an ECS Fargate cluster via `cloudformation.yaml`. Map it behind an Application Load Balancer. It handles fast HTTP traffic.
 4. **Fargate/ECS (Execution Plane):** Deploy the Worker image as an ECS Service reading from the SQS queue. Configure Auto-Scaling based on queue depth to keep costs low (it scales to 0 when idle).
 5. **Agentic Core / Bedrock:** Ensure your AWS Bedrock Agent using `meta.llama3-8b-instruct-v1:0` (or similar) is active. The ECS tasks will use their assigned IAM Task Role instead of IAM User keys.
 
-### Resource Mapping
+## Resource Mapping
 | Component | Implementation (Local Docker & AWS Cloud) |
 | :--- | :--- |
 | **Worker Compute** | Docker Container (Local) / ECS Fargate Tasks (Cloud) |
