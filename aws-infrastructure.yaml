@@ -13,7 +13,9 @@ Parameters:
   DBPassword:
     Type: String
     NoEcho: true
-    Description: Master password for RDS PostgreSQL (Ensure to pass this securely during deployment, e.g., resumedemo@#123)
+    Description: Master password for RDS PostgreSQL (Ensure to pass this securely during deployment, e.g., resumedemo#123. Cannot contain /, @, \", or space).
+    AllowedPattern: "^[^/@\" ]+$"
+    ConstraintDescription: Must be a string that does not contain '/', '@', '"', or spaces.
 
 Resources:
   # ---------------------------------------------------------
