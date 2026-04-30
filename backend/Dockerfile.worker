@@ -1,0 +1,22 @@
+FROM public.ecr.aws/docker/library/python:3.11-slim
+
+WORKDIR /app
+
+# Install required system packages for docling and pytorch
+RUN apt-get update && apt-get install -y gcc g++ libgl1 libglib2.0-0 && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements and install
+COPY pyproject.toml poetry.lock ./
+RUN pip install poetry
+RUN poetry config virtualenvs.create false
+RUN poetry install --no-interaction --no-ansi --without dev
+
+# Copy the application code
+COPY ./app ./app
+COPY ./init_db.py ./init_db.py
+
+# Create a local DB dir in case sqlite is initialized as fallback
+RUN mkdir -p .data
+
+# Run the worker script
+CMD ["python", "-m", "app.core.worker"]

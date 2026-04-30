@@ -9,6 +9,17 @@ from app.agent.nodes.transformation_node import create_schema_builder_node, crea
 from app.services.resume_parsing_service import ResumeParsingService
 from app.dependencies import get_storage_provider
 
+
+def create_validity_check_node():
+    async def validity_node(state: AgentState):
+        text = state.get("extracted_text", "")
+        # Simple heuristic validity guard
+        is_resume = "experience" in text.lower() or "education" in text.lower()
+        if not is_resume and len(text) > 0:
+             return {"status": "rejected_not_resume"}
+        return {"status": "valid_resume"}
+    return validity_node
+
 def create_parse_node(doc_parser: DocumentExtractionService, storage):
     async def parse_node(state: AgentState):
         file_path = state.get("file_path")
@@ -108,6 +119,7 @@ def build_workflow_graph(llm_runtime: LlmRuntimeAdapter, doc_parser: DocumentExt
 
     workflow.add_node("ingest", with_progress("ingest", lambda state: {"status": "ingested"}))
     workflow.add_node("parse", with_progress("parse", create_parse_node(doc_parser, storage)))
+    workflow.add_node("validate_resume", with_progress("validate_resume", create_validity_check_node()))
     workflow.add_node("normalize", with_progress("normalize", lambda state: {"status": "normalized"}))
     workflow.add_node("privacy_transform", with_progress("privacy_transform", lambda state: {"status": "privacy_applied"}))
 
@@ -134,7 +146,8 @@ def build_workflow_graph(llm_runtime: LlmRuntimeAdapter, doc_parser: DocumentExt
     # Define edges based on bounded workflow logic
     workflow.set_entry_point("ingest")
     workflow.add_edge("ingest", "parse")
-    workflow.add_edge("parse", "normalize")
+    workflow.add_edge("parse", "validate_resume")
+    workflow.add_edge("validate_resume", "normalize")
     workflow.add_edge("normalize", "privacy_transform")
     workflow.add_edge("privacy_transform", "template_resolution")
     workflow.add_edge("template_resolution", "transform")

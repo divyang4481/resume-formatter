@@ -65,7 +65,8 @@ class ProcessingJob(Base):
     __tablename__ = "processing_jobs"
 
     id = Column(String, primary_key=True, index=True)
-    candidate_resume_id = Column(String, ForeignKey("candidate_resumes.id"), nullable=False)
+    candidate_resume_id = Column(String, ForeignKey("candidate_resumes.id"), nullable=True)
+    job_type = Column(String, nullable=False, default="RESUME_FORMATTING")
     original_file_ref = Column(String, nullable=True)
     template_asset_id = Column(String, ForeignKey("template_assets.id"), nullable=True)
     template_version = Column(String, nullable=True)

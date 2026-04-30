@@ -1,7 +1,7 @@
 import uvicorn
 from fastapi import FastAPI
 from fastapi_mcp import FastApiMCP
-from app.api.processing import router as processing_router
+from app.api.runtime import router as runtime_router
 from app.api.admin import router as admin_router
 from app.api.a2a import router as a2a_router
 from app.config import settings
@@ -54,8 +54,8 @@ def create_app() -> FastAPI:
     )
 
     app.include_router(
-        processing_router,
-        prefix="/v1/processing",
+        runtime_router,
+        prefix="/runtime",
         tags=["Candidate Processing", "MCP Tool"],
     )
     app.include_router(admin_router, prefix="/admin", tags=["Admin"])

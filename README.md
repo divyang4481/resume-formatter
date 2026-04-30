@@ -101,3 +101,20 @@ To run the fast CI smoke test:
 cd frontend
 npx playwright test
 ```
+
+---
+
+## AWS Agentic Core & ECS Deployment
+This application supports both local execution and an AWS Cloud Native architecture utilizing **Bedrock Agents**, **SQS**, and **ECS Fargate**.
+
+### Runtime Architecture Modes
+- **Local Mode**: Uses local memory Queues, SQLite, local file system, and local LLMs (`CLOUD_PROVIDER=local`). No cloud credentials required.
+- **AWS Mode**: Uses AWS SQS, Bedrock Agents, S3, and Bedrock Knowledge Base.
+
+### APIs
+The API is cleanly separated into two distinct spaces:
+1. **Runtime API (`/runtime`)**: Stateless, used by candidate/recruiter applications to upload resumes and poll for results.
+2. **Admin API (`/admin`)**: Fully handles template versioning, knowledge assets, formatting rules, and sample test-runs before publishing templates.
+
+### Worker Node
+Due to the memory footprint of deep learning OCR libraries like `Docling`, processing has been refactored into a scalable, asynchronous ECS Worker task rather than AWS Lambda. A lightweight `API` layer runs independently to ensure fast HTTP responses.
