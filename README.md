@@ -150,6 +150,7 @@ We use a 3-container setup that connects directly to your newly created AWS reso
 
 **Step-by-Step for Windows (WSL2 / Docker Desktop):**
 1. **Prerequisites:** Ensure **WSL2** and **Docker Desktop** are installed and running. Allocate at least 4GB of RAM to Docker Desktop.
+   > **Tip:** For Windows users building these containers locally, we highly recommend using Docker Buildx (which is included in modern Docker Desktop) to ensure the images align perfectly with the target Linux execution environment, preventing ML compilation mismatches.
 2. **Configure Environment:** In the root directory, open your `.env` file and fill in the outputs from the CloudFormation stack:
    ```env
    AWS_REGION=ap-south-1
