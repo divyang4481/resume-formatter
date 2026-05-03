@@ -4,7 +4,7 @@ FROM python:3.11-slim as builder
 # Define environment variables
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    POETRY_VERSION=2.0.0 \
+    POETRY_VERSION=1.8.4 \
     POETRY_VIRTUALENVS_IN_PROJECT=true \
     POETRY_HOME="/opt/poetry"
 
@@ -24,7 +24,7 @@ RUN curl -sSL https://install.python-poetry.org | python3 -
 WORKDIR /app
 
 # Copy dependency files
-COPY pyproject.toml poetry.lock ./
+COPY pyproject.toml poetry.lock* ./
 
 # Install core dependencies.
 

@@ -69,7 +69,7 @@ Resources:
       MasterUserPassword: !Ref DBPassword
       PubliclyAccessible: true # To allow local developers to connect
       VPCSecurityGroups:
-        - !Ref DatabaseSecurityGroup
+        - !GetAtt DatabaseSecurityGroup.GroupId
       StorageType: gp2
       BackupRetentionPeriod: 1
 
