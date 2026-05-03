@@ -43,7 +43,7 @@ class TemplateService:
 
         # 3. Store asset
         storage_key = f"templates/{asset_id}/{filename}"
-        storage_uri = self.storage_provider.put_bytes(storage_key, content)
+        storage_uri = self.storage_provider.put_bytes(content, storage_key)
 
         # 4. Extract and Index if Knowledge-bearing
         # Only extract if it is a knowledge asset, not a structured template shell/rule

@@ -21,7 +21,7 @@ class ParserRouter(DocumentExtractionService):
         use_docling = False
         if settings.enable_docling:
             if is_docx:
-                use_docling = False # Prefer lightweight docx parser normally, but let's use tika for lightweight fallback here if docling is heavy
+                use_docling = True # Enable Docling for .docx as requested
             if is_pdf:
                 # If we have a PDF and docling is enabled, use it
                 use_docling = True
@@ -63,7 +63,8 @@ class ParserRouter(DocumentExtractionService):
         }
 
         return ExtractedDocument(
-            text=text,
+            extracted_text=text,
             structured_data={"sections": sections, "tables": tables},
-            metadata=metadata
+            backend_used=parser_used,
+            parsed_document=parsed_doc
         )

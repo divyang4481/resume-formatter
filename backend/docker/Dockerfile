@@ -1,10 +1,10 @@
 # Use a python 3.11 base image suitable for cloud environments
-FROM python:3.11-slim as builder
+FROM python:3.11-slim AS builder
 
 # Define environment variables
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    POETRY_VERSION=1.8.4 \
+    POETRY_VERSION=2.3.4 \
     POETRY_VIRTUALENVS_IN_PROJECT=true \
     POETRY_HOME="/opt/poetry"
 
@@ -31,9 +31,9 @@ COPY pyproject.toml poetry.lock* ./
 # In CI/CD pipelines targeting specific clouds, you would add `--extras "cloud-aws-native"` or `--extras "cloud-azure-native"` here.
 ARG EXTRA_DEPENDENCIES=""
 RUN if [ -z "$EXTRA_DEPENDENCIES" ]; then \
-      poetry install --no-root --only main; \
+      poetry install --no-root -v; \
     else \
-      poetry install --no-root --only main --extras "$EXTRA_DEPENDENCIES"; \
+      poetry install --no-root -v --extras "$EXTRA_DEPENDENCIES"; \
     fi
 
 # Override PyTorch with the CPU-only version inside the venv if no GPU is used
@@ -42,7 +42,7 @@ RUN if [ "$USE_GPU" = "false" ]; then \
       /app/.venv/bin/pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu; \
     fi
 
-FROM python:3.11-slim as runtime
+FROM python:3.11-slim AS runtime
 
 ENV PATH="/app/.venv/bin:$PATH"
 

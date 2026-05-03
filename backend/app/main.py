@@ -2,7 +2,9 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi_mcp import FastApiMCP
 from app.api.runtime import router as runtime_router
-from app.api.admin import router as admin_router
+from app.api.admin_endpoints import router as admin_endpoints_router
+from app.api.admin import router as admin_folder_router
+from app.api.processing import router as processing_router
 from app.api.a2a import router as a2a_router
 from app.config import settings
 
@@ -16,7 +18,7 @@ def create_app() -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
-        # Always initialize SQLite since we are using it for the DB layer in all clouds
+        # Initialize database tables (using RDS/PostgreSQL in AWS)
         from app.db.session import engine
         from app.db.models import Base
 
@@ -58,7 +60,9 @@ def create_app() -> FastAPI:
         prefix="/runtime",
         tags=["Candidate Processing", "MCP Tool"],
     )
-    app.include_router(admin_router, prefix="/admin", tags=["Admin"])
+    app.include_router(admin_endpoints_router, prefix="/admin", tags=["Admin"])
+    app.include_router(admin_folder_router, prefix="/admin", tags=["Admin"])
+    app.include_router(processing_router, prefix="/v1/processing", tags=["Processing"])
     # Expose at root to match `.well-known` discovery path correctly
     app.include_router(a2a_router, tags=["A2A Discoverability"])
 

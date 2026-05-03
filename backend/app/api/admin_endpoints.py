@@ -7,12 +7,12 @@ from app.schemas.admin import AssetUploadRequestMetadata, AssetUploadResponse
 from app.schemas.enums import AssetStatus
 from app.dependencies import (
     mock_is_admin,
-    storage_provider_dependency,
-    template_repository_dependency,
-    event_bus_dependency,
-    document_extraction_service_dependency,
+    get_storage_provider,
+    get_template_repository,
+    get_message_queue,
+    get_document_extraction_service,
     get_knowledge_index,
-    llm_runtime_dependency
+    get_llm_runtime
 )
 from app.utils import validate_uploaded_file
 from app.services.template_service import TemplateService
@@ -30,12 +30,12 @@ async def upload_asset(
     file: UploadFile = File(...),
     metadata: str = Form(..., description="JSON string of AssetUploadRequestMetadata"),
     is_admin: bool = Depends(mock_is_admin),
-    storage_provider: StorageProvider = Depends(storage_provider_dependency),
-    template_repository: TemplateRepository = Depends(template_repository_dependency),
-    event_bus: EventBus = Depends(event_bus_dependency),
-    extraction_service: DocumentExtractionService = Depends(document_extraction_service_dependency),
+    storage_provider: StorageProvider = Depends(get_storage_provider),
+    template_repository: TemplateRepository = Depends(get_template_repository),
+    event_bus: EventBus = Depends(get_message_queue),
+    extraction_service: DocumentExtractionService = Depends(get_document_extraction_service),
     knowledge_index: KnowledgeIndex = Depends(get_knowledge_index),
-    llm: LlmRuntimeAdapter = Depends(llm_runtime_dependency)
+    llm: LlmRuntimeAdapter = Depends(get_llm_runtime)
 ):
     try:
         # Validate metadata JSON
@@ -65,7 +65,7 @@ async def upload_asset(
 
     asset_id = str(uuid.uuid4())
     storage_key = f"templates/{asset_id}/{file.filename}"
-    storage_uri = storage_provider.put_bytes(storage_key, content)
+    storage_uri = storage_provider.put_bytes(content, storage_key)
 
     db = SessionLocal()
     try:
@@ -73,18 +73,18 @@ async def upload_asset(
         template = TemplateAsset(
             id=asset_id,
             version="1.0.0",
-            asset_type=parsed_metadata.asset_type,
             name=parsed_metadata.name or file.filename,
             status=AssetStatus.DRAFT.value,
             industry=parsed_metadata.industry,
             role_family=parsed_metadata.role_family,
             region=parsed_metadata.region,
             language=parsed_metadata.language,
-            original_file_ref=storage_uri,
+            storage_uri=storage_uri,
             file_name=file.filename,
             created_by="admin-user"
         )
         db.add(template)
+        db.flush() # Ensure template exists for foreign key constraint before adding job
 
         # 3. Create a processing job for the worker
         job_id = str(uuid.uuid4())
@@ -122,7 +122,7 @@ async def upload_asset(
 
 @router.get("/templates")
 async def pull_templates(
-    template_repository: TemplateRepository = Depends(template_repository_dependency),
+    template_repository: TemplateRepository = Depends(get_template_repository),
     is_admin: bool = Depends(mock_is_admin)
 ):
     templates = template_repository.list_templates({})
@@ -179,9 +179,9 @@ from app.services.template_analysis_service import TemplateAnalysisService
 async def analyze_template(
     id: str,
     is_admin: bool = Depends(mock_is_admin),
-    storage_provider: StorageProvider = Depends(storage_provider_dependency),
-    extraction_service: DocumentExtractionService = Depends(document_extraction_service_dependency),
-    llm: LlmRuntimeAdapter = Depends(llm_runtime_dependency)
+    storage_provider: StorageProvider = Depends(get_storage_provider),
+    extraction_service: DocumentExtractionService = Depends(get_document_extraction_service),
+    llm: LlmRuntimeAdapter = Depends(get_llm_runtime)
 ):
     db = SessionLocal()
     try:

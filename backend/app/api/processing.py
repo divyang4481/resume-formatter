@@ -2,13 +2,13 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Backgro
 import uuid
 import os
 from app.dependencies import (
-    storage_provider_dependency,
-    job_repository_dependency,
-    llm_runtime_dependency,
-    document_extraction_service_dependency,
-    message_queue_dependency,
-    template_repository_dependency,
-    template_lookup_service_dependency,
+    get_storage_provider,
+    get_job_repository,
+    get_llm_runtime,
+    get_document_extraction_service,
+    get_message_queue,
+    get_template_repository,
+    get_template_lookup_service,
     resume_workflow_service_dependency
 )
 from app.domain.interfaces import StorageProvider, JobRepository, DocumentExtractionService, MessageQueue, TemplateRepository
@@ -31,7 +31,7 @@ from app.services.template_lookup_service import TemplateLookupService
 
 @router.get("/lookups/industries")
 async def get_industries(
-    template_lookup_service: TemplateLookupService = Depends(template_lookup_service_dependency)
+    template_lookup_service: TemplateLookupService = Depends(get_template_lookup_service)
 ):
     """
     Returns available industries for form selection from published templates.
@@ -42,7 +42,7 @@ async def get_industries(
 @router.get("/lookups/templates")
 async def get_templates(
     industry: Optional[str] = None,
-    template_lookup_service: TemplateLookupService = Depends(template_lookup_service_dependency)
+    template_lookup_service: TemplateLookupService = Depends(get_template_lookup_service)
 ):
     """
     Returns available templates from the database, optionally filtered by industry.
@@ -85,12 +85,12 @@ async def submit_document(
     template_id: Optional[str] = Form(None),
     x_execution_mode: str = Header(ExecutionMode.RECRUITER_RUNTIME.value, alias="X-Execution-Mode"),
     x_actor_role: str = Header("recruiter", alias="X-Actor-Role"),
-    storage_provider: StorageProvider = Depends(storage_provider_dependency),
-    job_repository: JobRepository = Depends(job_repository_dependency),
-    llm_runtime: LlmRuntimeAdapter = Depends(llm_runtime_dependency),
-    doc_parser_service: DocumentExtractionService = Depends(document_extraction_service_dependency),
-    message_queue: MessageQueue = Depends(message_queue_dependency),
-    template_repository: TemplateRepository = Depends(template_repository_dependency)
+    storage_provider: StorageProvider = Depends(get_storage_provider),
+    job_repository: JobRepository = Depends(get_job_repository),
+    llm_runtime: LlmRuntimeAdapter = Depends(get_llm_runtime),
+    doc_parser_service: DocumentExtractionService = Depends(get_document_extraction_service),
+    message_queue: MessageQueue = Depends(get_message_queue),
+    template_repository: TemplateRepository = Depends(get_template_repository)
 ):
     """
     Accepts multipart upload for resume processing.
@@ -147,7 +147,7 @@ async def submit_document(
         storage_key = f"jobs/{job_id}/input/{filename}"
 
     # Store file via storage provider
-    storage_ref = storage_provider.put_bytes(storage_key, file_bytes)
+    storage_ref = storage_provider.put_bytes(file_bytes, storage_key)
 
     requires_confirmation = True
     suggested_industry_id = None
@@ -280,7 +280,7 @@ async def submit_document(
 @router.get("/jobs/{id}", response_model=RuntimeJobStatusResponse)
 async def get_job_status(
     id: str,
-    job_repository: JobRepository = Depends(job_repository_dependency)
+    job_repository: JobRepository = Depends(get_job_repository)
 ):
     """
     Returns processing job status.
@@ -301,8 +301,8 @@ async def get_job_status(
 async def confirm_document(
     id: str,
     request: ConfirmDocumentRequest,
-    job_repository: JobRepository = Depends(job_repository_dependency),
-    message_queue: MessageQueue = Depends(message_queue_dependency)
+    job_repository: JobRepository = Depends(get_job_repository),
+    message_queue: MessageQueue = Depends(get_message_queue)
 ):
     """
     Used to resume a paused human review step.
@@ -339,8 +339,8 @@ from fastapi.responses import Response
 @router.get("/documents/{id}/download")
 async def download_output(
     id: str,
-    job_repository: JobRepository = Depends(job_repository_dependency),
-    storage_provider: StorageProvider = Depends(storage_provider_dependency)
+    job_repository: JobRepository = Depends(get_job_repository),
+    storage_provider: StorageProvider = Depends(get_storage_provider)
 ):
     """
     Download final output.
@@ -369,8 +369,8 @@ from fastapi import Request
 async def get_job_output(
     id: str,
     request: Request,
-    job_repository: JobRepository = Depends(job_repository_dependency),
-    storage_provider: StorageProvider = Depends(storage_provider_dependency)
+    job_repository: JobRepository = Depends(get_job_repository),
+    storage_provider: StorageProvider = Depends(get_storage_provider)
 ):
     job = job_repository.get_job(id)
     if not job:
@@ -388,8 +388,8 @@ async def get_job_output(
 @router.get("/jobs/{id}/summary")
 async def get_job_summary(
     id: str,
-    job_repository: JobRepository = Depends(job_repository_dependency),
-    storage_provider: StorageProvider = Depends(storage_provider_dependency)
+    job_repository: JobRepository = Depends(get_job_repository),
+    storage_provider: StorageProvider = Depends(get_storage_provider)
 ):
     """
     Returns summary of the processed CV.

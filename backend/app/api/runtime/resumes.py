@@ -28,6 +28,7 @@ async def upload_resume(
         source_storage_uri=uri
     )
     job_repo.db.add(resume)
+    job_repo.db.flush() # Ensure resume exists before job is added for FK constraint
 
     # Create job
     job = ProcessingJob(

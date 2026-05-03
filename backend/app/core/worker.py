@@ -50,10 +50,15 @@ async def process_job(db, message: dict):
         job.status = "PROCESSING"
         job_repo.save_job(job)
 
+        filename = input_uri.split("/")[-1]
+        content_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document" if input_uri.endswith(".docx") else "application/pdf"
+
         initial_state = {
             "session_id": job_id,
             "file_path": input_uri,
-            "file_type": "application/pdf" if input_uri.endswith(".pdf") else "application/octet-stream",
+            "filename": filename,
+            "content_type": content_type,
+            "file_type": content_type,
             "runtime_metadata": {
                 "template_id": message.get("template_id"),
                 "version_id": message.get("version_id")
@@ -64,21 +69,34 @@ async def process_job(db, message: dict):
             graph = build_template_processing_graph(doc_parser, storage, job_repo)
             result = await graph.ainvoke(initial_state)
 
+            if "_failed" in result.get("status", ""):
+                error_msg = result.get("validation_errors", ["Unknown AI failure"])[0]
+                raise ValueError(f"AI Template Processing Failed: {error_msg}")
+
             # Update template status
             template_id = message.get("template_id")
             version_id = message.get("version_id")
             if template_id and version_id:
                 from app.db.models import TemplateAsset
+                from app.schemas.enums import AssetStatus
                 template = db.query(TemplateAsset).filter_by(id=template_id, version=version_id).first()
                 if template:
-                    contract = result.get("canonical_model", {})
-                    template.field_extraction_manifest = json.dumps(contract)
-                    template.status = "READY_FOR_TESTING"
+                    contract = result.get("canonical_model")
+                    if isinstance(contract, list) and len(contract) > 0:
+                        template.field_extraction_manifest = json.dumps(contract)
+                        template.status = AssetStatus.READY_FOR_TESTING.value
+                    else:
+                        template.status = "FAILED"
+                        template.field_extraction_manifest = json.dumps([])
                     db.commit()
 
         elif job_type in ["RESUME_FORMATTING", "TEMPLATE_TEST_RUN"]:
             graph = build_resume_processing_graph(llm_runtime, doc_parser, storage, job_repo)
             result = await graph.ainvoke(initial_state)
+
+            if "_failed" in result.get("status", ""):
+                error_msg = result.get("validation_errors", ["Unknown AI failure"])[0]
+                raise ValueError(f"AI Resume Processing Failed: {error_msg}")
 
             job.render_docx_uri = result.get("render_docx_uri")
             job.summary_uri = result.get("summary_uri")
@@ -105,7 +123,7 @@ async def process_job(db, message: dict):
 async def run_worker():
     logger.info("Starting long-running ECS background worker...")
 
-    # Initialize DB (SQLite fallback for dev, usually RDS in AWS)
+    # Initialize DB (PostgreSQL RDS in AWS)
     from app.db.session import engine
     from app.db.models import Base
     Base.metadata.create_all(bind=engine)

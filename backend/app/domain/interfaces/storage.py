@@ -25,3 +25,8 @@ class ObjectStorage(ABC):
     def exists(self, uri: str) -> bool:
         """Checks if an object exists."""
         pass
+
+    @abstractmethod
+    def get_bytes(self, uri: str) -> bytes:
+        """Retrieves bytes from storage."""
+        pass

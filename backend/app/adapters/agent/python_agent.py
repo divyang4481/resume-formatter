@@ -6,7 +6,7 @@ from app.domain.interfaces.llm import LlmRuntimeAdapter
 
 logger = logging.getLogger(__name__)
 
-class LocalLLMResumeFormattingAgent(ResumeFormattingAgent):
+class PythonOrchestratedResumeFormattingAgent(ResumeFormattingAgent):
     def __init__(self, llm: LlmRuntimeAdapter):
         self.llm = llm
 

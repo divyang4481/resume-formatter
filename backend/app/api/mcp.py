@@ -35,7 +35,7 @@ async def submit_document(
     message_queue = get_message_queue()
 
     storage_key = f"jobs/{job_id}/input/{filename}"
-    storage_ref = storage_provider.put_bytes(storage_key, file_bytes)
+    storage_ref = storage_provider.put_bytes(file_bytes, storage_key)
 
     requires_confirmation = True
     job_status = JobStatus.WAITING_FOR_CONFIRMATION

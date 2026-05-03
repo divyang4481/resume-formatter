@@ -26,6 +26,8 @@ class SqlAlchemyTemplateRepository(TemplateRepository):
         if model.field_extraction_manifest:
             try:
                 manifest_data = json.loads(model.field_extraction_manifest)
+                if not isinstance(manifest_data, list):
+                    manifest_data = None
             except:
                 manifest_data = None
 
@@ -120,6 +122,8 @@ class SqlAlchemyTemplateRepository(TemplateRepository):
             if model.field_extraction_manifest:
                 try:
                     manifest_data = json.loads(model.field_extraction_manifest)
+                    if not isinstance(manifest_data, list):
+                        manifest_data = None # Or [] depending on preference, None is safer for Optional[List]
                 except:
                     manifest_data = None
 

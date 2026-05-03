@@ -85,6 +85,19 @@ class S3ObjectStorage(ObjectStorage):
         except Exception:
             return False
 
+    def get_bytes(self, uri: str) -> bytes:
+        try:
+            if not uri.startswith("s3://"):
+                raise ValueError(f"Invalid S3 URI: {uri}")
+            parts = uri.replace("s3://", "").split("/", 1)
+            bucket = parts[0]
+            key = parts[1]
+            response = self.s3.get_object(Bucket=bucket, Key=key)
+            return response['Body'].read()
+        except Exception as e:
+            logger.error(f"Failed to get bytes from S3: {e}")
+            raise
+
 
 class LocalObjectStorage(ObjectStorage):
     def __init__(self, base_path: str = None):
@@ -117,3 +130,8 @@ class LocalObjectStorage(ObjectStorage):
     def exists(self, uri: str) -> bool:
         path = uri.replace("file://", "")
         return os.path.exists(path)
+
+    def get_bytes(self, uri: str) -> bytes:
+        path = uri.replace("file://", "")
+        with open(path, 'rb') as f:
+            return f.read()

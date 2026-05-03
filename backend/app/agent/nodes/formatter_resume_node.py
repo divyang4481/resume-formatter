@@ -53,7 +53,7 @@ def create_render_node(
         # 2. Save Summary Artifact
         summary_key = f"jobs/{session_id}/output/summary.md"
         final_summary_md = f"### CV Summary\n\n{summary_text}"
-        summary_uri = storage.put_bytes(summary_key, final_summary_md.encode("utf-8"))
+        summary_uri = storage.put_bytes(final_summary_md.encode("utf-8"), summary_key)
 
         template_id = state.get("selected_template_id") or "general_cv_v1"
         template_storage_uri = state.get("template_storage_uri")
@@ -105,14 +105,14 @@ def create_render_node(
             )
 
             render_key = f"jobs/{session_id}/output/formatted_resume.docx"
-            render_docx_uri = storage.put_bytes(render_key, docx_bytes)
+            render_docx_uri = storage.put_bytes(docx_bytes, render_key)
 
         except Exception as e:
             logger.error(f"Template rendering failed: {e}")
             # Fallback: Save an error document instead of crashing
             error_docx = generator_service.generate_error_docx(template_id, str(e))
             render_key = f"jobs/{session_id}/output/formatted_resume.docx"
-            render_docx_uri = storage.put_bytes(render_key, error_docx)
+            render_docx_uri = storage.put_bytes(error_docx, render_key)
 
         final_status = "rendered"
         if not state.get("validation_passed", True):

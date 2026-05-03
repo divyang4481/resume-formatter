@@ -4,7 +4,7 @@ from app.domain.interfaces import DocumentExtractionService, StorageProvider
 from app.adapters.repositories.job_repository import JobRepository
 from app.adapters.repositories.template_repository import TemplateRepository
 from app.schemas.enums import JobStatus
-from app.agent.graph import build_workflow_graph, AgentState
+from app.agent.graph import build_resume_processing_graph, AgentState
 from app.agent.state import AgentState as TypedAgentState
 from app.dependencies import get_storage_provider
 
@@ -24,7 +24,7 @@ class ResumeWorkflowService:
         self.storage = storage or get_storage_provider()
         
         # Build the graph once for this service instance
-        self.graph = build_workflow_graph(
+        self.graph = build_resume_processing_graph(
             llm_runtime=self.llm, 
             doc_parser=self.parser_service, 
             storage=self.storage,

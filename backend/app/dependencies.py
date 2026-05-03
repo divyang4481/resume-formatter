@@ -46,10 +46,10 @@ def get_llm_runtime():
 
 def get_agent_provider():
     from app.adapters.agent.bedrock_agent import BedrockResumeFormattingAgent
-    from app.adapters.agent.local_agent import LocalLLMResumeFormattingAgent
+    from app.adapters.agent.python_agent import PythonOrchestratedResumeFormattingAgent
     if settings.agent_provider == "bedrock_agent":
         return BedrockResumeFormattingAgent()
-    return LocalLLMResumeFormattingAgent(llm=get_llm_runtime())
+    return PythonOrchestratedResumeFormattingAgent(llm=get_llm_runtime())
 
 def get_knowledge_index():
     from app.adapters.knowledge_base_adapter import BedrockKnowledgeBaseAdapter, LocalKnowledgeBaseAdapter
@@ -66,6 +66,10 @@ def get_job_repository(db_session = Depends(get_db_session)):
 def get_template_repository(db_session = Depends(get_db_session)):
     from app.adapters.repositories.template_repository import SqlAlchemyTemplateRepository
     return SqlAlchemyTemplateRepository(db_session)
+
+def get_template_lookup_service(template_repository = Depends(get_template_repository)):
+    from app.services.template_lookup_service import TemplateLookupService
+    return TemplateLookupService(template_repository)
 
 # --- Services ---
 def resume_workflow_service_dependency(llm, parser, job_repo, template_repo, storage):

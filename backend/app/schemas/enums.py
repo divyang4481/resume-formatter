@@ -3,6 +3,7 @@ from enum import Enum
 
 class AssetStatus(str, Enum):
     DRAFT = "draft"
+    READY_FOR_TESTING = "ready_for_testing"
     ACTIVE = "active"
     ARCHIVED = "archived"
 

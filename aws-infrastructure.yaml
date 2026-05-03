@@ -104,7 +104,55 @@ Resources:
             Action:
               - bedrock:InvokeModel
               - bedrock:InvokeModelWithResponseStream
+              - bedrock:InvokeAgent
+              - bedrock:Retrieve
+              - bedrock:RetrieveAndGenerate
             Resource: "*"
+
+  # ---------------------------------------------------------
+  # Bedrock Agent IAM Role
+  # ---------------------------------------------------------
+  BedrockAgentRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "bedrock-agent-role-${Environment}-${AWS::Region}"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: bedrock.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: BedrockAgentPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                Resource: !Sub "arn:aws:bedrock:${AWS::Region}::foundation-model/anthropic.claude-3-haiku-20240307-v1:0"
+
+  # ---------------------------------------------------------
+  # Bedrock Agent
+  # ---------------------------------------------------------
+  BedrockAgent:
+    Type: AWS::Bedrock::Agent
+    Properties:
+      AgentName: !Sub "resume-formatter-agent-${Environment}"
+      AgentResourceRoleArn: !GetAtt BedrockAgentRole.Arn
+      FoundationModel: "anthropic.claude-3-haiku-20240307-v1:0"
+      Instruction: "You are a professional resume formatting assistant. You extract structured data from resumes and map them to templates."
+      AutoPrepare: true
+
+  # ---------------------------------------------------------
+  # Bedrock Agent Alias
+  # ---------------------------------------------------------
+  BedrockAgentAlias:
+    Type: AWS::Bedrock::AgentAlias
+    Properties:
+      AgentId: !Ref BedrockAgent
+      AgentAliasName: "latest"
 
   # ---------------------------------------------------------
   # IAM User (for Local Docker Compose Development)
@@ -122,6 +170,12 @@ Resources:
       UserName: !Ref LocalDeveloperUser
 
 Outputs:
+  BedrockAgentId:
+    Description: "Bedrock Agent ID"
+    Value: !Ref BedrockAgent
+  BedrockAgentAliasId:
+    Description: "Bedrock Agent Alias ID"
+    Value: !Ref BedrockAgentAlias
   S3BucketName:
     Description: "S3 Bucket Name"
     Value: !Ref PlatformStorageBucket

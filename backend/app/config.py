@@ -1,28 +1,31 @@
 from pydantic_settings import BaseSettings
 
+
 class Settings(BaseSettings):
     """
     Application Settings configured via environment variables.
     """
+
     project_name: str = "Agentic Document Platform"
 
     # Architecture Config
     cloud_provider: str = "aws"  # "aws", "azure", "gcp", "local"
-    runtime_mode: str = "local" # "local" or "aws"
-    processing_mode: str = "async" # "sync" or "async"
-    queue_provider: str = "local" # "local", "sqs"
-    storage_provider: str = "local" # "local", "s3"
-    knowledge_provider: str = "local" # "local", "bedrock_kb"
-    agent_provider: str = "local_llm" # "local_llm", "bedrock_agent"
+    runtime_mode: str = "local"  # "local" or "aws"
+    processing_mode: str = "async"  # "sync" or "async"
+    queue_provider: str = "local"  # "local", "sqs"
+    storage_provider: str = "local"  # "local", "s3"
+    knowledge_provider: str = "local"  # "local", "bedrock_kb"
+    agent_provider: str = "python_orchestrated"  # "python_orchestrated", "bedrock_agent"
 
     # AWS Specific Config
-    aws_region: str = "us-east-1"
+    aws_region: str = "ap-south-1"
     s3_bucket_input: str = "agentic-document-input-bucket"
     s3_bucket_output: str = "agentic-document-output-bucket"
     sqs_processing_queue_url: str = ""
     bedrock_agent_id: str = ""
     bedrock_agent_alias_id: str = ""
     bedrock_kb_id: str = ""
+    database_url: str = "sqlite:///./.data/app.db"
 
     # Document Parsing Routing & Guard
     enable_docling: bool = True
@@ -44,7 +47,7 @@ class Settings(BaseSettings):
 
     # LLM Settings
     llm_backend: str = "aws_bedrock"
-    llm_model_name: str = "meta.llama3-8b-instruct-v1:0"
+    llm_model_name: str = "meta.llama3-70b-instruct-v1:0"
     ollama_endpoint: str = "http://localhost:11434/api/generate"
     gemini_api_key: str = ""
 
@@ -59,5 +62,6 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8", "extra": "ignore"}
+
 
 settings = Settings()
