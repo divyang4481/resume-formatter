@@ -1,4 +1,5 @@
 import { Component } from '@angular/core';
+import { environment } from '../../../../environments/environment';
 import { MatCardModule } from '@angular/material/card';
 import { MatIconModule } from '@angular/material/icon';
 import { MatDividerModule } from '@angular/material/divider';
@@ -30,12 +31,12 @@ import { MatListModule } from '@angular/material/list';
             <mat-list-item>
               <mat-icon matListItemIcon>rss_feed</mat-icon>
               <div matListItemTitle>SSE Stream Endpoint</div>
-              <div matListItemLine><code>http://localhost:8000/mcp/sse</code></div>
+              <div matListItemLine><code>{{ apiUrl }}/mcp/sse</code></div>
             </mat-list-item>
             <mat-list-item>
               <mat-icon matListItemIcon>extension</mat-icon>
               <div matListItemTitle>Copilot / AI Plugin Manifest</div>
-              <div matListItemLine><code>http://localhost:8000/.well-known/ai-plugin.json</code></div>
+              <div matListItemLine><code>{{ apiUrl }}/.well-known/ai-plugin.json</code></div>
             </mat-list-item>
           </mat-list>
 
@@ -75,7 +76,7 @@ import { MatListModule } from '@angular/material/list';
   "mcpServers": {{ '{' }}
     "document_platform": {{ '{' }}
       "command": "python",
-      "args": ["-m", "mcp_client", "http://localhost:8000/mcp/sse"]
+      "args": ["-m", "mcp_client", "{{ apiUrl }}/mcp/sse"]
     {{ '}' }}
   {{ '}' }}
 {{ '}' }}
@@ -113,4 +114,6 @@ import { MatListModule } from '@angular/material/list';
     }
   `]
 })
-export class McpDocsComponent {}
+export class McpDocsComponent {
+  apiUrl = environment.baseApiUrl;
+}

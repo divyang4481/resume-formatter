@@ -1,12 +1,13 @@
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { Observable } from 'rxjs';
+import { environment } from '../../environments/environment';
 
 @Injectable({
   providedIn: 'root'
 })
 export class AdminTemplateTestingService {
-  private processingUrl = 'http://localhost:8000/v1/processing';
+  private processingUrl = `${environment.baseApiUrl}/v1/processing`;
 
   constructor(private http: HttpClient) {}
 

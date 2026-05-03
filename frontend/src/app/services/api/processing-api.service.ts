@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
+import { environment } from '../../../environments/environment';
 
 export interface Industry {
   id: string;
@@ -22,8 +23,7 @@ export class ProcessingApiService {
   // Wait, I need to check if proxy is configured. If not, maybe use relative url for now?
   // Let's use relative '/v1/processing' and if proxy.conf.json isn't there, we'll create it, OR we'll just proxy the specific request.
   // Let's just create proxy.conf.json.
-  private apiUrl = '/v1/processing';
-
+  private apiUrl = `${environment.baseApiUrl}/v1/processing`;
   constructor(private http: HttpClient) {}
 
   getApiUrl(): string {
