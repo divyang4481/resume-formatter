@@ -1,32 +1,16 @@
-FROM public.ecr.aws/docker/library/python:3.11-slim
+# Use the pre-built base image containing all dependencies
+ARG BASE_IMAGE=114644266543.dkr.ecr.ap-south-1.amazonaws.com/agentic-doc-base-dev:latest
+FROM ${BASE_IMAGE}
 
 WORKDIR /app
 
-# Install required system packages for docling and pytorch, as well as Tika
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    gcc g++ libgl1 libglib2.0-0 default-jre-headless \
-    && rm -rf /var/lib/apt/lists/*
+# Install boto3 crt extension for AWS SSO credential resolving
+RUN pip install --no-cache-dir "boto3[crt]"
 
-
-# Copy requirements and install
-COPY pyproject.toml poetry.lock ./
-RUN pip install poetry
-
-RUN poetry config virtualenvs.create false
-
-# Override PyTorch with the CPU-only version in the same RUN layer to prevent image bloat
-ARG USE_GPU="false"
-RUN poetry install --no-interaction --no-ansi --without dev && \
-    if [ "$USE_GPU" = "false" ]; then \
-      pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu; \
-    fi
-
-# Copy the application code
+# Copy application code
 COPY ./app ./app
 COPY ./init_db.py ./init_db.py
 
-# Create a local DB dir in case sqlite is initialized as fallback
 RUN mkdir -p .data
 
-# Run the worker script
 CMD ["python", "-m", "app.core.worker"]

@@ -117,6 +117,23 @@ class ResumeWorkflowService:
                 job.summary_uri = final_state["summary_uri"]
             if final_state.get("summary_text"):
                 job.generated_summary = final_state["summary_text"]
+                # Explicitly store summary in CandidateResume if linked
+                if job.candidate_resume_id:
+                    from app.db.session import SessionLocal
+                    from app.db.models import CandidateResume
+                    with SessionLocal() as session:
+                        candidate = session.query(CandidateResume).filter(CandidateResume.id == job.candidate_resume_id).first()
+                        if candidate:
+                            candidate.resume_summary = final_state["summary_text"]
+                            # Also store the extracted structured data
+                            extracted_json = final_state.get("transformed_document_json")
+                            if extracted_json:
+                                import json
+                                if isinstance(extracted_json, dict):
+                                    candidate.normalized_resume_json = json.dumps(extracted_json)
+                                else:
+                                    candidate.normalized_resume_json = str(extracted_json)
+                            session.commit()
             if final_state.get("render_docx_uri"):
                 job.render_docx_uri = final_state["render_docx_uri"]
 

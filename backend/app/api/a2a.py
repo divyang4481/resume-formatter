@@ -19,9 +19,9 @@ async def get_ai_plugin_manifest() -> Dict[str, Any]:
         },
         "api": {
             "type": "openapi",
-            "url": "http://localhost:8000/openapi.json"
+            "url": "/openapi.json"
         },
-        "logo_url": "http://localhost:8000/logo.png",
+        "logo_url": "/logo.png",
         "contact_email": "support@example.com",
         "legal_info_url": "http://www.example.com/legal"
     }
@@ -43,15 +43,15 @@ async def get_agent_card() -> Dict[str, Any]:
             "validate_document"
         ],
         "endpoints": {
-            "lookup_industries": "/v1/processing/lookups/industries",
-            "lookup_templates": "/v1/processing/lookups/templates",
-            "submit_document": "/v1/processing/documents/submit",
-            "confirm_document": "/v1/processing/documents/{id}/confirm",
-            "get_document_status": "/v1/processing/jobs/{id}",
-            "stream_document_events": "/v1/processing/documents/{id}/stream",
-            "download_document": "/v1/processing/documents/{id}/download",
-            "get_job_output": "/v1/processing/jobs/{id}/output",
-            "get_job_summary": "/v1/processing/jobs/{id}/summary",
-            "submit_feedback": "/v1/processing/jobs/{id}/feedback"
+            "lookup_industries": "/api/v1/processing/lookups/industries",
+            "lookup_templates": "/api/v1/processing/lookups/templates",
+            "submit_document": "/api/v1/processing/documents/submit",
+            "confirm_document": "/api/v1/processing/documents/{id}/confirm",
+            "get_document_status": "/api/v1/processing/jobs/{id}",
+            "stream_document_events": "/api/v1/processing/documents/{id}/stream",
+            "download_document": "/api/v1/processing/documents/{id}/download",
+            "get_job_output": "/api/v1/processing/jobs/{id}/output",
+            "get_job_summary": "/api/v1/processing/jobs/{id}/summary",
+            "submit_feedback": "/api/v1/processing/jobs/{id}/feedback"
         }
     }

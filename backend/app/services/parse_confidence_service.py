@@ -18,17 +18,7 @@ class ParseConfidenceService:
             score -= 0.5
 
         # Structure heuristic (Docling should find sections)
-        if parsed_doc.parser_used == "docling":
-            if len(parsed_doc.sections) < settings.parser_min_section_count:
-                score -= 0.3
-
-            # If docling didn't extract any tables, we don't penalize heavily,
-            # but we could add a minor penalty if we expected a complex document.
-
-        # Tika heuristic (Tika doesn't find sections, so we only judge on text length)
-        elif parsed_doc.parser_used == "tika":
-            # Tika is naturally lower confidence for structure,
-            # so we might cap its max confidence
-            score = min(score, 0.8)
+        if len(parsed_doc.sections) < settings.parser_min_section_count:
+            score -= 0.3
 
         return max(0.0, min(1.0, score))

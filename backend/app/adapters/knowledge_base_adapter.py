@@ -18,6 +18,10 @@ class BedrockKnowledgeBaseAdapter(ManagedKnowledgeBase):
         return "sync_triggered"
 
     def retrieve(self, query: str, filters: Dict[str, Any], top_k: int = 5) -> List[Dict[str, Any]]:
+        if not self.kb_id:
+            logger.warning("No Bedrock Knowledge Base ID configured. Skipping retrieval.")
+            return []
+            
         try:
             response = self.client.retrieve(
                 knowledgeBaseId=self.kb_id,
@@ -27,7 +31,6 @@ class BedrockKnowledgeBaseAdapter(ManagedKnowledgeBase):
                 retrievalConfiguration={
                     'vectorSearchConfiguration': {
                         'numberOfResults': top_k
-                        # filters could be mapped here if bedrock filter format matches
                     }
                 }
             )

@@ -16,11 +16,11 @@ export class AdminComponent implements OnInit {
   constructor(private apiService: ApiService) {}
 
   ngOnInit() {
-    this.apiService.getHealth().subscribe({
-      next: (data) => {
+    this.apiService.checkHealth().subscribe({
+      next: (data: any) => {
         this.healthStatus = data;
       },
-      error: (err) => {
+      error: (err: any) => {
         console.error('Error connecting to backend API', err);
         this.healthStatus = { status: 'Error', message: 'Could not reach backend' };
       }

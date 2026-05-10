@@ -27,6 +27,7 @@ async def process_job(db, message: dict):
     job_id = message.get("job_id")
     job_type = message.get("job_type", "RESUME_FORMATTING")
     input_uri = message.get("input_uri")
+    template_id = message.get("template_id")
 
     if not job_id:
         logger.error("Job ID missing from message.")
@@ -47,8 +48,23 @@ async def process_job(db, message: dict):
             logger.error(f"Job {job_id} not found in DB.")
             return
 
-        job.status = "PROCESSING"
+        from app.schemas.enums import JobStatus, AssetStatus
+        job.status = JobStatus.PROCESSING.value
         job_repo.save_job(job)
+
+        # Fallback for input_uri if not in message
+        if not input_uri:
+            input_uri = getattr(job, "original_file_ref", None)
+            
+        if not input_uri:
+            raise ValueError(f"No input URI found for job {job_id}")
+
+        if not template_id:
+            template_id = getattr(job, "template_asset_id", None)
+            if not template_id:
+                # In RESUME_FORMATTING, it might be in selected_template_id if it's a domain object, 
+                # but job is a DB model here.
+                template_id = getattr(job, "template_asset_id", None)
 
         filename = input_uri.split("/")[-1]
         content_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document" if input_uri.endswith(".docx") else "application/pdf"
@@ -81,19 +97,63 @@ async def process_job(db, message: dict):
                 from app.schemas.enums import AssetStatus
                 template = db.query(TemplateAsset).filter_by(id=template_id, version=version_id).first()
                 if template:
-                    contract = result.get("canonical_model")
-                    if isinstance(contract, list) and len(contract) > 0:
-                        template.field_extraction_manifest = json.dumps(contract)
+                    contract_data = result.get("canonical_model", {})
+                    
+                    if isinstance(contract_data, dict) and contract_data:
+                        # Map all available AI-generated metadata gracefully
+                        template.purpose = contract_data.get("purpose") or template.purpose
+                        template.expected_sections = contract_data.get("expected_sections") or template.expected_sections
+                        template.expected_fields = contract_data.get("expected_fields") or template.expected_fields
+                        
+                        # Serialize guidance dicts if they are not already strings
+                        summary_g = contract_data.get("summary_guidance")
+                        if summary_g:
+                            template.summary_guidance = json.dumps(summary_g) if isinstance(summary_g, (dict, list)) else summary_g
+                        
+                        formatting_g = contract_data.get("formatting_guidance")
+                        if formatting_g:
+                            template.formatting_guidance = json.dumps(formatting_g) if isinstance(formatting_g, (dict, list)) else formatting_g
+                        
+                        # The manifest itself
+                        manifest = contract_data.get("field_extraction_manifest")
+                        if manifest:
+                            template.field_extraction_manifest = json.dumps(manifest) if isinstance(manifest, (dict, list)) else manifest
+                            
+                            # Derive expected_fields directly from the manifest's fieldnames
+                            if isinstance(manifest, list):
+                                extracted_fields = [f.get("fieldname") for f in manifest if isinstance(f, dict) and f.get("fieldname")]
+                                if extracted_fields:
+                                    template.expected_fields = ",".join(extracted_fields)
+                        
                         template.status = AssetStatus.READY_FOR_TESTING.value
+                        logger.info(f"Template {template_id} processed successfully. Status: {template.status}")
+                        
+                        template.status = AssetStatus.READY_FOR_TESTING.value
+                        logger.info(f"Template {template_id} processed successfully. Status: {template.status}")
                     else:
-                        template.status = "FAILED"
+                        template.status = AssetStatus.FAILED.value
+                        logger.warning(f"Template {template_id} processing failed: No useful metadata extracted.")
                         template.field_extraction_manifest = json.dumps([])
                     db.commit()
 
-        elif job_type in ["RESUME_FORMATTING", "TEMPLATE_TEST_RUN"]:
-            graph = build_resume_processing_graph(llm_runtime, doc_parser, storage, job_repo)
-            result = await graph.ainvoke(initial_state)
+                # Update job status
+                job.status = JobStatus.COMPLETED.value
+                job_repo.save_job(job)
+                logger.info(f"Worker successfully processed job_id: {job_id} with job_type: {job_type}")
 
+        elif job_type == "RESUME_FORMATTING":
+            graph = build_resume_processing_graph(llm_runtime, doc_parser, storage, job_repo)
+            # template_id from message or job record
+            final_template_id = template_id or message.get("template_id")
+            
+            # Prepare initial state with the selected template ID
+            state_input = {**initial_state}
+            if final_template_id:
+                state_input["selected_template_id"] = final_template_id
+            
+            result = await graph.ainvoke(state_input)
+            job.status = JobStatus.COMPLETED.value
+            job_repo.save_job(job)
             if "_failed" in result.get("status", ""):
                 error_msg = result.get("validation_errors", ["Unknown AI failure"])[0]
                 raise ValueError(f"AI Resume Processing Failed: {error_msg}")
@@ -105,7 +165,7 @@ async def process_job(db, message: dict):
         else:
             raise ValueError(f"Unsupported job_type: {job_type}")
 
-        job.status = "COMPLETED"
+        job.status = JobStatus.COMPLETED.value
         job_repo.save_job(job)
         logger.info(f"Worker successfully processed job_id: {job_id} with job_type: {job_type}")
 
@@ -114,7 +174,7 @@ async def process_job(db, message: dict):
         try:
             job = job_repo.get_job(job_id)
             if job:
-                job.status = "FAILED"
+                job.status = JobStatus.FAILED.value
                 job.error_message = str(e)
                 job_repo.save_job(job)
         except Exception as db_e:
@@ -133,11 +193,20 @@ async def run_worker():
         db = SessionLocal()
         queue = get_message_queue()
         try:
+            logger.info("Worker polling for jobs...")
             for message in queue.consume():
-                logger.info(f"Worker received message: {message['message_id']}")
+                logger.info(f"--- WORKER RECEIVED MESSAGE: {message['message_id']} ---")
+                logger.info(f"Message Body: {message['body']}")
+                
                 body = message['body']
+                job_id = body.get('job_id')
+                job_type = body.get('job_type')
+                
+                logger.info(f"Starting processing for Job {job_id} ({job_type})...")
                 await process_job(db, body)
+                
                 queue.ack(message)
+                logger.info(f"Successfully processed and Acknowledged message: {message['message_id']}")
 
             # Sleep briefly if queue is empty
             await asyncio.sleep(2)

@@ -13,13 +13,5 @@ class TemplateAnalysisService:
             return await self.ai_service.analyze_template(file_bytes, filename)
         except Exception as e:
             print(f"Template analysis delegation failed: {e}")
-            return {
-                "purpose": "General Professional Template",
-                "expected_sections": "Summary, Experience, Education, Skills",
-                "expected_fields": "summary, experience, education, skills",
-                "summary_guidance": "Standard executive summary focusing on career progression.",
-                "formatting_guidance": "Clear, bulleted lists and consistent date formatting (Jan 2024).",
-                "pii_guidance": "Redact specific details like full home address and non-essential contact data.",
-                "validation_guidance": "Ensure all core sections have data; check for valid date ranges."
-            }
+            raise e
 

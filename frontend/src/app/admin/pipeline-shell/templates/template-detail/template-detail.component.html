@@ -4,13 +4,26 @@
       <mat-icon>arrow_back</mat-icon>
     </button>
     <h1>{{ template?.name || 'Template Detail' }}</h1>
-    <span class="status-badge" [ngClass]="template?.status">{{ template?.status | uppercase }}</span>
+    <span class="status-badge" [ngClass]="template?.status?.toLowerCase()">{{ template?.status | uppercase }}</span>
     <div class="spacer"></div>
     <button mat-flat-button color="accent" (click)="analyzeTemplate()" [disabled]="isAnalyzing">
       <mat-icon *ngIf="!isAnalyzing">psychology</mat-icon>
       <mat-spinner diameter="20" *ngIf="isAnalyzing"></mat-spinner>
       {{ isAnalyzing ? 'Analyzing...' : 'Analyze Template (AI)' }}
     </button>
+  </div>
+
+  <!-- Error Alert for Failed Analysis -->
+  <div *ngIf="template?.status === 'FAILED' || template?.status === 'failed'" class="error-alert-container">
+    <mat-icon>error</mat-icon>
+    <div class="error-content">
+      <strong>Template Analysis Failed</strong>
+      <p>The AI was unable to reverse-engineer this template. This usually happens if no placeholders were detected or the document structure is too complex.</p>
+      <div class="technical-details" *ngIf="template?.error_message">
+        <code>Error: {{ template.error_message }}</code>
+      </div>
+      <button mat-stroked-button color="warn" (click)="analyzeTemplate()">Retry AI Analysis</button>
+    </div>
   </div>
 
   <mat-tab-group>
@@ -136,23 +149,49 @@
               Specify the sections and fields that must be successfully extracted and identified on a candidate's resume to correctly populate this template's placeholders.
             </p>
 
-            <form [formGroup]="requirementsForm" class="flex-column gap-16">
-              <mat-form-field appearance="outline" class="w-100 mb-3">
-                <mat-label>Logical Sections Expected</mat-label>
-                <textarea matInput formControlName="expected_sections" placeholder="Summary, Experience, Skills, Education..." rows="3"></textarea>
-                <mat-hint>Key sections the system will prioritize during its parsing and classifying stages.</mat-hint>
-              </mat-form-field>
-
-              <mat-form-field appearance="outline" class="w-100 mb-n1">
-                <mat-label>Mandatory Data Fields (Placeholders)</mat-label>
-                <textarea matInput formControlName="expected_fields" placeholder="summary, skills, technical_experience, education..." rows="3"></textarea>
-                <mat-hint>Field identifiers that must be present in the AI extraction manifest for successful document mapping.</mat-hint>
-              </mat-form-field>
-
-              <div class="actions mt-3">
-                <button mat-raised-button color="primary" type="button" (click)="saveRequirements()">Save Extraction Logic</button>
+            <div class="row mb-4">
+              <div class="col-md-6">
+                <form [formGroup]="requirementsForm" class="flex-column gap-16">
+                  <mat-form-field appearance="outline" class="w-100 mb-3">
+                    <mat-label>Logical Sections Expected</mat-label>
+                    <textarea matInput formControlName="expected_sections" placeholder="Summary, Experience, Skills, Education..." rows="3"></textarea>
+                    <mat-hint>Key sections the system will prioritize during its parsing and classifying stages.</mat-hint>
+                  </mat-form-field>
+    
+                  <mat-form-field appearance="outline" class="w-100 mb-n1">
+                    <mat-label>Mandatory Data Fields (Placeholders)</mat-label>
+                    <textarea matInput formControlName="expected_fields" placeholder="summary, skills, technical_experience, education..." rows="3"></textarea>
+                    <mat-hint>Field identifiers that must be present in the AI extraction manifest for successful document mapping.</mat-hint>
+                  </mat-form-field>
+    
+                  <div class="actions mt-3">
+                    <button mat-raised-button color="primary" type="button" (click)="saveRequirements()">Save Extraction Logic</button>
+                  </div>
+                </form>
               </div>
-            </form>
+
+              <div class="col-md-6 border-start ps-4">
+                <h4 class="mb-3 d-flex align-items-center gap-8">
+                  <mat-icon color="accent">psychology</mat-icon>
+                  AI Extraction Manifest (Smart Hints)
+                </h4>
+                
+                <div *ngIf="!template?.field_extraction_manifest" class="p-4 bg-light rounded text-center border dashed">
+                  <p class="text-muted mb-0">No smart manifest detected yet. Run <strong>Analyze Template</strong> to generate one.</p>
+                </div>
+
+                <div *ngIf="template?.field_extraction_manifest" class="manifest-list-container">
+                   <div class="manifest-item p-2 mb-2 border rounded bg-white shadow-sm" *ngFor="let field of (template?.field_extraction_manifest | jsonParse)">
+                      <div class="d-flex justify-content-between align-items-center mb-1">
+                        <strong class="text-primary">{{ field.fieldname }}</strong>
+                        <mat-chip-set><mat-chip class="tiny-chip">REQUIRED</mat-chip></mat-chip-set>
+                      </div>
+                      <div class="small text-muted mb-1"><em>{{ field.meaning }}</em></div>
+                      <div class="tiny text-accent"><strong>Hints:</strong> {{ field.source_hints }}</div>
+                   </div>
+                </div>
+              </div>
+            </div>
           </mat-card-content>
         </mat-card>
       </div>
@@ -228,8 +267,8 @@
           <mat-card-content>
             <h3>Summary Output</h3>
             <pre class="summary-box">{{ jobOutputs.summary }}</pre>
-            <div class="mt-2 flex-gap-8" *ngIf="jobStatus && jobStatus.status === 'COMPLETED'">
-              <a mat-raised-button color="primary" [href]="'/v1/processing/documents/' + jobStatus.job_id + '/download'" target="_blank">
+            <div class="mt-2 flex-gap-8" *ngIf="jobStatus && jobStatus.status?.toUpperCase() === 'COMPLETED'">
+              <a mat-raised-button color="primary" [href]="'/api/v1/processing/documents/' + jobStatus.job_id + '/download'" target="_blank">
                 <mat-icon>download</mat-icon> Download Formatted DOCX
               </a>
               <a mat-stroked-button color="primary" [routerLink]="['/view-document', jobStatus.job_id]" target="_blank">
@@ -327,7 +366,7 @@
                     </div>
                     
                     <div class="flex-gap-8 mt-2">
-                        <a mat-raised-button color="primary" [href]="'/v1/processing/documents/' + element.job_id + '/download'" target="_blank">
+                        <a mat-raised-button color="primary" [href]="'/api/v1/processing/documents/' + element.job_id + '/download'" target="_blank">
                             <mat-icon>download</mat-icon> Download Formatted DOCX
                         </a>
                         
@@ -450,7 +489,7 @@
       <h4><strong>Formatted Artifact</strong></h4>
       <div class="flex-row gap-8">
         <a mat-raised-button color="primary" class="flex-1 py-2"
-           [href]="'/v1/processing/documents/' + data.run.job_id + '/download'"
+           [href]="'/api/v1/processing/documents/' + data.run.job_id + '/download'"
            target="_blank">
           <mat-icon>download</mat-icon> Download Formatted DOCX
         </a>

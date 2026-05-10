@@ -21,12 +21,17 @@ class DoclingParser(DocumentParser):
             tmp.flush()
             tmp_path = tmp.name
         
-        # Now that it's closed and flushed, Docling can open it safely
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"Docling parsing file: {file_name}, size: {len(file_bytes)} bytes")
 
         try:
             # Note: Docling processing is CPU bound, might want to run in an executor in real production
             result = self.converter.convert(tmp_path)
             doc = result.document
+            
+            full_text = doc.export_to_markdown()
+            logger.info(f"Docling successfully converted {file_name}. Extracted text length: {len(full_text)}")
 
             sections = []
             tables = []
@@ -51,7 +56,6 @@ class DoclingParser(DocumentParser):
                             table_data.append([cell.text for cell in row])
                     tables.append(ParsedTable(data=table_data))
 
-            full_text = doc.export_to_markdown()
 
             return ParsedDocument(
                 text=full_text,

@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from typing import Any
 from langgraph.graph import StateGraph, END
 from app.agent.state import AgentState
@@ -13,6 +14,8 @@ from app.agent.nodes.agentic_nodes import (
 )
 from app.services.resume_parsing_service import ResumeParsingService
 from app.dependencies import get_storage_provider
+ 
+logger = logging.getLogger(__name__)
 
 
 def create_validity_check_node():
@@ -40,7 +43,8 @@ def create_parse_node(doc_parser: DocumentExtractionService, storage):
         # Retrieve bytes from storage
         try:
             file_bytes = storage.get_bytes(file_path)
-        except Exception:
+        except Exception as e:
+            logger.error(f"Failed to fetch file from storage: {file_path}. Error: {e}")
             file_bytes = b"" # Fallback to empty if not found during dev
 
         parsing_service = ResumeParsingService(extractor=doc_parser)
@@ -51,8 +55,11 @@ def create_parse_node(doc_parser: DocumentExtractionService, storage):
             context=context
         )
 
+        extracted_text = result.get("extracted_text", "")
+        logger.info(f"Parsed document: {filename}, length: {len(extracted_text)} chars")
+
         return {
-             "extracted_text": result.get("extracted_text", ""),
+             "extracted_text": extracted_text,
              "raw_parsed_data": result.get("structured_data", {}),
              "extraction_confidence": 0.95,
              "status": result.get("status", "parsed")

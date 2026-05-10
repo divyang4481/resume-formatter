@@ -57,6 +57,7 @@ class CandidateResume(Base):
     source_storage_uri = Column(String, nullable=False)
     extraction_uri = Column(String, nullable=True)
     normalized_resume_json = Column(Text, nullable=True)
+    resume_summary = Column(Text, nullable=True)
     industry_hint = Column(String, nullable=True)
     template_hint = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)

@@ -33,11 +33,23 @@ def create_template_resolve_node(llm_runtime, storage_provider, doc_parser):
                     mode=mode
                 )
 
-                chosen_template_id = result.suggested_template_id or "general_cv_v1"
+                chosen_template_id = result.suggested_template_id
+                
+                if not chosen_template_id:
+                    # Fallback to the first active template in RDS
+                    first_tpl = repo.list_active_templates()
+                    if first_tpl:
+                        chosen_template_id = first_tpl[0].id
+                        print(f"Fallback: Using first active RDS template ID: {chosen_template_id}")
+                    else:
+                        raise ValueError("No active templates found in RDS. Template resolution failed.")
+                
                 print(f"Resolved Template ID: {chosen_template_id}")
 
             # Fetch the actual storage URI and guidance from the repository
             template_meta = repo.get_template(chosen_template_id)
+            if not template_meta:
+                 raise ValueError(f"Template with ID {chosen_template_id} not found in database.")
             storage_uri = None
             summary_guidance = None
             formatting_guidance = None
@@ -53,9 +65,19 @@ def create_template_resolve_node(llm_runtime, storage_provider, doc_parser):
                 pii_guidance = template_meta.pii_guidance
                 expected_sections = template_meta.expected_sections
                 expected_fields = template_meta.expected_fields
+                
+                # Fetch the manifest (JSON)
+                field_manifest = None
+                if template_meta.field_extraction_manifest:
+                    import json
+                    try:
+                        field_manifest = json.loads(template_meta.field_extraction_manifest)
+                    except:
+                        field_manifest = template_meta.field_extraction_manifest
+
                 print(f"Found template storage URI: {storage_uri}")
                 
-                # Fetch and extract raw text from template for smarter extraction context
+                # ... (rest of doc extraction logic)
                 try:
                     if storage_uri:
                         storage_key = storage_uri.replace("local://", "")
@@ -69,6 +91,16 @@ def create_template_resolve_node(llm_runtime, storage_provider, doc_parser):
                             context=context
                         )
                         template_text = extracted_doc.extracted_text
+                        
+                        # --- AUTO-DISCOVERY: If DB is missing fields, find them in the docx text ---
+                        if not expected_fields and template_text:
+                            # Simple regex to find {{ placeholders }} or similar patterns
+                            import re
+                            placeholders = re.findall(r'\{\{\s*(.*?)\s*\}\}', template_text)
+                            if placeholders:
+                                expected_fields = ",".join(list(set(placeholders)))
+                                print(f"Auto-discovered {len(placeholders)} placeholders from template: {expected_fields}")
+
                         print(f"Template text extracted successfully (length: {len(template_text)})")
                 except Exception as ex:
                     print(f"Failed to extract raw text from template: {ex}")
@@ -88,6 +120,7 @@ def create_template_resolve_node(llm_runtime, storage_provider, doc_parser):
                 "pii_guidance": pii_guidance,
                 "expected_sections": expected_sections,
                 "expected_fields": expected_fields,
+                "field_extraction_manifest": field_manifest,
                 "status": "template_resolved"
             }
 

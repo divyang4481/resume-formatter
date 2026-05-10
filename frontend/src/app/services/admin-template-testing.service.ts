@@ -7,7 +7,7 @@ import { environment } from '../../environments/environment';
   providedIn: 'root'
 })
 export class AdminTemplateTestingService {
-  private processingUrl = `${environment.baseApiUrl}/v1/processing`;
+  private processingUrl = `${environment.baseApiUrl}/api/v1/processing`;
 
   constructor(private http: HttpClient) {}
 

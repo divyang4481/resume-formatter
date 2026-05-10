@@ -30,13 +30,28 @@ class AwsBedrockLlmRuntime(LlmRuntimeAdapter):
                 system = [{"text": system_prompt}] if system_prompt else []
                 
                 # Determine max tokens based on model limits
+                # Mumbai ap-south-1 Llama3 limit is strictly 2048.
+                # Claude 3 models (including APAC profiles) support 4096 tokens.
                 max_tokens = kwargs.get("max_tokens", 4096)
-                if "meta.llama3" in self.model_id:
+                model_id_lower = self.model_id.lower()
+                
+                if "llama3" in model_id_lower:
                     max_tokens = min(max_tokens, 2048)
+                elif "qwen3-235b" in model_id_lower:
+                    max_tokens = min(max_tokens, 8192)
+                elif "gemma-3" in model_id_lower:
+                    max_tokens = min(max_tokens, 8192)
+                elif "nova" in model_id_lower:
+                    max_tokens = min(max_tokens, 10000)
+                elif "anthropic" in model_id_lower or "claude" in model_id_lower:
+                    # Maximizing for better data extraction as requested
+                    max_tokens = min(max_tokens, 4096)
+                else:
+                    max_tokens = min(max_tokens, 4096)
                 
                 inference_config = {
                     "maxTokens": max_tokens,
-                    "temperature": kwargs.get("temperature", 0.5),
+                    "temperature": kwargs.get("temperature", 0.1),
                     "topP": kwargs.get("top_p", 0.9)
                 }
 
@@ -46,6 +61,12 @@ class AwsBedrockLlmRuntime(LlmRuntimeAdapter):
                     system=system,
                     inferenceConfig=inference_config
                 )
+                
+                stop_reason = response.get('stopReason')
+                import logging
+                logger = logging.getLogger(__name__)
+                if stop_reason == 'max_tokens':
+                    logger.warning(f"Bedrock response truncated for model {self.model_id} (max_tokens hit)")
                 
                 return response['output']['message']['content'][0]['text']
 

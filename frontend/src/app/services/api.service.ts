@@ -11,11 +11,11 @@ export class ApiService {
 
   constructor(private http: HttpClient) { }
 
-  getHealth(): Observable<any> {
-    return this.http.get(`${this.apiUrl}/health`);
+  checkHealth(): Observable<any> {
+    return this.http.get(`${this.apiUrl}/api/health`);
   }
 
   getRoot(): Observable<any> {
-    return this.http.get(`${this.apiUrl}/`);
+    return this.http.get(`${this.apiUrl}/api`);
   }
 }

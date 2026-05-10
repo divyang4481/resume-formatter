@@ -1,14 +1,9 @@
 services:
   api:
-    build:
-      context: ./backend
-      dockerfile: docker/Dockerfile
-      args:
-        - EXTRA_DEPENDENCIES=parser-tika
+    image: 114644266543.dkr.ecr.ap-south-1.amazonaws.com/agentic-doc-api-dev:v1.0.1
     ports:
       - "8000:8000"
     environment:
-      # AWS Settings using credentials injected from local .env
       - CLOUD_PROVIDER=aws
       - RUNTIME_MODE=aws
       - PROCESSING_MODE=async
@@ -17,11 +12,8 @@ services:
       - AGENT_PROVIDER=python_orchestrated
       - KNOWLEDGE_PROVIDER=bedrock_kb
       - LLM_BACKEND=aws_bedrock
-
-      # Passed from root .env file
       - AWS_REGION=${AWS_REGION:-ap-south-1}
-      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
-      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_PROFILE=default
       - S3_BUCKET_INPUT=${S3_BUCKET_INPUT}
       - S3_BUCKET_OUTPUT=${S3_BUCKET_OUTPUT}
       - SQS_PROCESSING_QUEUE_URL=${SQS_PROCESSING_QUEUE_URL}
@@ -30,18 +22,11 @@ services:
       - BEDROCK_AGENT_ALIAS_ID=${BEDROCK_AGENT_ALIAS_ID}
       - BEDROCK_KB_ID=${BEDROCK_KB_ID}
     volumes:
-      - ./backend/app:/app/app
-      - ./backend/config:/app/config
+      - ~/.aws:/root/.aws
 
   worker:
-    build:
-      context: ./backend
-      dockerfile: docker/Dockerfile
-      args:
-        - EXTRA_DEPENDENCIES=parser-tika
-    command: ["python", "app/core/worker.py"]
+    image: 114644266543.dkr.ecr.ap-south-1.amazonaws.com/agentic-doc-worker-dev:v1.0.1
     environment:
-      # Identical environment to API for AWS resource access
       - CLOUD_PROVIDER=aws
       - RUNTIME_MODE=aws
       - PROCESSING_MODE=async
@@ -50,10 +35,8 @@ services:
       - AGENT_PROVIDER=python_orchestrated
       - KNOWLEDGE_PROVIDER=bedrock_kb
       - LLM_BACKEND=aws_bedrock
-
       - AWS_REGION=${AWS_REGION:-ap-south-1}
-      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
-      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_PROFILE=default
       - S3_BUCKET_INPUT=${S3_BUCKET_INPUT}
       - S3_BUCKET_OUTPUT=${S3_BUCKET_OUTPUT}
       - SQS_PROCESSING_QUEUE_URL=${SQS_PROCESSING_QUEUE_URL}
@@ -62,13 +45,11 @@ services:
       - BEDROCK_AGENT_ALIAS_ID=${BEDROCK_AGENT_ALIAS_ID}
       - BEDROCK_KB_ID=${BEDROCK_KB_ID}
     volumes:
-      - ./backend/app:/app/app
-      - ./backend/config:/app/config
+      - ~/.aws:/root/.aws
 
   frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
+    build: ./frontend
+    image: 114644266543.dkr.ecr.ap-south-1.amazonaws.com/agentic-doc-frontend-dev:v1.0.1
     ports:
       - "4200:80"
     depends_on:

@@ -41,14 +41,26 @@ class PythonOrchestratedResumeFormattingAgent(ResumeFormattingAgent):
 
         try:
             response_text = self.llm.generate(prompt=prompt, temperature=0.1)
+            logger.info(f"LLM Response (raw): {response_text}")
 
-            # Simple cleanup
-            if response_text.startswith("```json"):
-                response_text = response_text[7:]
-            if response_text.endswith("```"):
-                response_text = response_text[:-3]
+            import re
+            json_match = re.search(r"```(?:json)?\n?(.*?)```", response_text, re.DOTALL)
+            if json_match:
+                cleaned_text = json_match.group(1).strip()
+            else:
+                # Fallback: try to find the first '{' and last '}'
+                start = response_text.find('{')
+                end = response_text.rfind('}')
+                if start != -1 and end != -1:
+                    cleaned_text = response_text[start:end+1].strip()
+                else:
+                    cleaned_text = response_text.strip()
 
-            return json.loads(response_text.strip())
+            if not cleaned_text:
+                logger.error("LLM returned an empty response or no JSON found.")
+                raise ValueError("LLM returned an empty response or no JSON found")
+
+            return json.loads(cleaned_text)
         except Exception as e:
             logger.error(f"Local Agent Extraction failed: {e}")
             raise
@@ -59,40 +71,143 @@ class PythonOrchestratedResumeFormattingAgent(ResumeFormattingAgent):
         template_text: str,
         template_metadata: Dict[str, Any]
     ) -> Dict[str, Any]:
-        prompt = f"""
-        You are an expert HR template analyzer. I am providing you with the parsed text of a Resume Template.
-        Your task is to identify all the fields and sections that need to be extracted from a candidate's resume to fill out this template.
+        import os
+        from jinja2 import Template
+        
+        # Load the Jinja2 template
+        template_path = os.path.join(os.path.dirname(__file__), "..", "..", "agent", "prompts", "template_analysis.jinja2")
+        with open(template_path, "r") as f:
+            jinja_template = Template(f.read())
+        
+        # Prepare variables for the template
+        # We'll extract potential placeholders from the text using a simple regex if not provided
+        import re
+        # Support multiple placeholder styles: <<key>>, {{key}}, [[key]]
+        detected_placeholders = re.findall(r"(?:<<|\{\{|\[\[)(.*?)(?:>>|\}\}|\]\])", template_text)
+        
+        prompt = jinja_template.render(
+            template_text=template_text,
+            detected_placeholders=detected_placeholders
+        )
 
-        Template metadata:
-        {json.dumps(template_metadata, indent=2)}
-
-        Parsed Template Text:
-        {template_text}
-
-        Output ONLY a valid JSON object matching this structure:
-        {{
-            "sections": [
-                {{
-                    "section_key": "string",
-                    "required": boolean,
-                    "repeatable": boolean,
-                    "expected_content_type": "string"
-                }}
-            ],
-            "placeholders": ["string"],
-            "quality_rules": ["string"],
-            "rendering_rules": ["string"]
-        }}
-        """
         try:
             response_text = self.llm.generate(prompt=prompt, temperature=0.1)
-            if response_text.startswith("```json"):
-                response_text = response_text[7:]
-            if response_text.endswith("```"):
-                response_text = response_text[:-3]
-            return json.loads(response_text.strip())
+            logger.info(f"LLM Response (raw): {response_text}")
+
+            import re
+            json_match = re.search(r"```(?:json)?\n?(.*?)```", response_text, re.DOTALL)
+            if json_match:
+                cleaned_text = json_match.group(1).strip()
+            else:
+                # Fallback: try to find the first '{' and last '}'
+                start = response_text.find('{')
+                end = response_text.rfind('}')
+                if start != -1 and end != -1:
+                    cleaned_text = response_text[start:end+1].strip()
+                else:
+                    cleaned_text = response_text.strip()
+
+            if not cleaned_text:
+                logger.error("LLM returned an empty response or no JSON found.")
+                raise ValueError("LLM returned an empty response or no JSON found")
+
+            try:
+                return json.loads(cleaned_text)
+            except json.JSONDecodeError:
+                repaired = self._repair_json(cleaned_text)
+                return json.loads(repaired)
         except Exception as e:
             logger.error(f"Local Agent generate_template_contract failed: {e}")
+            raise
+
+    def _repair_json(self, json_str: str) -> str:
+        """Robustly repairs truncated JSON by rolling back to a structural point and then closing it."""
+        json_str = json_str.strip()
+        if not json_str:
+            return "{}"
+            
+        # 1. Roll back to the last safe structural point (comma, brace, bracket)
+        # This prevents being in the middle of a key name or value
+        last_comma = json_str.rfind(',')
+        last_open_brace = json_str.rfind('{')
+        last_open_bracket = json_str.rfind('[')
+        
+        safe_point = max(last_comma, last_open_brace, last_open_bracket)
+        
+        if safe_point != -1:
+            # Cut at the safe point
+            json_str = json_str[:safe_point]
+            # If we cut at a comma, strip it
+            if safe_point == last_comma:
+                json_str = json_str.rstrip(',')
+
+        # 2. Handle unclosed quotes AFTER rolling back
+        # Count non-escaped quotes in the new string
+        import re
+        if len(re.findall(r'(?<!\\)"', json_str)) % 2 != 0:
+            json_str += '"'
+
+        # 3. Count remaining imbalances and close them
+        open_braces = json_str.count('{') - json_str.count('}')
+        open_brackets = json_str.count('[') - json_str.count(']')
+        
+        json_str += ']' * max(0, open_brackets)
+        json_str += '}' * max(0, open_braces)
+        
+        logger.info(f"Repaired truncated JSON. New length: {len(json_str)}")
+        return json_str
+
+    def extract_structured_data(
+        self,
+        *,
+        extracted_text: str,
+        dynamic_schema: Dict[str, Any],
+        template_context: str = "",
+        formatting_guidance: str = ""
+    ) -> Dict[str, Any]:
+        import os
+        from jinja2 import Template
+        
+        template_path = os.path.join(os.path.dirname(__file__), "..", "..", "agent", "prompts", "context_aware_extraction.jinja2")
+        with open(template_path, "r") as f:
+            jinja_template = Template(f.read())
+            
+        prompt = jinja_template.render(
+            dynamic_schema_json=json.dumps(dynamic_schema, indent=2),
+            template_text_excerpt=template_context[:1000],
+            extracted_text=extracted_text,
+            formatting_guidance=formatting_guidance
+        )
+
+        try:
+            response_text = self.llm.generate(prompt=prompt, temperature=0.0)
+            
+            import re
+            json_match = re.search(r"```(?:json)?\n?(.*?)```", response_text, re.DOTALL)
+            if json_match:
+                cleaned_text = json_match.group(1).strip()
+            else:
+                start = response_text.find('{')
+                end = response_text.rfind('}')
+                if start != -1:
+                    if end != -1 and end > start:
+                        cleaned_text = response_text[start:end+1].strip()
+                    else:
+                        cleaned_text = response_text[start:].strip()
+                else:
+                    cleaned_text = response_text.strip()
+
+            if not cleaned_text:
+                raise ValueError("LLM returned an empty response or no JSON found")
+
+            try:
+                return json.loads(cleaned_text)
+            except json.JSONDecodeError:
+                # Try repair
+                repaired = self._repair_json(cleaned_text)
+                return json.loads(repaired)
+        except Exception as e:
+            logger.error(f"Local Agent Extraction failed: {e}")
             raise
 
     def evaluate_output_quality(
@@ -115,11 +230,26 @@ class PythonOrchestratedResumeFormattingAgent(ResumeFormattingAgent):
         """
         try:
             response_text = self.llm.generate(prompt=prompt, temperature=0.1)
-            if response_text.startswith("```json"):
-                response_text = response_text[7:]
-            if response_text.endswith("```"):
-                response_text = response_text[:-3]
-            return json.loads(response_text.strip())
+            logger.info(f"LLM Response (raw): {response_text}")
+
+            import re
+            json_match = re.search(r"```(?:json)?\n?(.*?)```", response_text, re.DOTALL)
+            if json_match:
+                cleaned_text = json_match.group(1).strip()
+            else:
+                # Fallback: try to find the first '{' and last '}'
+                start = response_text.find('{')
+                end = response_text.rfind('}')
+                if start != -1 and end != -1:
+                    cleaned_text = response_text[start:end+1].strip()
+                else:
+                    cleaned_text = response_text.strip()
+
+            if not cleaned_text:
+                logger.error("LLM returned an empty response or no JSON found.")
+                raise ValueError("LLM returned an empty response or no JSON found")
+
+            return json.loads(cleaned_text)
         except Exception as e:
             logger.error(f"Local Agent evaluate_output_quality failed: {e}")
             raise

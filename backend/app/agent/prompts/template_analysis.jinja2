@@ -3,6 +3,9 @@ TASK: Reverse-engineer this CV Template to suggest professional governance metad
 TEMPLATE TEXT (EXTRACTED):
 {{ template_text }}
 
+DOCLING STRUCTURAL ANALYSIS (LAYOUT MAP):
+{{ docling_metadata_json }}
+
 IDENTIFIED RAW PLACEHOLDERS:
 {{ ", ".join(detected_placeholders) if detected_placeholders else "None identified programmatically." }}
 
@@ -14,6 +17,8 @@ CRITICAL INSTRUCTIONS FOR PLACEHOLDERS:
 - If you see 6 markers like '<< Fill this section >>', you MUST provide exactly 6 descriptive keys (e.g., 'professional_summary', 'technical_skills', 'experience', etc.).
 - NEVER list granular sub-fields (like 'programming_languages') in 'expected_fields' if the template only has one high-level box for that section. Granular data belongs in 'formatting_guidance'.
 - The keys MUST appear in the EXACT ORDER they appear in the visual text of the template.
+- Handle different marker styles (<< >>, {% raw %}{{ }}{% endraw %}, [[ ]], « ») uniformly.
+- Identify corporate-specific sections (e.g., 'Our expert opinion', 'Candidate Profile') and provide specialized guidance for filling them.
 
 Provide recommendations in the following JSON format:
 1. 'purpose': A concise description of the ideal profile for this template.

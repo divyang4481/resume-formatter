@@ -18,7 +18,9 @@ class SqsJobQueueAdapter(JobQueue):
                 QueueUrl=self.queue_url,
                 MessageBody=json.dumps(message)
             )
-            return response.get('MessageId')
+            msg_id = response.get('MessageId')
+            logger.info(f"Successfully published message to SQS: {msg_id} (Queue: {self.queue_url})")
+            return msg_id
         except Exception as e:
             logger.error(f"Failed to publish message to SQS: {e}")
             raise
@@ -31,11 +33,17 @@ class SqsJobQueueAdapter(JobQueue):
                 WaitTimeSeconds=10
             )
             for msg in response.get('Messages', []):
-                yield {
-                    "receipt_handle": msg['ReceiptHandle'],
-                    "body": json.loads(msg['Body']),
-                    "message_id": msg['MessageId']
-                }
+                try:
+                    body = json.loads(msg['Body'])
+                    yield {
+                        "receipt_handle": msg['ReceiptHandle'],
+                        "body": body,
+                        "message_id": msg['MessageId']
+                    }
+                except json.JSONDecodeError:
+                    logger.warning(f"Skipping non-JSON message {msg['MessageId']}: {msg['Body']}")
+                    # Optionally ack it so it doesn't stay in the queue
+                    self.ack({"receipt_handle": msg['ReceiptHandle']})
         except Exception as e:
             logger.error(f"Failed to consume message from SQS: {e}")
 

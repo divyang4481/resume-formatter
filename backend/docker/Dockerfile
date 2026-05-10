@@ -10,11 +10,10 @@ ENV PYTHONUNBUFFERED=1 \
 
 ENV PATH="$POETRY_HOME/bin:$PATH"
 
-# Install system dependencies (including potential requirements for local parsers like tika)
+# Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     build-essential \
-    default-jre-headless \
     && rm -rf /var/lib/apt/lists/*
 
 # Install poetry
@@ -27,14 +26,7 @@ WORKDIR /app
 COPY pyproject.toml poetry.lock* ./
 
 # Install core dependencies.
-
-# In CI/CD pipelines targeting specific clouds, you would add `--extras "cloud-aws-native"` or `--extras "cloud-azure-native"` here.
-ARG EXTRA_DEPENDENCIES=""
-RUN if [ -z "$EXTRA_DEPENDENCIES" ]; then \
-      poetry install --no-root -v; \
-    else \
-      poetry install --no-root -v --extras "$EXTRA_DEPENDENCIES"; \
-    fi
+RUN poetry install --no-root -v
 
 # Override PyTorch with the CPU-only version inside the venv if no GPU is used
 ARG USE_GPU="false"
@@ -48,11 +40,10 @@ ENV PATH="/app/.venv/bin:$PATH"
 
 WORKDIR /app
 
-# Install runtime system dependencies for ML/Docling (libgl1, libglib2.0-0) and Tika (default-jre-headless)
+# Install runtime system dependencies for ML/Docling (libgl1, libglib2.0-0)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libgl1 \
     libglib2.0-0 \
-    default-jre-headless \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy the virtual environment from builder

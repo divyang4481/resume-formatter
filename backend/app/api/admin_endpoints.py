@@ -1,7 +1,11 @@
+import logging
 from fastapi import APIRouter, UploadFile, File, Form, Depends, HTTPException, status
 from pydantic import ValidationError
+from app.schemas.enums import JobStatus
 import json
 import uuid
+
+logger = logging.getLogger(__name__)
 
 from app.schemas.admin import AssetUploadRequestMetadata, AssetUploadResponse
 from app.schemas.enums import AssetStatus
@@ -12,18 +16,27 @@ from app.dependencies import (
     get_message_queue,
     get_document_extraction_service,
     get_knowledge_index,
-    get_llm_runtime
+    get_llm_runtime,
 )
 from app.utils import validate_uploaded_file
 from app.services.template_service import TemplateService
-from app.domain.interfaces import StorageProvider, TemplateRepository, EventBus, DocumentExtractionService, KnowledgeIndex
+from app.domain.interfaces import (
+    StorageProvider,
+    TemplateRepository,
+    EventBus,
+    DocumentExtractionService,
+    KnowledgeIndex,
+)
 from app.domain.interfaces import LlmRuntimeAdapter
+from app.config import settings
 
 router = APIRouter()
+
 
 @router.post("/templates")
 async def push_template():
     return {"message": "Template uploaded."}
+
 
 @router.post("/templates/upload", response_model=AssetUploadResponse)
 async def upload_asset(
@@ -33,9 +46,11 @@ async def upload_asset(
     storage_provider: StorageProvider = Depends(get_storage_provider),
     template_repository: TemplateRepository = Depends(get_template_repository),
     event_bus: EventBus = Depends(get_message_queue),
-    extraction_service: DocumentExtractionService = Depends(get_document_extraction_service),
+    extraction_service: DocumentExtractionService = Depends(
+        get_document_extraction_service
+    ),
     knowledge_index: KnowledgeIndex = Depends(get_knowledge_index),
-    llm: LlmRuntimeAdapter = Depends(get_llm_runtime)
+    llm: LlmRuntimeAdapter = Depends(get_llm_runtime),
 ):
     try:
         # Validate metadata JSON
@@ -44,12 +59,11 @@ async def upload_asset(
     except json.JSONDecodeError:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid JSON format in metadata field"
+            detail="Invalid JSON format in metadata field",
         )
     except ValidationError as e:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=e.errors()
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=e.errors()
         )
 
     # Validate file
@@ -81,10 +95,10 @@ async def upload_asset(
             language=parsed_metadata.language,
             storage_uri=storage_uri,
             file_name=file.filename,
-            created_by="admin-user"
+            created_by="admin-user",
         )
         db.add(template)
-        db.flush() # Ensure template exists for foreign key constraint before adding job
+        db.flush()  # Ensure template exists for foreign key constraint before adding job
 
         # 3. Create a processing job for the worker
         job_id = str(uuid.uuid4())
@@ -93,23 +107,30 @@ async def upload_asset(
             original_file_ref=storage_uri,
             template_asset_id=asset_id,
             template_version="1.0.0",
-            status="PROCESSING",
+            status=JobStatus.PROCESSING.value,
             stage="init",
-            job_type="TEMPLATE_PROCESSING"
+            job_type="TEMPLATE_PROCESSING",
         )
         db.add(job)
         db.commit()
 
         # 4. Enqueue the Job
         from app.dependencies import get_message_queue
+
         queue = get_message_queue()
-        queue.publish({
-            "job_id": job_id,
-            "job_type": "TEMPLATE_PROCESSING",
-            "input_uri": storage_uri,
-            "template_id": asset_id,
-            "version_id": "1.0.0"
-        })
+        message_body = {
+                "job_id": job_id,
+                "job_type": "TEMPLATE_PROCESSING",
+                "input_uri": storage_uri,
+                "template_id": asset_id,
+                "version_id": "1.0.0",
+            }
+        logger.info(f"--- PUBLISHING TEMPLATE JOB TO SQS ---")
+        logger.info(f"Queue: {settings.sqs_processing_queue_url}")
+        logger.info(f"Message Body: {message_body}")
+        
+        queue.publish(message_body)
+        logger.info(f"Successfully enqueued template job {job_id} for asset {asset_id}")
 
     finally:
         db.close()
@@ -117,16 +138,18 @@ async def upload_asset(
     return AssetUploadResponse(
         asset_id=asset_id,
         status=AssetStatus.DRAFT,  # The entity is still a draft while processing
-        message="Asset uploaded successfully. Processing in background."
+        message="Asset uploaded successfully. Processing in background.",
     )
+
 
 @router.get("/templates")
 async def pull_templates(
     template_repository: TemplateRepository = Depends(get_template_repository),
-    is_admin: bool = Depends(mock_is_admin)
+    is_admin: bool = Depends(mock_is_admin),
 ):
     templates = template_repository.list_templates({})
     return {"templates": [t.model_dump() for t in templates]}
+
 
 from typing import Optional
 from pydantic import BaseModel
@@ -134,6 +157,7 @@ from sqlalchemy.orm import Session
 from app.db.session import SessionLocal
 from app.db.models import TemplateAsset, TemplateTestRun
 from app.services.template_publish_guard import TemplatePublishGuard
+
 
 class TemplateUpdateRequest(BaseModel):
     name: Optional[str] = None
@@ -144,6 +168,7 @@ class TemplateUpdateRequest(BaseModel):
     purpose: Optional[str] = None
     expected_sections: Optional[str] = None
     expected_fields: Optional[str] = None
+    field_extraction_manifest: Optional[str] = None
 
     summary_guidance: Optional[str] = None
     formatting_guidance: Optional[str] = None
@@ -152,11 +177,10 @@ class TemplateUpdateRequest(BaseModel):
     selection_weight: Optional[int] = None
     is_default_for_industry: Optional[bool] = None
 
+
 @router.patch("/templates/{id}")
 async def update_template(
-    id: str,
-    payload: TemplateUpdateRequest,
-    is_admin: bool = Depends(mock_is_admin)
+    id: str, payload: TemplateUpdateRequest, is_admin: bool = Depends(mock_is_admin)
 ):
     db = SessionLocal()
     try:
@@ -173,15 +197,19 @@ async def update_template(
     finally:
         db.close()
 
+
 from app.services.template_analysis_service import TemplateAnalysisService
+
 
 @router.post("/templates/{id}/analyze")
 async def analyze_template(
     id: str,
     is_admin: bool = Depends(mock_is_admin),
     storage_provider: StorageProvider = Depends(get_storage_provider),
-    extraction_service: DocumentExtractionService = Depends(get_document_extraction_service),
-    llm: LlmRuntimeAdapter = Depends(get_llm_runtime)
+    extraction_service: DocumentExtractionService = Depends(
+        get_document_extraction_service
+    ),
+    llm: LlmRuntimeAdapter = Depends(get_llm_runtime),
 ):
     db = SessionLocal()
     try:
@@ -190,44 +218,49 @@ async def analyze_template(
             raise HTTPException(status_code=404, detail="Template not found")
 
         if not template.storage_uri:
-            raise HTTPException(status_code=400, detail="Template file not found in storage")
+            raise HTTPException(
+                status_code=400, detail="Template file not found in storage"
+            )
 
         # Fetch template bytes
         template_key = template.storage_uri.replace("local://", "")
         template_bytes = storage_provider.get_bytes(template_key)
 
         from app.services.resume_ai_service import ResumeAiService
+
         ai_service = ResumeAiService(llm, extraction_service)
         analyzer = TemplateAnalysisService(ai_service=ai_service)
-        suggestions = await analyzer.analyze_template(template_bytes, template.file_name or "template.docx")
+        suggestions = await analyzer.analyze_template(
+            template_bytes, template.file_name or "template.docx"
+        )
 
-        return {
-            "template_id": id,
-            "suggestions": suggestions
-        }
+        return {"template_id": id, "suggestions": suggestions}
     finally:
         db.close()
 
+
 @router.get("/templates/{id}")
-async def get_template_detail(
-    id: str,
-    is_admin: bool = Depends(mock_is_admin)
-):
+async def get_template_detail(id: str, is_admin: bool = Depends(mock_is_admin)):
     db = SessionLocal()
     try:
         template = db.query(TemplateAsset).filter(TemplateAsset.id == id).first()
         if not template:
             raise HTTPException(status_code=404, detail="Template not found")
 
-        latest_test_run = db.query(TemplateTestRun).filter(
-            TemplateTestRun.template_id == id
-        ).order_by(TemplateTestRun.created_at.desc()).first()
+        latest_test_run = (
+            db.query(TemplateTestRun)
+            .filter(TemplateTestRun.template_id == id)
+            .order_by(TemplateTestRun.created_at.desc())
+            .first()
+        )
 
         validation_result = {}
         if latest_test_run and latest_test_run.validation_result_json:
             validation_result = json.loads(latest_test_run.validation_result_json)
 
-        publish_check = TemplatePublishGuard.can_publish(template, latest_test_run, validation_result)
+        publish_check = TemplatePublishGuard.can_publish(
+            template, latest_test_run, validation_result
+        )
 
         return {
             "template": {
@@ -243,35 +276,44 @@ async def get_template_detail(
                 "validation_guidance": template.validation_guidance,
                 "pii_guidance": template.pii_guidance,
                 "selection_weight": template.selection_weight,
-
+                "field_extraction_manifest": template.field_extraction_manifest,
                 "industry": template.industry,
                 "language": template.language,
                 "role_family": template.role_family,
-                "updated_at": template.updated_at
+                "updated_at": template.updated_at,
             },
-            "latest_test_run": {
-                "id": latest_test_run.id,
-                "decision": latest_test_run.decision,
-                "created_at": latest_test_run.created_at
-            } if latest_test_run else None,
+            "latest_test_run": (
+                {
+                    "id": latest_test_run.id,
+                    "decision": latest_test_run.decision,
+                    "created_at": latest_test_run.created_at,
+                }
+                if latest_test_run
+                else None
+            ),
             "publish_eligibility": {
                 "can_publish": publish_check.can_publish,
-                "reason": publish_check.reason
-            }
+                "reason": publish_check.reason,
+            },
         }
     finally:
         db.close()
 
+
 @router.get("/templates/{id}/test-runs")
-async def list_template_test_runs(
-    id: str,
-    is_admin: bool = Depends(mock_is_admin)
-):
+async def list_template_test_runs(id: str, is_admin: bool = Depends(mock_is_admin)):
     from app.db.models import ProcessingJob
+
     db = SessionLocal()
     try:
-        runs = db.query(TemplateTestRun).filter(TemplateTestRun.template_id == id).order_by(TemplateTestRun.created_at.desc()).all()
+        runs = (
+            db.query(TemplateTestRun)
+            .filter(TemplateTestRun.template_id == id)
+            .order_by(TemplateTestRun.created_at.desc())
+            .all()
+        )
         import json
+
         result = []
         for r in runs:
             val_json = {}
@@ -280,29 +322,35 @@ async def list_template_test_runs(
                     val_json = json.loads(r.validation_result_json)
                 except Exception:
                     pass
-            
+
             # Direct query fallback to ensure we get the job summary if missing on test run
             summary = r.generated_summary
             if not summary:
-                job = db.query(ProcessingJob).filter(ProcessingJob.id == r.processing_job_id).first()
+                job = (
+                    db.query(ProcessingJob)
+                    .filter(ProcessingJob.id == r.processing_job_id)
+                    .first()
+                )
                 if job:
                     summary = job.generated_summary
 
-            result.append({
-                "id": r.id,
-                "job_id": r.processing_job_id,
-                "decision": r.decision,
-                "created_at": r.created_at,
-                "reviewed_at": r.reviewed_at,
-                "sample_resume_asset_id": r.sample_resume_asset_id,
-                "generated_summary": summary,
-                "validation_result": val_json
-            })
+            result.append(
+                {
+                    "id": r.id,
+                    "job_id": r.processing_job_id,
+                    "decision": r.decision,
+                    "created_at": r.created_at,
+                    "reviewed_at": r.reviewed_at,
+                    "sample_resume_asset_id": r.sample_resume_asset_id,
+                    "generated_summary": summary,
+                    "validation_result": val_json,
+                }
+            )
         return {"test_runs": result}
-
 
     finally:
         db.close()
+
 
 class TestRunReviewRequest(BaseModel):
     decision: str
@@ -310,17 +358,26 @@ class TestRunReviewRequest(BaseModel):
     update_template_notes: bool = False
     template_notes: Optional[str] = None
 
+
 @router.post("/templates/{templateId}/test-runs/{testRunId}/review")
 async def review_test_run(
     templateId: str,
     testRunId: str,
     payload: TestRunReviewRequest,
-    is_admin: bool = Depends(mock_is_admin)
+    is_admin: bool = Depends(mock_is_admin),
 ):
     from datetime import datetime
+
     db = SessionLocal()
     try:
-        test_run = db.query(TemplateTestRun).filter(TemplateTestRun.id == testRunId, TemplateTestRun.template_id == templateId).first()
+        test_run = (
+            db.query(TemplateTestRun)
+            .filter(
+                TemplateTestRun.id == testRunId,
+                TemplateTestRun.template_id == templateId,
+            )
+            .first()
+        )
         if not test_run:
             raise HTTPException(status_code=404, detail="Test run not found")
 
@@ -329,7 +386,9 @@ async def review_test_run(
         test_run.reviewed_at = datetime.utcnow()
 
         if payload.update_template_notes and payload.template_notes:
-            template = db.query(TemplateAsset).filter(TemplateAsset.id == templateId).first()
+            template = (
+                db.query(TemplateAsset).filter(TemplateAsset.id == templateId).first()
+            )
             if template:
                 template.notes = payload.template_notes
 
@@ -338,26 +397,29 @@ async def review_test_run(
     finally:
         db.close()
 
+
 @router.post("/templates/{id}/publish")
-async def publish_template(
-    id: str,
-    is_admin: bool = Depends(mock_is_admin)
-):
+async def publish_template(id: str, is_admin: bool = Depends(mock_is_admin)):
     db = SessionLocal()
     try:
         template = db.query(TemplateAsset).filter(TemplateAsset.id == id).first()
         if not template:
             raise HTTPException(status_code=404, detail="Template not found")
 
-        latest_test_run = db.query(TemplateTestRun).filter(
-            TemplateTestRun.template_id == id
-        ).order_by(TemplateTestRun.created_at.desc()).first()
+        latest_test_run = (
+            db.query(TemplateTestRun)
+            .filter(TemplateTestRun.template_id == id)
+            .order_by(TemplateTestRun.created_at.desc())
+            .first()
+        )
 
         validation_result = {}
         if latest_test_run and latest_test_run.validation_result_json:
             validation_result = json.loads(latest_test_run.validation_result_json)
 
-        publish_check = TemplatePublishGuard.can_publish(template, latest_test_run, validation_result)
+        publish_check = TemplatePublishGuard.can_publish(
+            template, latest_test_run, validation_result
+        )
 
         if not publish_check.can_publish:
             raise HTTPException(status_code=400, detail=publish_check.reason)
@@ -368,11 +430,9 @@ async def publish_template(
     finally:
         db.close()
 
+
 @router.post("/templates/{id}/archive")
-async def archive_template(
-    id: str,
-    is_admin: bool = Depends(mock_is_admin)
-):
+async def archive_template(id: str, is_admin: bool = Depends(mock_is_admin)):
     db = SessionLocal()
     try:
         template = db.query(TemplateAsset).filter(TemplateAsset.id == id).first()
@@ -385,11 +445,9 @@ async def archive_template(
     finally:
         db.close()
 
+
 @router.post("/templates/{id}/revert-to-draft")
-async def revert_to_draft(
-    id: str,
-    is_admin: bool = Depends(mock_is_admin)
-):
+async def revert_to_draft(id: str, is_admin: bool = Depends(mock_is_admin)):
     db = SessionLocal()
     try:
         template = db.query(TemplateAsset).filter(TemplateAsset.id == id).first()
@@ -398,7 +456,10 @@ async def revert_to_draft(
 
         template.status = AssetStatus.DRAFT.value
         db.commit()
-        return {"message": f"Template {id} reverted to draft.", "status": template.status}
+        return {
+            "message": f"Template {id} reverted to draft.",
+            "status": template.status,
+        }
     finally:
         db.close()
 
@@ -407,17 +468,21 @@ async def revert_to_draft(
 async def manage_knowledge():
     return {"message": "Knowledge managed."}
 
+
 @router.put("/policies/privacy")
 async def manage_privacy_policies():
     return {"message": "Privacy policies managed."}
+
 
 @router.get("/sessions/{id}")
 async def inspect_session(id: str):
     return {"session_id": id, "state": "inspected"}
 
+
 @router.post("/evaluations/run")
 async def run_evaluations():
     return {"message": "Evaluations running."}
+
 
 @router.post("/ranking/rerank")
 async def rerank_templates():

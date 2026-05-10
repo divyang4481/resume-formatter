@@ -132,10 +132,12 @@ class LlmSanitizer:
             joined_content = "\n\n".join(contents)
             final_results[name] = joined_content
             
-            # Alias Support for snake_case placeholders
-            snake_name = name.lower().replace(" ", "_")
-            if snake_name not in final_results:
-                final_results[snake_name] = joined_content
+            # --- Template Compatibility Safety ---
+            # Create a snake_case version of the key to ensure it matches {{ placeholders }} in Word
+            # e.g., "Professional Experience" -> "professional_experience"
+            normalized_key = name.lower().strip().replace(" ", "_").replace("&", "n")
+            if normalized_key not in final_results:
+                final_results[normalized_key] = joined_content
 
         if not final_results:
             final_results["__raw_content__"] = text

@@ -19,6 +19,7 @@ import { ReactiveFormsModule, FormBuilder, FormGroup } from '@angular/forms';
 import { animate, state, style, transition, trigger } from '@angular/animations';
 import { AdminTemplateApiService } from '../../../../services/admin-template-api.service';
 import { AdminTemplateTestingService } from '../../../../services/admin-template-testing.service';
+import { JsonParsePipe } from '../../../../pipes/json-parse.pipe';
 
 @Component({
   selector: 'app-template-detail',
@@ -38,7 +39,8 @@ import { AdminTemplateTestingService } from '../../../../services/admin-template
     MatChipsModule,
     MatExpansionModule,
     ReactiveFormsModule,
-    MatDialogModule
+    MatDialogModule,
+    JsonParsePipe
   ],
   templateUrl: './template-detail.component.html',
   styleUrls: ['./template-detail.component.scss'],
@@ -64,7 +66,6 @@ export class TemplateDetailComponent implements OnInit, OnDestroy {
     { id: 'parse', name: 'Extraction', icon: 'document_scanner' },
     { id: 'classify', name: 'Classification', icon: 'category' },
     { id: 'normalize', name: 'Normalization', icon: 'schema' },
-    { id: 'privacy', name: 'PII Privacy', icon: 'security' },
     { id: 'transform', name: 'AI Transformation', icon: 'auto_awesome' },
     { id: 'validate', name: 'Quality Check', icon: 'fact_check' },
     { id: 'render', name: 'Rendering', icon: 'picture_as_pdf' }
@@ -193,7 +194,13 @@ export class TemplateDetailComponent implements OnInit, OnDestroy {
   }
 
   saveRequirements() {
-    this.templateApi.updateTemplate(this.templateId, this.requirementsForm.value).subscribe(() => {
+    const payload = {
+      ...this.requirementsForm.value,
+      field_extraction_manifest: typeof this.template.field_extraction_manifest === 'string' 
+        ? this.template.field_extraction_manifest 
+        : JSON.stringify(this.template.field_extraction_manifest)
+    };
+    this.templateApi.updateTemplate(this.templateId, payload).subscribe(() => {
       this.loadTemplate();
     });
   }

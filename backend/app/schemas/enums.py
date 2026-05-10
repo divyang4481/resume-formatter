@@ -6,6 +6,7 @@ class AssetStatus(str, Enum):
     READY_FOR_TESTING = "ready_for_testing"
     ACTIVE = "active"
     ARCHIVED = "archived"
+    FAILED = "failed"
 
 
 class ExecutionMode(str, Enum):

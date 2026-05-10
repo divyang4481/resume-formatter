@@ -9,7 +9,7 @@ class Settings(BaseSettings):
     project_name: str = "Agentic Document Platform"
 
     # Architecture Config
-    cloud_provider: str = "aws"  # "aws", "azure", "gcp", "local"
+    cloud_provider: str = "aws"  # "aws", "local"
     runtime_mode: str = "local"  # "local" or "aws"
     processing_mode: str = "async"  # "sync" or "async"
     queue_provider: str = "local"  # "local", "sqs"
@@ -29,16 +29,13 @@ class Settings(BaseSettings):
 
     # Document Parsing Routing & Guard
     enable_docling: bool = True
-    enable_tika_fallback: bool = True
     enable_gpu_worker: bool = False
     parser_timeout_seconds: int = 300
     max_file_size_mb: int = 10
 
-    # Legacy Document Parsing Routing & Thresholds (Keep for fallback)
+    # Document Parsing Routing & Thresholds
     document_parser_primary_pdf: str = "docling"
-    document_parser_fallback_pdf: str = "tika"
     document_parser_primary_docx: str = "docling"
-    document_parser_fallback_docx: str = "tika"
 
     # Thresholds for parsing confidence & routing
     parser_min_text_chars: int = 300
@@ -47,9 +44,8 @@ class Settings(BaseSettings):
 
     # LLM Settings
     llm_backend: str = "aws_bedrock"
-    llm_model_name: str = "meta.llama3-70b-instruct-v1:0"
+    llm_model_name: str = "qwen.qwen3-235b-a22b-2507-v1:0"
     ollama_endpoint: str = "http://localhost:11434/api/generate"
-    gemini_api_key: str = ""
 
     # Storage Settings
     local_storage_path: str = "./data"

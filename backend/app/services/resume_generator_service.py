@@ -33,6 +33,12 @@ class ResumeGeneratorService:
                 f.strip() for f in expected_fields.split(",") if f.strip()
             ]
 
+            if not expected_fields_list:
+                # Fallback: If no expected fields are defined, use the primary keys from the AI-generated data.
+                # We filter out normalized (underscore) keys and metadata to get the human-readable section titles.
+                expected_fields_list = [k for k in resume_data.keys() if "_" not in k and k not in ["summary", "job_id", "personal_info"]]
+                logger.info(f"expected_fields was empty. Auto-detected fallback sequential mapping: {expected_fields_list}")
+
             processed_template_stream = self.prepare_document_markers(
                 template_stream, expected_fields_list
             )
@@ -51,11 +57,28 @@ class ResumeGeneratorService:
                 render_context.update(processed_resume_data["personal_info"])
 
             # Universal Scoped Context mapping logic:
-            render_context_with_scope = {**render_context, "_": {**render_context}}
+            # We provide the context in 3 formats to ensure a match:
+            # 1. Original keys (e.g. "Full Name")
+            # 2. Normalized keys (e.g. "full_name")
+            # 3. Fuzzy mapping (mapping all possible matches into the scoped '_' object)
+            
+            normalized_context = {}
+            for k, v in render_context.items():
+                # Store original
+                normalized_context[k] = v
+                # Store normalized (lowercase, no spaces)
+                norm_k = k.lower().strip().replace(" ", "_").replace("-", "_")
+                normalized_context[norm_k] = v
+                # Store ultra-clean (alphanumeric only)
+                clean_k = "".join(filter(str.isalnum, k.lower()))
+                normalized_context[clean_k] = v
+
+            render_context_with_scope = {**render_context, **normalized_context, "_": {**render_context, **normalized_context}}
 
             logger.info(
                 f"RENDERING DOCUMENT: {len(render_context_with_scope['_'])} labels available in context."
             )
+            logger.info(f"AVAILABLE DATA KEYS: {list(render_context_with_scope['_'].keys())}")
             
             doc.render(render_context_with_scope)
 
@@ -80,8 +103,8 @@ class ResumeGeneratorService:
         doc = Document(template_stream)
         counter = 0
 
-        # Regex for common placeholder patterns: << >>, {{ }}, [[ ]]
-        MARKER_PATTERN = r"(?:<<|\{\{|\[\[)\s*(.*?)\s*(?:>>|\}\}|\]\])"
+        # Regex for common placeholder patterns: << >>, {{ }}, [[ ]], and « »
+        MARKER_PATTERN = r"(?:<<|\{\{|\[\[|«)\s*(.*?)\s*(?:>>|\}\}|\]\]|»)"
 
         def transform_paragraph_markers(text, fields, current_counter):
             matches = re.finditer(MARKER_PATTERN, text)
@@ -90,6 +113,8 @@ class ResumeGeneratorService:
             for match in matches:
                 original = match.group(0)
                 raw_marker_text = match.group(1).strip()
+                
+                logger.info(f"MARKER DETECTED in template: '{original}' (Name: '{raw_marker_text}')")
 
                 # 1. Identify 'fill' placeholders (sequential mapping)
                 is_fill_section = (
@@ -109,6 +134,8 @@ class ResumeGeneratorService:
                     # 2. Map visual marker to its logical value in context
                     # Any marker text now becomes a valid dictionary key.
                     replacement = f"{{{{ _['{raw_marker_text}'] }}}}"
+                
+                logger.info(f"  -> PREPARING JINJA TAG: {replacement}")
 
                 start, end = match.span()
                 new_text = (
@@ -119,15 +146,23 @@ class ResumeGeneratorService:
 
         # Process all structural elements in the document
         for p in doc.paragraphs:
-            if "<<" in p.text or "{{" in p.text or "[[" in p.text:
-                p.text, counter = transform_paragraph_markers(p.text, field_list, counter)
+            original_text = p.text
+            if any(m in original_text for m in ["<<", "{{", "[[", "«"]):
+                new_text, counter = transform_paragraph_markers(original_text, field_list, counter)
+                if new_text != original_text:
+                    # Surgically replace the text while attempting to preserve formatting
+                    # Note: p.text = new_text is the standard way to update a paragraph in python-docx
+                    p.text = new_text
 
         for table in doc.tables:
             for row in table.rows:
                 for cell in row.cells:
                     for p in cell.paragraphs:
-                        if "<<" in p.text or "{{" in p.text or "[[" in p.text:
-                            p.text, counter = transform_paragraph_markers(p.text, field_list, counter)
+                        original_text = p.text
+                        if any(m in original_text for m in ["<<", "{{", "[[", "«"]):
+                            new_text, counter = transform_paragraph_markers(original_text, field_list, counter)
+                            if new_text != original_text:
+                                p.text = new_text
 
         processed_stream = io.BytesIO()
         doc.save(processed_stream)

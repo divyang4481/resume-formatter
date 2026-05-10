@@ -59,26 +59,43 @@ class ResumeAiService:
             content, filename, "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
         )
         
-        # Retrieve placeholders
-        from docxtpl import DocxTemplate
-        import io, re
-        doc = DocxTemplate(io.BytesIO(content))
-        detected_placeholders = list(set([str(p).strip() for p in doc.get_undeclared_template_variables()]))
+        # Retrieve placeholders using multiple styles: <<key>>, {{key}}, [[key]], and «key»
+        import re
+        text_content = extracted_doc.extracted_text
+        detected_placeholders = list(set(re.findall(r"(?:<<|\{\{|\[\[|«)\s*(.*?)\s*(?:>>|\}\}|\]\]|»)", text_content)))
         
         prompt = prompt_manager.get_prompt(
             "template_analysis.jinja2",
             template_text=extracted_doc.extracted_text[:8000],
+            docling_metadata_json=json.dumps(extracted_doc.structured_data, indent=2)[:4000] if extracted_doc.structured_data else "None",
             detected_placeholders=detected_placeholders,
         )
 
         response = self.llm.generate(prompt)
-        blocks = LlmSanitizer.extract_tagged_blocks(response)
         
-        # Build Suggestions from Tags
+        # 1. Extract JSON from the response
+        try:
+            cleaned_json = LlmSanitizer.clean_json(response)
+            data = json.loads(cleaned_json)
+        except Exception as e:
+            logger.error(f"Failed to parse template analysis JSON: {e}")
+            data = {}
+
+        # 2. Extract expected_fields from the manifest if present
+        manifest = data.get("field_extraction_manifest", [])
+        if manifest and isinstance(manifest, list):
+            fields = [m.get("fieldname") for m in manifest if m.get("fieldname")]
+            expected_fields = ", ".join(fields)
+        else:
+            expected_fields = ", ".join(detected_placeholders)
+
         return {
-            "purpose": blocks.get("PURPOSE") or blocks.get("purpose") or "General Template",
-            "expected_sections": blocks.get("SECTIONS") or blocks.get("sections") or "Summary, Experience",
-            "expected_fields": blocks.get("FIELDS") or blocks.get("fields") or ",".join(detected_placeholders),
+            "purpose": data.get("purpose") or "General Template",
+            "expected_sections": data.get("expected_sections") or "Summary, Experience",
+            "expected_fields": expected_fields,
+            "summary_guidance": data.get("summary_guidance") or "",
+            "formatting_guidance": data.get("formatting_guidance") or "",
+            "field_extraction_manifest": manifest
         }
 
     async def validate_output(

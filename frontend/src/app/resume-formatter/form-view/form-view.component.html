@@ -80,12 +80,20 @@
         </mat-card-header>
         <mat-card-content>
           <p>Your CV has been successfully formatted.</p>
-          <div class="flex-row gap-8" *ngIf="docService.outputUrl()">
-            <a mat-raised-button color="primary" [href]="docService.outputUrl()" target="_blank">Download Formatted CV</a>
+          <div class="flex-row gap-8" *ngIf="docService.outputUrl(); else loadingDownload">
+            <a mat-raised-button color="primary" [href]="docService.outputUrl()" target="_blank">
+              <mat-icon>cloud_download</mat-icon> Download Formatted CV
+            </a>
             <a mat-stroked-button color="primary" [routerLink]="['/view-document', docService.currentJobId()]" target="_blank" *ngIf="docService.currentJobId()">
               <mat-icon>visibility</mat-icon> View
             </a>
           </div>
+          <ng-template #loadingDownload>
+            <div class="flex-row align-center gap-8 py-2">
+              <mat-spinner diameter="20"></mat-spinner>
+              <span class="text-secondary">Generating secure download link...</span>
+            </div>
+          </ng-template>
         </mat-card-content>
       </mat-card>
 

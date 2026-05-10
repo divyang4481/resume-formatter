@@ -57,23 +57,23 @@ def create_app() -> FastAPI:
 
     app.include_router(
         runtime_router,
-        prefix="/runtime",
+        prefix="/api/runtime",
         tags=["Candidate Processing", "MCP Tool"],
     )
-    app.include_router(admin_endpoints_router, prefix="/admin", tags=["Admin"])
-    app.include_router(admin_folder_router, prefix="/admin", tags=["Admin"])
-    app.include_router(processing_router, prefix="/v1/processing", tags=["Processing"])
+    app.include_router(admin_endpoints_router, prefix="/api/admin", tags=["Admin"])
+    app.include_router(admin_folder_router, prefix="/api/admin", tags=["Admin"])
+    app.include_router(processing_router, prefix="/api/v1/processing", tags=["Processing"])
     # Expose at root to match `.well-known` discovery path correctly
     app.include_router(a2a_router, tags=["A2A Discoverability"])
 
     # This automatically turns FastAPI endpoints into discoverable AI tools
     mcp.mount_http()
 
-    @app.get("/health")
+    @app.get("/api/health")
     async def health_check():
-        return {"status": "healthy", "cloud_mode": settings.cloud}
+        return {"status": "healthy", "runtime_mode": settings.runtime_mode}
 
-    @app.get("/")
+    @app.get("/api")
     async def root():
         return {
             "message": "Welcome to Resume Formatter API. Visit /docs for the API documentation.",

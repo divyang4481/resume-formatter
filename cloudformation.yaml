@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: Agentic Document Platform using ECS Worker and Stateless FastAPI API
+Description: Full Stack Agentic Document Platform (Frontend, API, Worker)
 
 Parameters:
   Environment:
@@ -11,52 +11,34 @@ Parameters:
     Description: VPC ID for ECS Cluster
   SubnetIds:
     Type: List<AWS::EC2::Subnet::Id>
-    Description: Subnets for ECS Tasks
+    Description: Subnets for ECS Tasks and ALB
+  
+  # Existing Infra Parameters
+  S3BucketName:
+    Type: String
+    Description: Existing S3 bucket for platform storage
+  SqsQueueUrl:
+    Type: String
+    Description: Existing SQS queue URL
+  SqsQueueArn:
+    Type: String
+    Description: Existing SQS queue ARN
+  DatabaseUrl:
+    Type: String
+    Description: PostgreSQL connection string
+    NoEcho: true
+  BedrockAgentId:
+    Type: String
+    Description: Bedrock Agent ID
+  BedrockAgentAliasId:
+    Type: String
+    Description: Bedrock Agent Alias ID
 
 Resources:
   # ---------------------------------------------------------
-  # S3 Buckets
-  # ---------------------------------------------------------
-  InputStorageBucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: !Sub "agentic-doc-input-${Environment}-${AWS::AccountId}"
-
-  OutputStorageBucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: !Sub "agentic-doc-output-${Environment}-${AWS::AccountId}"
-
-  # ---------------------------------------------------------
-  # SQS Queue
-  # ---------------------------------------------------------
-  ProcessingQueue:
-    Type: AWS::SQS::Queue
-    Properties:
-      QueueName: !Sub "document-processing-queue-${Environment}"
-      VisibilityTimeout: 900
-      MessageRetentionPeriod: 86400
-      RedrivePolicy:
-        deadLetterTargetArn: !GetAtt ProcessingDLQ.Arn
-        maxReceiveCount: 3
-
-  ProcessingDLQ:
-    Type: AWS::SQS::Queue
-    Properties:
-      QueueName: !Sub "document-processing-dlq-${Environment}"
-
-  # ---------------------------------------------------------
   # ECR Repositories
   # ---------------------------------------------------------
-  ApiRepository:
-    Type: AWS::ECR::Repository
-    Properties:
-      RepositoryName: !Sub "agentic-doc-api-${Environment}"
 
-  WorkerRepository:
-    Type: AWS::ECR::Repository
-    Properties:
-      RepositoryName: !Sub "agentic-doc-worker-${Environment}"
 
   # ---------------------------------------------------------
   # ECS Cluster
@@ -81,8 +63,19 @@ Resources:
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+      Policies:
+        - PolicyName: EcrLoggingPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: "*"
 
-  ApiTaskRole:
+  TaskRole:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
@@ -93,56 +86,38 @@ Resources:
               Service: ecs-tasks.amazonaws.com
             Action: sts:AssumeRole
       Policies:
-        - PolicyName: ApiS3SqsPolicy
+        - PolicyName: PlatformAccessPolicy
           PolicyDocument:
             Version: "2012-10-17"
             Statement:
               - Effect: Allow
                 Action:
-                  - s3:PutObject
                   - s3:GetObject
+                  - s3:PutObject
+                  - s3:DeleteObject
+                  - s3:ListBucket
                 Resource:
-                  - !Sub "${InputStorageBucket.Arn}/*"
-                  - !Sub "${OutputStorageBucket.Arn}/*"
+                  - !Sub "arn:aws:s3:::${S3BucketName}"
+                  - !Sub "arn:aws:s3:::${S3BucketName}/*"
               - Effect: Allow
                 Action:
                   - sqs:SendMessage
-                Resource: !GetAtt ProcessingQueue.Arn
-
-  WorkerTaskRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: ecs-tasks.amazonaws.com
-            Action: sts:AssumeRole
-      Policies:
-        - PolicyName: WorkerS3SqsBedrockPolicy
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              - Effect: Allow
-                Action:
-                  - s3:GetObject
-                  - s3:PutObject
-                Resource:
-                  - !Sub "${InputStorageBucket.Arn}/*"
-                  - !Sub "${OutputStorageBucket.Arn}/*"
-              - Effect: Allow
-                Action:
                   - sqs:ReceiveMessage
                   - sqs:DeleteMessage
+                  - sqs:GetQueueUrl
+                  - sqs:GetQueueAttributes
                   - sqs:ChangeMessageVisibility
-                Resource: !GetAtt ProcessingQueue.Arn
+                  - sqs:PurgeQueue
+                Resource: !Ref SqsQueueArn
               - Effect: Allow
                 Action:
                   - bedrock:InvokeModel
+                  - bedrock:InvokeModelWithResponseStream
                   - bedrock:InvokeAgent
                   - bedrock:Retrieve
                   - bedrock:RetrieveAndGenerate
+                  - bedrock:GetFoundationModel
+                  - bedrock:ListFoundationModels
                 Resource: "*"
 
   # ---------------------------------------------------------
@@ -152,18 +127,25 @@ Resources:
     Type: AWS::ECS::TaskDefinition
     Properties:
       Family: !Sub "agentic-doc-api-${Environment}"
-      RequiresCompatibilities:
-        - FARGATE
+      RequiresCompatibilities: [FARGATE]
       NetworkMode: awsvpc
-      Cpu: '512'
-      Memory: '1024'
+      Cpu: '2048'
+      Memory: '4096'
+      EphemeralStorage:
+        SizeInGiB: 30
       ExecutionRoleArn: !GetAtt EcsTaskExecutionRole.Arn
-      TaskRoleArn: !GetAtt ApiTaskRole.Arn
+      TaskRoleArn: !GetAtt TaskRole.Arn
       ContainerDefinitions:
         - Name: api
-          Image: !Sub "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/agentic-doc-api-${Environment}:latest"
+          Image: !Sub "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/agentic-doc-api-${Environment}:v1.0.1"
           PortMappings:
             - ContainerPort: 8000
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref ApiLogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: api
           Environment:
             - Name: CLOUD_PROVIDER
               Value: aws
@@ -176,26 +158,41 @@ Resources:
             - Name: STORAGE_PROVIDER
               Value: s3
             - Name: S3_BUCKET_INPUT
-              Value: !Ref InputStorageBucket
+              Value: !Ref S3BucketName
             - Name: S3_BUCKET_OUTPUT
-              Value: !Ref OutputStorageBucket
+              Value: !Ref S3BucketName
             - Name: SQS_PROCESSING_QUEUE_URL
-              Value: !Ref ProcessingQueue
+              Value: !Ref SqsQueueUrl
+            - Name: DATABASE_URL
+              Value: !Ref DatabaseUrl
+            - Name: LLM_MODEL_NAME
+              Value: "qwen.qwen3-235b-a22b-2507-v1:0"
+            - Name: AWS_REGION
+              Value: "ap-south-1"
+            - Name: LLM_MAX_TOKENS
+              Value: "8192"
 
   WorkerTaskDefinition:
     Type: AWS::ECS::TaskDefinition
     Properties:
       Family: !Sub "agentic-doc-worker-${Environment}"
-      RequiresCompatibilities:
-        - FARGATE
+      RequiresCompatibilities: [FARGATE]
       NetworkMode: awsvpc
-      Cpu: '2048'
-      Memory: '4096'
+      Cpu: '4096'
+      Memory: '8192'
+      EphemeralStorage:
+        SizeInGiB: 30
       ExecutionRoleArn: !GetAtt EcsTaskExecutionRole.Arn
-      TaskRoleArn: !GetAtt WorkerTaskRole.Arn
+      TaskRoleArn: !GetAtt TaskRole.Arn
       ContainerDefinitions:
         - Name: worker
-          Image: !Sub "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/agentic-doc-worker-${Environment}:latest"
+          Image: !Sub "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/agentic-doc-worker-${Environment}:v1.0.1"
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref WorkerLogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: worker
           Environment:
             - Name: CLOUD_PROVIDER
               Value: aws
@@ -208,50 +205,80 @@ Resources:
             - Name: STORAGE_PROVIDER
               Value: s3
             - Name: AGENT_PROVIDER
-              Value: bedrock_agent
+              Value: python_orchestrated
             - Name: KNOWLEDGE_PROVIDER
               Value: bedrock_kb
             - Name: S3_BUCKET_INPUT
-              Value: !Ref InputStorageBucket
+              Value: !Ref S3BucketName
             - Name: S3_BUCKET_OUTPUT
-              Value: !Ref OutputStorageBucket
+              Value: !Ref S3BucketName
             - Name: SQS_PROCESSING_QUEUE_URL
-              Value: !Ref ProcessingQueue
+              Value: !Ref SqsQueueUrl
+            - Name: DATABASE_URL
+              Value: !Ref DatabaseUrl
+            - Name: BEDROCK_AGENT_ID
+              Value: !Ref BedrockAgentId
+            - Name: BEDROCK_AGENT_ALIAS_ID
+              Value: !Ref BedrockAgentAliasId
+            - Name: LLM_MODEL_NAME
+              Value: "qwen.qwen3-235b-a22b-2507-v1:0"
+            - Name: AWS_REGION
+              Value: "ap-south-1"
+            - Name: LLM_MAX_TOKENS
+              Value: "8192"
 
+  FrontendTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub "agentic-doc-frontend-${Environment}"
+      RequiresCompatibilities: [FARGATE]
+      NetworkMode: awsvpc
+      Cpu: '256'
+      Memory: '512'
+      ExecutionRoleArn: !GetAtt EcsTaskExecutionRole.Arn
+      ContainerDefinitions:
+        - Name: frontend
+          Image: !Sub "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/agentic-doc-frontend-dev:v1.0.1"
+          PortMappings:
+            - ContainerPort: 80
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref FrontendLogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: frontend
 
   # ---------------------------------------------------------
-  # ECS Services and Load Balancer
+  # CloudWatch Logs
   # ---------------------------------------------------------
-  ApiLoadBalancer:
+  ApiLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/ecs/agentic-doc-api-${Environment}"
+      RetentionInDays: 7
+
+  WorkerLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/ecs/agentic-doc-worker-${Environment}"
+      RetentionInDays: 7
+
+  FrontendLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/ecs/agentic-doc-frontend-${Environment}"
+      RetentionInDays: 7
+
+  # ---------------------------------------------------------
+  # ALB and Security Groups
+  # ---------------------------------------------------------
+  LoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
-      Name: !Sub "api-alb-${Environment}"
       Subnets: !Ref SubnetIds
-      SecurityGroups:
-        - !Ref AlbSecurityGroup
+      SecurityGroups: [!Ref AlbSecurityGroup]
       Scheme: internet-facing
       Type: application
-
-  ApiTargetGroup:
-    Type: AWS::ElasticLoadBalancingV2::TargetGroup
-    Properties:
-      Name: !Sub "api-tg-${Environment}"
-      Port: 8000
-      Protocol: HTTP
-      VpcId: !Ref VpcId
-      TargetType: ip
-      HealthCheckPath: /health
-      HealthCheckIntervalSeconds: 30
-
-  ApiListener:
-    Type: AWS::ElasticLoadBalancingV2::Listener
-    Properties:
-      LoadBalancerArn: !Ref ApiLoadBalancer
-      Port: 80
-      Protocol: HTTP
-      DefaultActions:
-        - Type: forward
-          TargetGroupArn: !Ref ApiTargetGroup
 
   AlbSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -274,9 +301,79 @@ Resources:
           FromPort: 8000
           ToPort: 8000
           SourceSecurityGroupId: !Ref AlbSecurityGroup
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          SourceSecurityGroupId: !Ref AlbSecurityGroup
 
+  # Target Groups
+  ApiTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Port: 8000
+      Protocol: HTTP
+      VpcId: !Ref VpcId
+      TargetType: ip
+      HealthCheckPath: /api/health
+      HealthCheckIntervalSeconds: 30
+      HealthCheckTimeoutSeconds: 10
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 5
+
+  FrontendTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Port: 80
+      Protocol: HTTP
+      VpcId: !Ref VpcId
+      TargetType: ip
+      HealthCheckPath: /
+      HealthCheckIntervalSeconds: 30
+      HealthCheckTimeoutSeconds: 10
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 5
+
+  # Listener Rules
+  Listener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref LoadBalancer
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref FrontendTargetGroup
+
+  ApiRule1:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      Actions:
+        - Type: forward
+          TargetGroupArn: !Ref ApiTargetGroup
+      Conditions:
+        - Field: path-pattern
+          Values: ["/api/*", "/.well-known/*", "/mcp/*"]
+      ListenerArn: !Ref Listener
+      Priority: 100
+
+  ApiRule2:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      Actions:
+        - Type: forward
+          TargetGroupArn: !Ref ApiTargetGroup
+      Conditions:
+        - Field: path-pattern
+          Values: ["/docs", "/openapi.json", "/redoc"]
+      ListenerArn: !Ref Listener
+      Priority: 101
+
+  # ---------------------------------------------------------
+  # ECS Services
+  # ---------------------------------------------------------
   ApiService:
     Type: AWS::ECS::Service
+    DependsOn: [Listener, ApiRule1, ApiRule2]
     Properties:
       Cluster: !Ref EcsCluster
       ServiceName: !Sub "api-service-${Environment}"
@@ -286,14 +383,13 @@ Resources:
       NetworkConfiguration:
         AwsvpcConfiguration:
           Subnets: !Ref SubnetIds
-          SecurityGroups:
-            - !Ref EcsSecurityGroup
+          SecurityGroups: [!Ref EcsSecurityGroup]
           AssignPublicIp: ENABLED
+      HealthCheckGracePeriodSeconds: 300
       LoadBalancers:
         - ContainerName: api
           ContainerPort: 8000
           TargetGroupArn: !Ref ApiTargetGroup
-      DependsOn: ApiListener
 
   WorkerService:
     Type: AWS::ECS::Service
@@ -306,17 +402,31 @@ Resources:
       NetworkConfiguration:
         AwsvpcConfiguration:
           Subnets: !Ref SubnetIds
-          SecurityGroups:
-            - !Ref EcsSecurityGroup
+          SecurityGroups: [!Ref EcsSecurityGroup]
           AssignPublicIp: ENABLED
 
-Outputs:
-  ApiEndpoint:
-    Value: !GetAtt ApiLoadBalancer.DNSName
+  FrontendService:
+    Type: AWS::ECS::Service
+    DependsOn: [Listener]
+    Properties:
+      Cluster: !Ref EcsCluster
+      ServiceName: !Sub "frontend-service-${Environment}"
+      TaskDefinition: !Ref FrontendTaskDefinition
+      DesiredCount: 1
+      LaunchType: FARGATE
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          Subnets: !Ref SubnetIds
+          SecurityGroups: [!Ref EcsSecurityGroup]
+          AssignPublicIp: ENABLED
+      HealthCheckGracePeriodSeconds: 300
+      LoadBalancers:
+        - ContainerName: frontend
+          ContainerPort: 80
+          TargetGroupArn: !Ref FrontendTargetGroup
 
-  ApiRepositoryUri:
-    Value: !GetAtt ApiRepository.RepositoryUri
-  WorkerRepositoryUri:
-    Value: !GetAtt WorkerRepository.RepositoryUri
-  ProcessingQueueUrl:
-    Value: !Ref ProcessingQueue
+Outputs:
+  AppEndpoint:
+    Value: !Sub "http://${LoadBalancer.DNSName}"
+
+

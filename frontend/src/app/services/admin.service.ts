@@ -51,7 +51,7 @@ export interface TemplateListResponse {
   providedIn: 'root'
 })
 export class AdminService {
-  private apiUrl = `${environment.baseApiUrl}/admin`;
+  private apiUrl = `${environment.baseApiUrl}/api/admin`;
 
   constructor(private http: HttpClient) { }
 

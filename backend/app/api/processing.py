@@ -1,6 +1,9 @@
+import logging
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, BackgroundTasks, status, Form, Header
 import uuid
 import os
+
+logger = logging.getLogger(__name__)
 from app.dependencies import (
     get_storage_provider,
     get_job_repository,
@@ -15,10 +18,13 @@ from app.domain.interfaces import StorageProvider, JobRepository, DocumentExtrac
 from app.schemas.job import ProcessingJob
 from app.domain.interfaces import LlmRuntimeAdapter
 from app.agent.graph import AgentState
+from app.config import settings
 from app.schemas.enums import JobStatus
 from app.schemas.runtime import SubmitDocumentResponse, RuntimeJobStatusResponse, ConfirmDocumentRequest
 from app.services.resume_parsing_service import ResumeParsingService
 from app.services.resume_workflow_service import ResumeWorkflowService
+from app.db.session import SessionLocal
+from app.adapters.repositories.template_repository import SqlAlchemyTemplateRepository
 
 router = APIRouter()
 
@@ -96,9 +102,15 @@ async def submit_document(
     Accepts multipart upload for resume processing.
     Supports execution modes (recruiter_runtime vs admin_template_test).
     """
+    logger.info(f"--- INCOMING SUBMIT REQUEST ---")
+    logger.info(f"File: {file.filename}, Industry: {industry_id}, Template: {template_id}")
+    logger.info(f"Execution Mode: {x_execution_mode}, Actor Role: {x_actor_role}")
+    
     try:
         execution_mode = ExecutionMode(x_execution_mode)
+        logger.info(f"Validated Execution Mode: {execution_mode}")
     except ValueError:
+        logger.error(f"Invalid execution mode received: {x_execution_mode}")
         raise HTTPException(status_code=400, detail=f"Invalid execution mode: {x_execution_mode}")
 
     if execution_mode == ExecutionMode.ADMIN_TEMPLATE_TEST and template_id is None:
@@ -155,9 +167,13 @@ async def submit_document(
     allowed_template_ids = None
     job_status = JobStatus.WAITING_FOR_CONFIRMATION
 
-    if industry_id and template_id:
+    if template_id:
+        # If template is explicitly provided (common for Test Runs), skip AI suggestion
         requires_confirmation = False
         job_status = JobStatus.CONFIRMED
+        # Ensure we have an industry if possible, or default to 'it'
+        if not industry_id:
+            industry_id = "it" 
     else:
         # Suggest if not provided using shared service
         try:
@@ -215,17 +231,33 @@ async def submit_document(
         except Exception as e:
             print(f"Failed to get LLM template recommendation: {e}")
             # Fallback
-            suggested_industry_id = "it"
-            suggested_template_id = "general_cv_v1"
-            allowed_template_ids = ["general_cv_v1"]
+            # Fallback to first available template in RDS
+            db = SessionLocal()
+            try:
+                repo = SqlAlchemyTemplateRepository(db)
+                first_tpl = repo.list_active_templates()
+                if not first_tpl:
+                    logger.error("CRITICAL: No active templates found in RDS. Processing cannot continue.")
+                    raise HTTPException(
+                        status_code=status.HTTP_404_NOT_FOUND,
+                        detail="No active resume templates found in the system. Please upload a template in the Admin UI first."
+                    )
+                
+                suggested_template_id = first_tpl[0].id
+                suggested_industry_id = getattr(first_tpl[0], 'industry', "it")
+                allowed_template_ids = [suggested_template_id]
+            finally:
+                db.close()
         
-        # FORCET: Automatically accept suggestions and move to processing
+        # FORCE AUTO-CONFIRM: Skip human review and move straight to processing
+        logger.info(f"Auto-confirming job {job_id} with template {suggested_template_id}")
         requires_confirmation = False
         job_status = JobStatus.CONFIRMED
         template_id = suggested_template_id
         industry_id = suggested_industry_id
 
     # Create job record
+    logger.info(f"Creating job {job_id} with status {job_status} (Requires Confirmation: {requires_confirmation})")
     job = ProcessingJob(
         id=job_id,
         status=job_status,
@@ -262,7 +294,15 @@ async def submit_document(
 
     if not requires_confirmation:
         # Enqueue job to the message queue instead of using BackgroundTasks in-memory
-        message_queue.enqueue("document_processing", {"job_id": job_id})
+        message_body = {"job_id": job_id, "job_type": "RESUME_FORMATTING"}
+        logger.info(f"--- PUBLISHING TO SQS ---")
+        logger.info(f"Queue: {settings.sqs_processing_queue_url}")
+        logger.info(f"Message Body: {message_body}")
+        
+        message_queue.publish(message_body)
+        logger.info(f"Successfully enqueued job {job_id} for Worker processing.")
+    else:
+        logger.info(f"Job {job_id} is in {job_status} state. Waiting for manual confirmation before enqueuing.")
 
     return SubmitDocumentResponse(
         document_id=job_id,
@@ -323,7 +363,7 @@ async def confirm_document(
     job_repository.save_job(job)
 
     # Enqueue job to the message queue to resume processing
-    message_queue.enqueue("document_processing", {"job_id": id})
+    message_queue.publish({"job_id": id, "job_type": "RESUME_FORMATTING"})
 
     return {"message": "Document confirmed", "job_id": id, "status": job.status}
 
