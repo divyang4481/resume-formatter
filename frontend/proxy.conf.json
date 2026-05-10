@@ -1,16 +1,17 @@
 {
-  "/v1": {
-    "target": "http://localhost:8000",
+  "/api": {
+    "target": "http://api:8000",
     "secure": false,
     "changeOrigin": true
   },
-  "/admin/api": {
-    "target": "http://localhost:8000",
+  "/health": {
+    "target": "http://api:8000",
     "secure": false,
-    "changeOrigin": true,
-    "pathRewrite": {
-      "^/admin/api": "/admin"
-    }
+    "changeOrigin": true
+  },
+  "/.well-known": {
+    "target": "http://api:8000",
+    "secure": false,
+    "changeOrigin": true
   }
-
 }
