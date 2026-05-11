@@ -1,6 +1,9 @@
 services:
   api:
-    image: 114644266543.dkr.ecr.ap-south-1.amazonaws.com/agentic-doc-api-dev:v1.0.1
+    build: 
+      context: ./backend
+      dockerfile: Dockerfile.api
+    image: agentic-doc-api-local:v1.2.0
     ports:
       - "8000:8000"
     environment:
@@ -21,11 +24,17 @@ services:
       - BEDROCK_AGENT_ID=${BEDROCK_AGENT_ID}
       - BEDROCK_AGENT_ALIAS_ID=${BEDROCK_AGENT_ALIAS_ID}
       - BEDROCK_KB_ID=${BEDROCK_KB_ID}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_SESSION_TOKEN=${AWS_SESSION_TOKEN}
     volumes:
       - ~/.aws:/root/.aws
 
   worker:
-    image: 114644266543.dkr.ecr.ap-south-1.amazonaws.com/agentic-doc-worker-dev:v1.0.1
+    build: 
+      context: ./backend
+      dockerfile: Dockerfile.worker
+    image: agentic-doc-worker-local:v1.2.0
     environment:
       - CLOUD_PROVIDER=aws
       - RUNTIME_MODE=aws
@@ -44,12 +53,18 @@ services:
       - BEDROCK_AGENT_ID=${BEDROCK_AGENT_ID}
       - BEDROCK_AGENT_ALIAS_ID=${BEDROCK_AGENT_ALIAS_ID}
       - BEDROCK_KB_ID=${BEDROCK_KB_ID}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_SESSION_TOKEN=${AWS_SESSION_TOKEN}
     volumes:
       - ~/.aws:/root/.aws
 
   frontend:
-    build: ./frontend
-    image: 114644266543.dkr.ecr.ap-south-1.amazonaws.com/agentic-doc-frontend-dev:v1.0.1
+    build: 
+      context: ./frontend
+      args:
+        - ENVIRONMENT=development
+    image: agentic-doc-frontend-local:v1.1.6
     ports:
       - "4200:80"
     depends_on:

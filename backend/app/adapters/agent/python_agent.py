@@ -82,8 +82,8 @@ class PythonOrchestratedResumeFormattingAgent(ResumeFormattingAgent):
         # Prepare variables for the template
         # We'll extract potential placeholders from the text using a simple regex if not provided
         import re
-        # Support multiple placeholder styles: <<key>>, {{key}}, [[key]]
-        detected_placeholders = re.findall(r"(?:<<|\{\{|\[\[)(.*?)(?:>>|\}\}|\]\])", template_text)
+        # Support multiple placeholder styles: <<key>>, {{key}}, [[key]], «key»
+        detected_placeholders = re.findall(r"(?:<<|\{\{|\[\[|«)(.*?)(?:>>|\}\}|\]\]|»)", template_text)
         
         prompt = jinja_template.render(
             template_text=template_text,
@@ -217,17 +217,17 @@ class PythonOrchestratedResumeFormattingAgent(ResumeFormattingAgent):
         template_contract: Dict[str, Any],
         job_context: Dict[str, Any]
     ) -> Dict[str, Any]:
-        prompt = f"""
-        Evaluate the quality of the mapped resume data against the template contract.
-
-        Template Contract:
-        {json.dumps(template_contract, indent=2)}
-
-        Mapped Data:
-        {json.dumps(mapped_data, indent=2)}
-
-        Provide a quality assessment JSON with "needs_review" (boolean), "reason" (string, optional), "suggested_admin_action" (string, optional), and "confidence" (float). Output ONLY JSON.
-        """
+        import os
+        from jinja2 import Template
+        
+        template_path = os.path.join(os.path.dirname(__file__), "..", "..", "agent", "prompts", "quality_check.jinja2")
+        with open(template_path, "r") as f:
+            jinja_template = Template(f.read())
+            
+        prompt = jinja_template.render(
+            template_contract_json=json.dumps(template_contract, indent=2),
+            mapped_data_json=json.dumps(mapped_data, indent=2)
+        )
         try:
             response_text = self.llm.generate(prompt=prompt, temperature=0.1)
             logger.info(f"LLM Response (raw): {response_text}")

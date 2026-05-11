@@ -129,11 +129,19 @@ def create_render_node(
             logger.info(json.dumps(final_context, indent=2)[:2000] + "..." if len(json.dumps(final_context)) > 2000 else json.dumps(final_context, indent=2))
             logger.info("-"*60 + "\n")
 
-            docx_bytes = generator_service.render_formatted_document(
+            docx_bytes, gen_missing_fields = generator_service.render_formatted_document(
                 template_bytes=template_bytes,
                 resume_data=final_context,
                 expected_fields=expected_fields_raw,
+                field_manifest=field_manifest,
             )
+            
+            # Merge missing fields discovered during rendering into state
+            if gen_missing_fields:
+                state_missing = state.get("missing_fields") or []
+                unique_missing = list(set(state_missing + gen_missing_fields))
+                state["missing_fields"] = unique_missing
+
             render_docx_uri = storage.put_bytes(docx_bytes, render_key)
 
         except Exception as e:

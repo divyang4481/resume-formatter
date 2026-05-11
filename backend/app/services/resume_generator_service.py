@@ -19,7 +19,8 @@ class ResumeGeneratorService:
         template_bytes: bytes,
         resume_data: Dict[str, Any],
         expected_fields: Optional[str] = "",
-    ) -> bytes:
+        field_manifest: Optional[List[Dict[str, Any]]] = None
+    ) -> tuple[bytes, List[str]]:
         """
         Takes raw template bytes and AI-harmonized data, prepares the document markers,
         and renders the final DOCX file.
@@ -27,20 +28,12 @@ class ResumeGeneratorService:
         try:
             template_stream = io.BytesIO(template_bytes)
 
-            # 1. Normalize markers across styles: Convert <<...>>, {{...}}, and [[...]] 
-            # into a unified logical mapping for the rendering engine.
             expected_fields_list = [
                 f.strip() for f in expected_fields.split(",") if f.strip()
             ]
 
-            if not expected_fields_list:
-                # Fallback: If no expected fields are defined, use the primary keys from the AI-generated data.
-                # We filter out normalized (underscore) keys and metadata to get the human-readable section titles.
-                expected_fields_list = [k for k in resume_data.keys() if "_" not in k and k not in ["summary", "job_id", "personal_info"]]
-                logger.info(f"expected_fields was empty. Auto-detected fallback sequential mapping: {expected_fields_list}")
-
             processed_template_stream = self.prepare_document_markers(
-                template_stream, expected_fields_list
+                template_stream, expected_fields_list, field_manifest
             )
 
             # 2. Apply "Rendering Actions" to transform structured data into professional document prose
@@ -49,7 +42,7 @@ class ResumeGeneratorService:
             # 3. Render final content using docxtpl
             doc = DocxTemplate(processed_template_stream)
 
-            # Prepare render context (merge nested personal_info for easier access)
+            # Prepare render context
             render_context = {**processed_resume_data}
             if "personal_info" in processed_resume_data and isinstance(
                 processed_resume_data["personal_info"], dict
@@ -57,112 +50,172 @@ class ResumeGeneratorService:
                 render_context.update(processed_resume_data["personal_info"])
 
             # Universal Scoped Context mapping logic:
-            # We provide the context in 3 formats to ensure a match:
-            # 1. Original keys (e.g. "Full Name")
-            # 2. Normalized keys (e.g. "full_name")
-            # 3. Fuzzy mapping (mapping all possible matches into the scoped '_' object)
-            
+            # We create a mapping that supports:
+            # 1. Original keys
+            # 2. Lowercase snake_case (employee_email)
+            # 3. Clean alphanumeric (employeeemail)
             normalized_context = {}
             for k, v in render_context.items():
-                # Store original
                 normalized_context[k] = v
-                # Store normalized (lowercase, no spaces)
-                norm_k = k.lower().strip().replace(" ", "_").replace("-", "_")
+                
+                # Standardize key for lookup
+                def standardize(key):
+                    return "".join(filter(str.isalnum, key.lower()))
+                
+                norm_k = standardize(k)
                 normalized_context[norm_k] = v
-                # Store ultra-clean (alphanumeric only)
-                clean_k = "".join(filter(str.isalnum, k.lower()))
-                normalized_context[clean_k] = v
 
-            render_context_with_scope = {**render_context, **normalized_context, "_": {**render_context, **normalized_context}}
+            # Create a "Smart Context" that handles missing keys by trying standardized versions
+            class CaseInsensitiveDict(dict):
+                def __getitem__(self, key):
+                    if key in self:
+                        return super().__getitem__(key)
+                    
+                    # Try standardized version
+                    std_key = "".join(filter(str.isalnum, key.lower()))
+                    if std_key in self:
+                        return super().__getitem__(std_key)
+                    
+                    # Fallback to snake_case if key is PascalCase
+                    snake_key = re.sub(r'(?<!^)(?=[A-Z])', '_', key).lower()
+                    if snake_key in self:
+                        return super().__getitem__(snake_key)
+                        
+                    return "" # Return empty string instead of None to prevent 'None' appearing in Docx
 
-            logger.info(
-                f"RENDERING DOCUMENT: {len(render_context_with_scope['_'])} labels available in context."
-            )
-            logger.info(f"AVAILABLE DATA KEYS: {list(render_context_with_scope['_'].keys())}")
+            smart_context = CaseInsensitiveDict(normalized_context)
+            render_context_with_scope = {**render_context, **smart_context, "_": smart_context}
             
+            # --- MISSING FIELD VALIDATION ---
+            missing_fields = []
+            all_target_keys = set()
+            if field_manifest:
+                all_target_keys.update([item["fieldname"] for item in field_manifest])
+            if expected_fields_list:
+                all_target_keys.update(expected_fields_list)
+            
+            for key in all_target_keys:
+                val = render_context_with_scope.get("_", {}).get(key)
+                if val is None or val == "" or (isinstance(val, str) and "not found" in val.lower()):
+                    missing_fields.append(key)
+            
+            if missing_fields:
+                logger.warning(f"RENDERING WARNING: The following template fields remained empty: {missing_fields}")
+
             doc.render(render_context_with_scope)
 
-            # 4. Save to bytes (preserving original formatting)
+            # 4. Save to bytes
             out_stream = io.BytesIO()
             doc.save(out_stream)
-            return out_stream.getvalue()
+            return out_stream.getvalue(), missing_fields
 
         except Exception as e:
-            logger.error(
-                f"Document rendering failed: {e}. Available keys in data: {list(render_context.keys()) if 'render_context' in locals() else 'Unknown'}"
-            )
+            logger.error(f"Document rendering failed: {e}")
             raise RuntimeError(f"Failed to render document: {str(e)}")
 
     def prepare_document_markers(
-        self, template_stream: io.BytesIO, field_list: List[str]
+        self, 
+        template_stream: io.BytesIO, 
+        field_list: List[str],
+        field_manifest: Optional[List[Dict[str, Any]]] = None
     ) -> io.BytesIO:
         """
-        Scans the document for various marker patterns (<< >>, {{ }}, [[ ]]) and 
-        normalizes them to use the scoped 'Universal Context' dictionary lookup.
+        Scans the document for various marker patterns and normalizes them.
+        Uses manifest 'marker_text' as primary anchors for high-precision replacement.
         """
         doc = Document(template_stream)
         counter = 0
 
-        # Regex for common placeholder patterns: << >>, {{ }}, [[ ]], and « »
-        MARKER_PATTERN = r"(?:<<|\{\{|\[\[|«)\s*(.*?)\s*(?:>>|\}\}|\]\]|»)"
+        # Regex for common placeholder patterns
+        MARKER_PATTERN = r"(?:<<|\{\{|\[\[|«|\[)\s*(.*?)\s*(?:>>|\}\}|\]\]|»|\])"
 
-        def transform_paragraph_markers(text, fields, current_counter):
-            matches = re.finditer(MARKER_PATTERN, text)
+        def transform_text(text, fields, current_counter, manifest):
+            matches = list(re.finditer(MARKER_PATTERN, text))
             new_text = text
             offset = 0
+            
             for match in matches:
                 original = match.group(0)
                 raw_marker_text = match.group(1).strip()
+                target_key = None
                 
-                logger.info(f"MARKER DETECTED in template: '{original}' (Name: '{raw_marker_text}')")
-
-                # 1. Identify 'fill' placeholders (sequential mapping)
-                is_fill_section = (
-                    "fill" in raw_marker_text.lower()
-                    and "section" in raw_marker_text.lower()
-                )
-
-                if is_fill_section and current_counter < len(fields):
-                    # Map generic marker to specific AI field
-                    target_key = fields[current_counter]
-                    replacement = f"{{{{ _['{target_key}'] }}}}"
-                    current_counter += 1
-                elif is_fill_section:
-                    replacement = f"{{{{ _['missing_field_{current_counter}'] }}}}"
-                    current_counter += 1
-                else:
-                    # 2. Map visual marker to its logical value in context
-                    # Any marker text now becomes a valid dictionary key.
-                    replacement = f"{{{{ _['{raw_marker_text}'] }}}}"
+                # 1. Try to find in manifest by literal marker_text match
+                if manifest:
+                    for item in manifest:
+                        if item.get("marker_text") == original:
+                            target_key = item.get("fieldname")
+                            logger.info(f"Manifest Match: Found '{original}', mapping to '{target_key}'")
+                            break
                 
-                logger.info(f"  -> PREPARING JINJA TAG: {replacement}")
-
+                # 2. Sequential mapping for generic markers
+                if not target_key:
+                    is_generic = any(x in raw_marker_text.lower() for x in ["type text", "fill", "placeholder"])
+                    if is_generic and current_counter < len(fields):
+                        target_key = fields[current_counter]
+                        current_counter += 1
+                        logger.info(f"Generic Match: Mapping '{original}' to '{target_key}' (sequential)")
+                
+                # 3. Fallback to raw marker text
+                if not target_key:
+                    target_key = raw_marker_text
+                    logger.info(f"Fallback Match: Using raw marker text '{target_key}' for '{original}'")
+                
+                replacement = f"{{{{ _['{target_key}'] }}}}"
                 start, end = match.span()
                 new_text = (
                     new_text[: start + offset] + replacement + new_text[end + offset :]
                 )
                 offset += len(replacement) - len(original)
+            
             return new_text, current_counter
 
-        # Process all structural elements in the document
+        def process_paragraph(paragraph, fields, current_counter, manifest):
+            full_text = paragraph.text
+            
+            # Check for instructional anchors from manifest first
+            if manifest:
+                for item in manifest:
+                    anchor = item.get("marker_text")
+                    if anchor and anchor in full_text and not any(m in anchor for m in ["<<", "«", "{{", "[[", "["]):
+                        # This is a non-marker instructional anchor (like "Paste CV here")
+                        paragraph.text = f"{{{{ _['{item.get('fieldname')}'] }}}}"
+                        logger.info(f"Anchor matched and replaced: {anchor}")
+                        return current_counter
+
+            # Then check for formal markers
+            has_marker = any(m in full_text for m in ["<<", "{{", "[[", "«", "[Type text]", "[type text]"])
+            if has_marker:
+                new_text, next_counter = transform_text(full_text, fields, current_counter, manifest)
+                if new_text != full_text:
+                    if len(paragraph.runs) == 1:
+                        paragraph.runs[0].text = new_text
+                    else:
+                        # Fallback: preserve the formatting of the first run if it exists
+                        first_run_style = None
+                        if paragraph.runs:
+                            try:
+                                first_run_style = paragraph.runs[0].style
+                            except:
+                                pass
+                        
+                        paragraph.text = ""
+                        run = paragraph.add_run(new_text)
+                        # Only apply if it's a CHARACTER style (type 2) to avoid docx error
+                        if first_run_style and hasattr(first_run_style, 'type') and first_run_style.type == 2:
+                            run.style = first_run_style
+                return next_counter
+            
+            return current_counter
+
+        # Process all structural elements
         for p in doc.paragraphs:
-            original_text = p.text
-            if any(m in original_text for m in ["<<", "{{", "[[", "«"]):
-                new_text, counter = transform_paragraph_markers(original_text, field_list, counter)
-                if new_text != original_text:
-                    # Surgically replace the text while attempting to preserve formatting
-                    # Note: p.text = new_text is the standard way to update a paragraph in python-docx
-                    p.text = new_text
+            counter = process_paragraph(p, field_list, counter, field_manifest)
 
         for table in doc.tables:
             for row in table.rows:
                 for cell in row.cells:
                     for p in cell.paragraphs:
-                        original_text = p.text
-                        if any(m in original_text for m in ["<<", "{{", "[[", "«"]):
-                            new_text, counter = transform_paragraph_markers(original_text, field_list, counter)
-                            if new_text != original_text:
-                                p.text = new_text
+                        counter = process_paragraph(p, field_list, counter, field_manifest)
 
         processed_stream = io.BytesIO()
         doc.save(processed_stream)

@@ -137,7 +137,7 @@ Resources:
       TaskRoleArn: !GetAtt TaskRole.Arn
       ContainerDefinitions:
         - Name: api
-          Image: !Sub "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/agentic-doc-api-${Environment}:v1.0.1"
+          Image: !Sub "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/agentic-doc-api-${Environment}:v1.1.7"
           PortMappings:
             - ContainerPort: 8000
           LogConfiguration:
@@ -186,7 +186,7 @@ Resources:
       TaskRoleArn: !GetAtt TaskRole.Arn
       ContainerDefinitions:
         - Name: worker
-          Image: !Sub "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/agentic-doc-worker-${Environment}:v1.0.1"
+          Image: !Sub "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/agentic-doc-worker-${Environment}:v1.1.7"
           LogConfiguration:
             LogDriver: awslogs
             Options:
@@ -238,7 +238,7 @@ Resources:
       ExecutionRoleArn: !GetAtt EcsTaskExecutionRole.Arn
       ContainerDefinitions:
         - Name: frontend
-          Image: !Sub "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/agentic-doc-frontend-dev:v1.0.1"
+          Image: !Sub "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/agentic-doc-frontend-dev:v1.1.7"
           PortMappings:
             - ContainerPort: 80
           LogConfiguration:

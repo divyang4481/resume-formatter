@@ -9,25 +9,31 @@ DOCLING STRUCTURAL ANALYSIS (LAYOUT MAP):
 IDENTIFIED RAW PLACEHOLDERS:
 {{ ", ".join(detected_placeholders) if detected_placeholders else "None identified programmatically." }}
 
-Analyze the structure, visual hierarchy, expected content, and placeholders in this template. 
-Generate highly specific guidance that will be used to steer other LLMs when they process actual candidate resumes using this template.
+---
+ANALYSIS CONTEXT:
+We are using a Dual-Stream extraction process:
+1. "Visual Stream": The markers you see within the TEMPLATE TEXT.
+2. "Deep XML Stream": Hidden markers (MergeFields/Metadata) identified programmatically from the file's internal XML structure. These may appear as a [SYSTEM: HIDDEN METADATA MARKERS] block at the top of the text.
 
-CRITICAL INSTRUCTIONS FOR PLACEHOLDERS:
-- You MUST maintain a 1:1 parity between the number of markers in the doc and the number of keys in 'expected_fields'.
-- If you see 6 markers like '<< Fill this section >>', you MUST provide exactly 6 descriptive keys (e.g., 'professional_summary', 'technical_skills', 'experience', etc.).
-- NEVER list granular sub-fields (like 'programming_languages') in 'expected_fields' if the template only has one high-level box for that section. Granular data belongs in 'formatting_guidance'.
-- The keys MUST appear in the EXACT ORDER they appear in the visual text of the template.
-- Handle different marker styles (<< >>, {% raw %}{{ }}{% endraw %}, [[ ]], « ») uniformly.
-- Identify corporate-specific sections (e.g., 'Our expert opinion', 'Candidate Profile') and provide specialized guidance for filling them.
+YOUR GOAL:
+Generate a unified manifest that includes EVERY SINGLE placeholder from BOTH streams.
+
+CRITICAL INSTRUCTION:
+- You MUST maintain a 1:1 parity between EVERY marker identified in the "IDENTIFIED RAW PLACEHOLDERS" list and the entries in 'field_extraction_manifest'.
+- Hidden metadata markers (e.g., «CandidateID») MUST be included in the manifest. Even if you don't see them in the visual paragraphs, assume they are anchor points at the very top of the document (usually in the header or the first row of the first table).
+- Map each placeholder to a unique, descriptive logical key (snake_case) as the 'fieldname'.
+- Omission of ANY detected placeholder is a CRITICAL FAILURE.
 
 Provide recommendations in the following JSON format:
 1. 'purpose': A concise description of the ideal profile for this template.
 2. 'expected_sections': A comma-separated string of the literal headers found.
 3. 'field_extraction_manifest': A list of objects, one for each physical marker in the doc.
    Each object MUST have:
-   - 'fieldname': The unique logical key for the marker (e.g., 'technical_skills').
-   - 'meaning': A brief description of what this section represents visually in the template.
-   - 'source_hints': A comma-separated string of specific resume data points that should be "sourced" to fill this field (e.g., 'programming languages, cloud platforms, databases').
+   - 'fieldname': The unique logical key for the marker (e.g., 'candidate_id').
+   - 'marker_text': The literal text found in the template (e.g., '«CandidateID»' or '[Type text]').
+   - 'visual_context': Physical location (e.g., "Top header table, row 1" or "Under 'Professional Qualifications'").
+   - 'meaning': Description of the field's intent.
+   - 'source_hints': Comma-separated resume data points to fill this field.
 4. 'summary_guidance': Style rules for the summary.
 5. 'formatting_guidance': Specific rules for how the AI should format the harmonized text for these fields.
 

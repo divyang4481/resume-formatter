@@ -76,6 +76,12 @@ def create_output_quality_reasoning_node():
         template_contract = state.get("canonical_model")
         if not template_contract:
             template_contract = state.get("field_extraction_manifest")
+        
+        if not template_contract and state.get("expected_fields"):
+            # Fallback to simple list of fields if no rich manifest
+            fields = [f.strip() for f in state.get("expected_fields").split(",") if f.strip()]
+            template_contract = [{"fieldname": f, "meaning": f} for f in fields]
+
         if not template_contract and state.get("selected_template"):
             template_obj = state.get("selected_template")
             if isinstance(template_obj, dict):
@@ -108,6 +114,7 @@ def create_output_quality_reasoning_node():
                 "requires_human_review": False, 
                 "validation_passed": True,
                 "validation_warnings": [evaluation.get("reason")] if needs_review else [],
+                "missing_fields": evaluation.get("missing_fields", []),
                 "status": "quality_evaluated"
             }
         except Exception as e:

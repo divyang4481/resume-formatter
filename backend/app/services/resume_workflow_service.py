@@ -1,3 +1,6 @@
+import logging
+import json
+import uuid
 from typing import Any, Dict, Optional
 from app.domain.interfaces import LlmRuntimeAdapter
 from app.domain.interfaces import DocumentExtractionService, StorageProvider
@@ -7,6 +10,8 @@ from app.schemas.enums import JobStatus
 from app.agent.graph import build_resume_processing_graph, AgentState
 from app.agent.state import AgentState as TypedAgentState
 from app.dependencies import get_storage_provider
+
+logger = logging.getLogger(__name__)
 
 class ResumeWorkflowService:
     def __init__(
@@ -63,6 +68,9 @@ class ResumeWorkflowService:
         industry = ext_meta.get("industry_id", "General")
         language = "en"
 
+        field_extraction_manifest = None
+        expected_fields = ""
+
         if selected_template_id and self.template_repo:
             try:
                 template = self.template_repo.get_template(selected_template_id)
@@ -73,6 +81,10 @@ class ResumeWorkflowService:
                     pii_guidance = template.pii_guidance or ""
                     industry = template.industry or industry
                     language = template.language or "en"
+                    
+                    # --- FIX: Populate extraction contract fields ---
+                    field_extraction_manifest = template.field_extraction_manifest
+                    expected_fields = template.expected_fields or ""
             except Exception as te:
                 print(f"Warning: Failed to fetch template guidance for {selected_template_id}: {te}")
 
@@ -84,6 +96,8 @@ class ResumeWorkflowService:
             "extracted_text": None,
             "extraction_confidence": None,
             "canonical_model": None,
+            "field_extraction_manifest": field_extraction_manifest,
+            "expected_fields": expected_fields,
             "privacy_transformed_model": None,
             "selected_template_id": selected_template_id,
             "template_storage_uri": None,
@@ -112,7 +126,6 @@ class ResumeWorkflowService:
             final_state = await self.graph.ainvoke(initial_state)
 
             # Persist final state back to job
-            job.status = JobStatus.COMPLETED
             if final_state.get("summary_uri"):
                 job.summary_uri = final_state["summary_uri"]
             if final_state.get("summary_text"):
@@ -136,6 +149,44 @@ class ResumeWorkflowService:
                             session.commit()
             if final_state.get("render_docx_uri"):
                 job.render_docx_uri = final_state["render_docx_uri"]
+
+            # Determine final status: If it passed quality reasoning node with 'needs_review', use partial success
+            if final_state.get("status") == "needs_review" or final_state.get("missing_fields"):
+                job.status = JobStatus.PARTIAL_SUCCESS
+                logger.info(f"Job {job_id} marked as PARTIAL_SUCCESS due to missing fields or quality reasoning.")
+            else:
+                job.status = JobStatus.COMPLETED
+            missing_fields = final_state.get("missing_fields", [])
+            validation_warnings = final_state.get("validation_warnings", [])
+            
+            if missing_fields or validation_warnings:
+                from app.db.session import SessionLocal
+                from app.db.models import ValidationResult
+                with SessionLocal() as session:
+                    # Clean up old results for this job if any
+                    session.query(ValidationResult).filter(ValidationResult.job_id == job_id).delete()
+                    
+                    if missing_fields:
+                        session.add(ValidationResult(
+                            id=str(uuid.uuid4()),
+                            job_id=job_id,
+                            validation_type="COMPLETENESS",
+                            severity="WARNING",
+                            passed=False,
+                            message=f"Missing template fields: {', '.join(missing_fields)}",
+                            details_json=json.dumps({"missing_fields": missing_fields})
+                        ))
+                    
+                    for warning in validation_warnings:
+                        session.add(ValidationResult(
+                            id=str(uuid.uuid4()),
+                            job_id=job_id,
+                            validation_type="QUALITY",
+                            severity="INFO",
+                            passed=True,
+                            message=warning
+                        ))
+                    session.commit()
 
             
             # If it's a governance audit run, update the audit record

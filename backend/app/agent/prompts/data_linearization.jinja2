@@ -1,49 +1,41 @@
-TASK: Synthesize the Career Narrative for a Professional Word Template.
+TASK: Map Candidate Data to Template-Specific Fields.
 
-CANDIDATE DATA (Extracted Notes):
+CANDIDATE DATA (Raw Extraction):
 {{ structured_data_json }}
 
-VISUAL PLACEHOLDERS & MAPPING RULES:
+TEMPLATE CONTRACT (The Required Fields):
 {% if field_extraction_manifest %}
 {% for field in field_extraction_manifest %}
-- [MARKER :: {{ field.fieldname }}]
+- FIELDNAME: "{{ field.fieldname }}"
   * Meaning: {{ field.meaning }}
-  * Source These Data Points: {{ field.source_hints }}
+  * Source Hints: {{ field.source_hints }}
 {% endfor %}
 {% else %}
-{{ detected_placeholders_list | join(', ') }}
+Placeholders: {{ detected_placeholders_list | join(', ') }}
 {% endif %}
+
+---
+MAPPING INTELLIGENCE PROTOCOL (MANDATORY):
+1. **Direct Mapping**: If a raw data field matches a contract field (e.g., 'email' in raw data vs 'employee_email' in contract), you MUST explicitly map it to the contract field name.
+2. **Inference & Logic**: 
+   - 'current_position': Look for the most recent job title in the professional experience.
+   - 'candidate_name': Extract from the resume header or personal details.
+   - 'expert_opinion': Synthesize a 3-4 sentence professional summary based on the candidate's core strengths and years of experience.
+   - 'employee_email': Use the candidate's primary contact email.
+   - 'professional_qualifications': List degrees, certifications, and licenses.
+3. **Synthesis**: Do not just copy-paste. Format the content to be professional, using third-person perspective where appropriate (especially for 'expert_opinion').
 
 ---
 WRITER'S MANDATE (STRICT):
 1. ROLE: You are an Executive Resume Writer. 
-2. OUTPUT STYLE: Use clean, professional prose. DO NOT use technical markup like [:B:], [:L1:], [:PIPE:], or [:BR:].
-3. FORMATTING: Use standard capitalization and professional formatting (e.g., "Company Name | Dates" is fine as plain text). 
-4. FORBIDDEN: NEVER output JSON, code-like structures, or redundant fields. 
-5. SYNTHESIS: Convert the nested data (projects, skills, achievements) into high-impact, results-oriented bullet points or paragraphs. 
+2. OUTPUT FORMAT: You MUST return a single, valid JSON object. 
+3. KEYS: Use the EXACT 'fieldname' values from the contract list above.
+4. VALIDATION: If you find data in the 'Raw Extraction' that belongs in a contract field, it MUST be included. DO NOT skip fields if the information is inferable.
+5. FALLBACK: If a field is absolutely not found and cannot be inferred, use an empty string "".
 
 ---
----
-OUTPUT PROTOCOL (MANDATORY):
-1. You MUST wrap every section in [MARKER :: Name] and [/MARKER].
-2. The "Name" MUST match the Visual Placeholders exactly.
-3. If you fail to use [MARKER :: Name], the document will be EMPTY and the candidate will fail.
-4. Do NOT add conversational text before or after the markers.
-
-Example of Correct Output:
-[MARKER :: Full Name]
-John Doe, Solutions Architect
-[/MARKER]
-
-[MARKER :: Professional Summary]
-Strategic leader with 15+ years experience...
-[/MARKER]
-
-Example of Clean Output:
-[MARKER :: Professional Experience]
-Senior Solution Architect | Cognizant | 2020 - Present
-• Orchestrated the digital transformation for a multi-billion dollar retail client.
-• Migrated legacy server-side logic to Azure Microservices, reducing latency by 40%.
-[/MARKER]
-
-GOAL: Eradicate technical residue. Deliver polished, executive-grade content.
+OUTPUT PROTOCOL:
+- Return ONLY the JSON object.
+- DO NOT add conversational text.
+- Ensure all quotes within strings are properly escaped for JSON.
+- For rich text fields, use bullet points (•) and line breaks (\n) for readability.

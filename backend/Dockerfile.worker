@@ -13,4 +13,10 @@ COPY ./init_db.py ./init_db.py
 
 RUN mkdir -p .data
 
+# Install RapidOCR explicitly to enable model pre-downloading
+RUN pip install --no-cache-dir rapidocr-onnxruntime
+
+# Pre-download RapidOCR models so they are ready at runtime
+RUN python -c "from rapidocr_onnxruntime import RapidOCR; RapidOCR()"
+
 CMD ["python", "-m", "app.core.worker"]
