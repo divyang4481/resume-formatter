@@ -49,7 +49,12 @@ for _fn, _aliases in FIELD_ALIAS_MAP.items():
     for _alias in _aliases:
         _ALIAS_INVERTED[_alias.lower()] = _fn
 
-PASTE_ZONE_KEYWORDS = ["own cv", "paste", "insert cv", "candidate cv", "candidate's cv"]
+PASTE_ZONE_KEYWORDS = [
+    "own cv", "paste", "insert cv", "candidate cv", "candidate's cv",
+    "work experience", "employment history", "professional experience",
+    "education", "academic background", "qualifications",
+    "interests and activities", "hobbies", "personal interests"
+]
 INSTRUCTION_COLORS_RED = {"ff0000", "c00000", "dc143c", "b22222"}
 TABLE_LOOP_PREFIX = "TableStart:"
 TABLE_LOOP_SUFFIX = "TableEnd:"
@@ -115,6 +120,15 @@ class TemplateStructure:
     headers_footers_markers: List[str] = field(default_factory=list)
     """Markers found specifically in header/footer XML parts"""
 
+    all_headings: List[str] = field(default_factory=list)
+    """All detected document headings/titles"""
+
+    all_table_labels: List[str] = field(default_factory=list)
+    """All detected table labels (bold first-column text)"""
+
+    repeated_markers: List[str] = field(default_factory=list)
+    """Markers found more than once in the document"""
+
     layout_style: str = "freeflow"
     """table_based | freeflow | mixed"""
 
@@ -129,6 +143,9 @@ class TemplateStructure:
             "paste_zones": self.paste_zones,
             "instruction_blocks": self.instruction_blocks,
             "headers_footers_markers": self.headers_footers_markers,
+            "all_headings": self.all_headings,
+            "all_table_labels": self.all_table_labels,
+            "repeated_markers": self.repeated_markers,
             "layout_style": self.layout_style,
         }
 
@@ -146,9 +163,9 @@ def normalize_marker_name(marker: str) -> str:
         [Type text]         → "type text"
         EmployeeEmail       → "employee email"
     """
-    # Strip enclosing brackets
+    # Strip enclosing brackets (longest pairs first)
     inner = marker.strip()
-    for pair in [("«", "»"), ("[", "]"), ("<<", ">>"), ("{{", "}}"), ("[[", "]]")]:
+    for pair in [("«", "»"), ("[[", "]]"), ("{{", "}}"), ("<<", ">>"), ("[", "]")]:
         if inner.startswith(pair[0]) and inner.endswith(pair[1]):
             inner = inner[len(pair[0]):-len(pair[1])].strip()
             break
@@ -249,12 +266,22 @@ class TemplateStructureExtractor:
 
                 # Deduplicate markers preserving order
                 seen: set = set()
+                all_raw_seen = []
                 for m in raw_markers:
                     m = m.strip()
-                    if m and m not in seen:
-                        seen.add(m)
-                        struct.detected_markers.append(m)
-                        struct.marker_normalized_map[m] = normalize_marker_name(m)
+                    # Normalize guillemets to standard « and »
+                    m = m.replace("\xab", "«").replace("\xbb", "»")
+                    if m:
+                        all_raw_seen.append(m)
+                        if m not in seen:
+                            seen.add(m)
+                            struct.detected_markers.append(m)
+                            struct.marker_normalized_map[m] = normalize_marker_name(m)
+
+                # Identify repeated markers
+                from collections import Counter
+                counts = Counter(all_raw_seen)
+                struct.repeated_markers = [m for m, count in counts.items() if count > 1]
 
             logger.info(
                 f"TemplateStructureExtractor: '{filename}' → "
@@ -335,6 +362,11 @@ class TemplateStructureExtractor:
                 # Save previous heading's bullet status
                 if current_heading and heading_has_bullets:
                     struct.bullet_slots.append(current_heading)
+                
+                # Register all headings
+                if para_text not in struct.all_headings:
+                    struct.all_headings.append(para_text)
+                    
                 current_heading = para_text
                 heading_has_bullets = False
 
@@ -345,7 +377,8 @@ class TemplateStructureExtractor:
                 continue
 
             # Detect guillemet markers by reconstructing para text
-            found_guillemets = re.findall(r"«\s*(.*?)\s*»", para_text_raw)
+            # Use both literal and hex escape for robustness (\xab = «, \xbb = »)
+            found_guillemets = re.findall(r"[\xab\u00ab]\s*(.*?)\s*[\xbb\u00bb]", para_text_raw)
             for g in found_guillemets:
                 m = f"«{g.strip()}»"
                 part_markers.append(m)
@@ -445,8 +478,11 @@ class TemplateStructureExtractor:
                 if not label_text or len(label_text) > 80:
                     continue
 
+                if label_text not in struct.all_table_labels:
+                    struct.all_table_labels.append(label_text)
+
                 # Look for a guillemet marker in the value cell
-                guillemets = re.findall(r"«\s*(.*?)\s*»", value_text)
+                guillemets = re.findall(r"[\xab\u00ab]\s*(.*?)\s*[\xbb\u00bb]", value_text)
                 marker_found = ""
                 if guillemets:
                     marker_found = f"«{guillemets[0].strip()}»"

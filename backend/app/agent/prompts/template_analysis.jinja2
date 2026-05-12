@@ -19,6 +19,11 @@ It contains:
 - The [STRUCTURED TABLE LABEL→VALUE PAIRS] section maps each table label to its adjacent marker or blank
 
 Use these structural hints as the PRIMARY source of truth for field classification.
+Specifically:
+- ALL_HEADINGS: Only use headings listed here for render_locator.heading.
+- ALL_TABLE_LABELS: Only use labels listed here for render_locator.label.
+- REPEATED_MARKERS: If a marker appears here, you MUST use a label-based or heading-based render_locator strategy to differentiate between occurrences.
+- PASTE_ZONES: ONLY create field_type="paste_zone" if the heading is explicitly listed here.
 
 ---
 STEP 2 — FIELD TYPE + SOURCE KIND RULES:
@@ -80,7 +85,12 @@ STEP 3 — ANTI-HALLUCINATION RULES (MANDATORY):
 
 3. COMPLETE COVERAGE: Every item in DETECTED MARKERS must appear in exactly one entry.
 
-4. confidence: 1.0 for exact marker match, 0.7 for visual_blank_slot with confirmed label, 0.5 for inferred.
+4. PASTE ZONE RESTRICTION: Do NOT infer a "CANDIDATE’S CV" or generic paste zone. Only create a paste_zone field if the heading is present in the document.
+   - For Hays templates, if no "PASTE CV HERE" or similar exists, look for specific sections like WORK EXPERIENCE, EDUCATION, and INTERESTS AND ACTIVITIES and treat them as rich_text (section_body) or array_simple (bullet_slots).
+
+5. REPEATED MARKER RESTRICTION: If a marker like [Type text] or [...] appears multiple times (listed in REPEATED_MARKERS), you MUST provide "label" or "heading" context in render_locator. Failure to do so will result in rendering errors.
+
+6. confidence: 1.0 for exact marker match, 0.7 for visual_blank_slot with confirmed label, 0.5 for inferred.
 
 ---
 DYNAMIC EXAMPLES FROM THIS TEMPLATE:

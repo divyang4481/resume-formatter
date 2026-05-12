@@ -343,6 +343,11 @@ class ResumeAiService:
         # Structural hints block
         hints_block = "[STRUCTURAL HINTS FROM DOCX ANALYSIS]\n"
         hints_block += f"Layout Style: {structure.layout_style}\n"
+        hints_block += f"Paste Zone Headings: {structure.paste_zones}\n"
+        hints_block += f"Table Loops Detected: {[l.to_dict() for l in structure.table_loops]}\n"
+        hints_block += f"ALL_HEADINGS: {structure.all_headings}\n"
+        hints_block += f"ALL_TABLE_LABELS: {structure.all_table_labels}\n"
+        hints_block += f"REPEATED_MARKERS: {structure.repeated_markers}\n"
 
         if structure.table_loops:
             hints_block += "Table Loops Detected (field_type=table_loop):\n"
@@ -538,20 +543,29 @@ class ResumeAiService:
                 continue  # marker is valid, move on
 
             # marker_text is empty — run alias-based reconciliation
-            if sk in ("visual_blank_slot", "bullet_slots", "paste_zone", "instruction_block", "section_body"):
+            if sk in ("bullet_slots", "paste_zone", "instruction_block", "section_body"):
                 continue  # these legitimately have no marker
+            
+            # Note: visual_blank_slot IS allowed to proceed here so we can "upgrade" it
+            # if we find a detected marker that matches its fieldname/alias.
 
             # Try alias map first (high confidence)
             if fn in FIELD_ALIAS_MAP:
                 for alias in FIELD_ALIAS_MAP[fn]:
-                    canonical = f"«{alias}»"
-                    if canonical in detected_markers and canonical not in used_markers:
-                        entry["marker_text"] = canonical
+                    # Try all common wrappings to find the actual marker in the document
+                    potential_matches = [
+                        f"«{alias}»", f"[{alias}]", f"[[{alias}]]", f"<<{alias}>>", f"{{{alias}}}", alias
+                    ]
+                    
+                    found_marker = next((m for m in potential_matches if m in detected_markers and m not in used_markers), None)
+                    
+                    if found_marker:
+                        entry["marker_text"] = found_marker
                         entry["source_kind"] = "merge_marker"
                         entry.setdefault("render_locator", {})["strategy"] = "replace_marker"
-                        entry.setdefault("render_locator", {})["marker"] = canonical
-                        used_markers.add(canonical)
-                        logger.info(f"[Reconcile] Alias matched: '{fn}' → '{canonical}'")
+                        entry.setdefault("render_locator", {})["marker"] = found_marker
+                        used_markers.add(found_marker)
+                        logger.info(f"[Reconcile] Alias matched: '{fn}' → '{found_marker}' (Upgraded from {sk})")
                         break
 
             # If still empty, try normalized name matching
@@ -565,7 +579,53 @@ class ResumeAiService:
                         used_markers.add(m_candidate)
                         logger.info(f"[Reconcile] Norm matched: '{fn}' → '{m_candidate}'")
 
-        # ── Phase 3b: Add any completely missed detected markers ──────────────
+        # ── Phase 3c: Harden against hallucinations ───────────────────────────
+        actual_paste_zone_headings = set(structure.paste_zones or [])
+        known_headings = set(structure.all_headings or [])
+        known_labels = set(structure.all_table_labels or [])
+
+        reconciled_manifest = []
+        for entry in manifest:
+            fieldname = entry.get("fieldname", "")
+            ft = entry.get("field_type", "")
+            locator = entry.get("render_locator") or {}
+            strategy = locator.get("strategy", "")
+            heading = locator.get("heading", "")
+            label = locator.get("label", "")
+            mt = entry.get("marker_text", "")
+
+            drop_reason = None
+
+            # 1. Paste Zone Guard
+            if ft == "paste_zone":
+                if heading not in actual_paste_zone_headings:
+                    drop_reason = f"hallucinated paste_zone heading '{heading}'"
+
+            # 2. Heading Guard
+            if strategy in ("replace_section_body", "replace_bullets_under_heading"):
+                if heading and heading not in known_headings:
+                    drop_reason = f"hallucinated heading '{heading}'"
+
+            # 3. Label Guard
+            if strategy == "fill_blank_cell_after_label":
+                if label and label not in known_labels:
+                    drop_reason = f"hallucinated table label '{label}'"
+
+            # 4. Repeated Marker Context Enforcement
+            if mt in structure.repeated_markers and strategy == "replace_marker":
+                # Check if we can heal this by switching to a label/heading strategy
+                # AI should have provided this, but if not, it's risky
+                logger.warning(f"[Reconcile] Field '{fieldname}' uses repeated marker '{mt}' without context strategy.")
+
+            if drop_reason:
+                logger.warning(f"[Reconcile] Dropping field '{fieldname}': {drop_reason}")
+                continue
+                
+            reconciled_manifest.append(entry)
+
+        manifest = reconciled_manifest
+
+        # ── Phase 3d: Add any completely missed detected markers ──────────────
         for m in detected_markers:
             if m in used_markers:
                 continue
@@ -574,10 +634,11 @@ class ResumeAiService:
             if inner.startswith("TableStart:") or inner.startswith("TableEnd:"):
                 continue
 
-            # Try to find a known fieldname via alias
+            # Try to find a known fieldname via alias using normalized comparison
             fn_for_marker = None
+            m_norm = normalize_marker_name(m)
             for fn_alias, aliases in FIELD_ALIAS_MAP.items():
-                if inner in aliases:
+                if any(normalize_marker_name(a) == m_norm for a in aliases):
                     fn_for_marker = fn_alias
                     break
 
@@ -627,7 +688,7 @@ class ResumeAiService:
 
         # ── Phase 4: Manifest validation ─────────────────────────────────────
         validator = TemplateManifestValidator()
-        validation_result = validator.validate(manifest, detected_markers)
+        validation_result = validator.validate(manifest, structure)
         logger.info(f"[TemplateAnalysis] Validation: {validation_result.to_dict()}")
         if validation_result.status == "FAIL":
             logger.error(f"[TemplateAnalysis] Manifest FAILED validation: {validation_result.errors}")

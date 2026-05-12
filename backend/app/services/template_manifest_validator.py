@@ -73,7 +73,7 @@ class TemplateManifestValidator:
     def validate(
         self,
         manifest: List[Dict[str, Any]],
-        detected_markers: List[str],
+        structure: Any,  # TemplateStructure
     ) -> ValidationResult:
         result = ValidationResult()
 
@@ -81,8 +81,13 @@ class TemplateManifestValidator:
             result.fail("Manifest is empty — no fields extracted.")
             return result
 
+        detected_markers = structure.detected_markers
         detected_set = set(m.strip() for m in detected_markers)
         detected_inner = {m.strip("«»[]<> ").lower() for m in detected_markers}
+        known_headings = set(structure.all_headings or [])
+        known_labels = set(structure.all_table_labels or [])
+        paste_zones = set(structure.paste_zones or [])
+        repeated_markers = set(structure.repeated_markers or [])
 
         # Build coverage counters
         mapped_count = 0
@@ -137,9 +142,16 @@ class TemplateManifestValidator:
                     mapped_count += 1
 
                 # Duplicate marker check (warn unless it's a shared marker like [Type text])
-                generic_markers = {"[type text]", "[type text]"}
-                if mt.lower() not in generic_markers:
-                    used_markers.setdefault(mt, []).append(fn)
+                if mt in repeated_markers:
+                    strategy = locator.get("strategy", "")
+                    if strategy == "replace_marker":
+                        result.warn(
+                            f"Field '{fn}' uses repeated marker '{mt}' without context strategy "
+                            "(use label or heading based locator instead)."
+                        )
+                
+                # Global duplicate check (different fields using same marker)
+                used_markers.setdefault(mt, []).append(fn)
 
             else:
                 # No marker_text — must have render_locator
@@ -154,10 +166,24 @@ class TemplateManifestValidator:
                         result.fail(
                             f"Field '{fn}' is visual_blank_slot but render_locator.label is missing."
                         )
-                    if sk == "paste_zone" and not locator.get("heading"):
-                        result.warn(
-                            f"Field '{fn}' is paste_zone but render_locator.heading is missing."
-                        )
+                    if sk == "paste_zone":
+                        heading = locator.get("heading")
+                        if not heading:
+                            result.fail(f"Field '{fn}' is paste_zone but render_locator.heading is missing.")
+                        elif heading not in paste_zones:
+                            result.fail(f"Field '{fn}' has hallucinated paste_zone heading '{heading}'.")
+                    
+                    if sk == "section_body" or sk == "bullet_slots":
+                        heading = locator.get("heading")
+                        if heading and heading not in known_headings:
+                            result.fail(f"Field '{fn}' has hallucinated heading '{heading}'.")
+
+                    if sk == "visual_blank_slot":
+                        label = locator.get("label")
+                        if not label:
+                            result.fail(f"Field '{fn}' is visual_blank_slot but render_locator.label is missing.")
+                        elif label not in known_labels:
+                            result.fail(f"Field '{fn}' has hallucinated table label '{label}'.")
                 else:
                     # merge_marker field with no marker_text
                     if sk == "merge_marker":
