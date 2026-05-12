@@ -395,6 +395,13 @@ export class TemplateDetailComponent implements OnInit, OnDestroy {
       data: { run }
     });
   }
+
+  openJsonInspector(dialogRef: any, title: string, json: any) {
+    this.dialog.open(dialogRef, {
+      width: '800px',
+      data: { title, json }
+    });
+  }
 }
 
 

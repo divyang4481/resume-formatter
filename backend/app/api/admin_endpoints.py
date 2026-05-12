@@ -302,48 +302,61 @@ async def get_template_detail(id: str, is_admin: bool = Depends(mock_is_admin)):
 
 @router.get("/templates/{id}/test-runs")
 async def list_template_test_runs(id: str, is_admin: bool = Depends(mock_is_admin)):
-    from app.db.models import ProcessingJob
+    from app.db.models import ProcessingJob, CandidateResume
 
     db = SessionLocal()
     try:
-        runs = (
-            db.query(TemplateTestRun)
+        # Join with ProcessingJob and CandidateResume to get extraction facts and mapping results
+        query = (
+            db.query(TemplateTestRun, ProcessingJob, CandidateResume)
+            .join(ProcessingJob, TemplateTestRun.processing_job_id == ProcessingJob.id)
+            .outerjoin(CandidateResume, ProcessingJob.candidate_resume_id == CandidateResume.id)
             .filter(TemplateTestRun.template_id == id)
             .order_by(TemplateTestRun.created_at.desc())
-            .all()
         )
+        
+        runs = query.all()
         import json
 
         result = []
-        for r in runs:
+        for r_run, r_job, r_resume in runs:
             val_json = {}
-            if r.validation_result_json:
+            if r_run.validation_result_json:
                 try:
-                    val_json = json.loads(r.validation_result_json)
+                    val_json = json.loads(r_run.validation_result_json)
+                except Exception:
+                    pass
+
+            # Parse extracted facts and transformed mapping
+            facts_json = {}
+            if r_resume and r_resume.candidate_facts_json:
+                try:
+                    facts_json = json.loads(r_resume.candidate_facts_json)
+                except Exception:
+                    pass
+            
+            mapping_json = {}
+            if r_job and r_job.transformed_json:
+                try:
+                    mapping_json = json.loads(r_job.transformed_json)
                 except Exception:
                     pass
 
             # Direct query fallback to ensure we get the job summary if missing on test run
-            summary = r.generated_summary
-            if not summary:
-                job = (
-                    db.query(ProcessingJob)
-                    .filter(ProcessingJob.id == r.processing_job_id)
-                    .first()
-                )
-                if job:
-                    summary = job.generated_summary
+            summary = r_run.generated_summary or r_job.generated_summary
 
             result.append(
                 {
-                    "id": r.id,
-                    "job_id": r.processing_job_id,
-                    "decision": r.decision,
-                    "created_at": r.created_at,
-                    "reviewed_at": r.reviewed_at,
-                    "sample_resume_asset_id": r.sample_resume_asset_id,
+                    "id": r_run.id,
+                    "job_id": r_run.processing_job_id,
+                    "decision": r_run.decision,
+                    "created_at": r_run.created_at,
+                    "reviewed_at": r_run.reviewed_at,
+                    "sample_resume_asset_id": r_run.sample_resume_asset_id,
                     "generated_summary": summary,
                     "validation_result": val_json,
+                    "extraction_facts": facts_json,
+                    "mapping_results": mapping_json
                 }
             )
         return {"test_runs": result}
