@@ -8,16 +8,16 @@ import io
 logger = logging.getLogger(__name__)
 
 
-def create_render_node(
+def create_document_composition_node(
     ai_service: ResumeAiService, generator_service: ResumeGeneratorService, storage
 ):
     """
-    Creates the LangGraph node for rendering the final outputs.
+    Creates the LangGraph node for final document composition.
     Delegates document manipulation to the ResumeGeneratorService.
     """
 
-    async def render_node(state: AgentState) -> dict:
-        logger.info("Executing Formatter Resume Node...")
+    async def document_composition_node(state: AgentState) -> dict:
+        logger.info("Executing Document Composition Node...")
 
         extracted_text = state.get("extracted_text", "")
         transformed_json_str = state.get("transformed_document_json", "")
@@ -96,12 +96,8 @@ def create_render_node(
                 # Re-raise to trigger the error document fallback below
                 raise s3_err
 
-            # Linearize and polish JSON data for the template style via AI
+            # Data is already harmonized by the Transform node
             if resume_data:
-                template_text_content = state.get("template_text") or ""
-                formatting_guidance = state.get("formatting_guidance") or ""
-
-                # ... (rest of harmonization logic)
                 expected_fields_raw = state.get("expected_fields")
                 if not expected_fields_raw and state.get("selected_template"):
                     template_obj = state.get("selected_template")
@@ -109,20 +105,13 @@ def create_render_node(
                         expected_fields_raw = template_obj.get("expected_fields", "")
                 expected_fields_raw = expected_fields_raw or ""
                 
-                detected_placeholders = [f.strip() for f in expected_fields_raw.split(",") if f.strip()]
                 field_manifest = state.get("field_extraction_manifest")
                 
-                formatted_data = await ai_service.harmonize_data_to_template_style(
-                    structured_data=resume_data,
-                    template_text=template_text_content,
-                    detected_placeholders=detected_placeholders,
-                    field_manifest=field_manifest,
-                    formatting_guidance=formatting_guidance,
-                )
                 # Only use the polished, harmonized data for the final document to prevent redundancy
-                final_context = {**formatted_data, "summary": summary_text, "job_id": session_id}
-            else:
+                # Add summary and job_id to the context
                 final_context = {**resume_data, "summary": summary_text, "job_id": session_id}
+            else:
+                final_context = {"summary": summary_text, "job_id": session_id}
 
             # --- RENDER CONTEXT DUMP ---
             logger.info("\n" + "-"*60 + "\n--- FINAL RENDERING CONTEXT ---\n" + "-"*60)
@@ -136,11 +125,10 @@ def create_render_node(
                 field_manifest=field_manifest,
             )
             
-            # Merge missing fields discovered during rendering into state
+            # Merge missing fields discovered during rendering
+            all_missing_fields = state.get("missing_fields") or []
             if gen_missing_fields:
-                state_missing = state.get("missing_fields") or []
-                unique_missing = list(set(state_missing + gen_missing_fields))
-                state["missing_fields"] = unique_missing
+                all_missing_fields = list(set(all_missing_fields + gen_missing_fields))
 
             render_docx_uri = storage.put_bytes(docx_bytes, render_key)
 
@@ -166,7 +154,9 @@ def create_render_node(
             "summary_text": clean_ui_summary,
             "summary_uri": summary_uri,
             "render_docx_uri": render_docx_uri,
+            "transformed_document_json": final_context,
+            "missing_fields": all_missing_fields,
             "status": final_status,
         }
 
-    return render_node
+    return document_composition_node

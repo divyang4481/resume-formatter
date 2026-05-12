@@ -1,40 +1,30 @@
-TASK: Reverse-engineer this CV Template to suggest professional governance metadata and AI-steering guidance.
+TASK: Analyze a Resume Template and Generate a Field Extraction Manifest.
 
-TEMPLATE TEXT (EXTRACTED):
+TEMPLATE CONTEXT (Text Extraction & Markers):
 {{ template_text }}
 
-DOCLING STRUCTURAL ANALYSIS (LAYOUT MAP):
-{{ docling_metadata_json }}
+DETECTED MARKERS (The literal strings found in the document):
+{{ detected_placeholders | join(', ') }}
 
-IDENTIFIED RAW PLACEHOLDERS:
-{{ ", ".join(detected_placeholders) if detected_placeholders else "None identified programmatically." }}
-
----
-ANALYSIS CONTEXT:
-We are using a Dual-Stream extraction process:
-1. "Visual Stream": The markers you see within the TEMPLATE TEXT.
-2. "Deep XML Stream": Hidden markers (MergeFields/Metadata) identified programmatically from the file's internal XML structure. These may appear as a [SYSTEM: HIDDEN METADATA MARKERS] block at the top of the text.
-
-YOUR GOAL:
-Generate a unified manifest that includes EVERY SINGLE placeholder from BOTH streams.
-
-CRITICAL INSTRUCTION:
-- You MUST maintain a 1:1 parity between EVERY marker identified in the "IDENTIFIED RAW PLACEHOLDERS" list and the entries in 'field_extraction_manifest'.
-- Hidden metadata markers (e.g., «CandidateID») MUST be included in the manifest. Even if you don't see them in the visual paragraphs, assume they are anchor points at the very top of the document (usually in the header or the first row of the first table).
-- Map each placeholder to a unique, descriptive logical key (snake_case) as the 'fieldname'.
-- Omission of ANY detected placeholder is a CRITICAL FAILURE.
+INSTRUCTIONS:
+1. Identify all placeholders/markers in the template. Use the "DETECTED MARKERS" list as your primary source of truth for 'marker_text'.
+2. For each marker, determine its logical purpose (e.g., "Full name of the candidate") and assign a 'fieldname' in snake_case (e.g., 'candidate_name').
+3. **MANDATORY**: Every 'fieldname' MUST have a non-empty 'marker_text'. 
+4. **CRITICAL**: The 'marker_text' MUST be the exact literal string found in the document, including brackets/quotes if applicable (e.g., "«CandidateFullName»" or "[Type text]"). 
+5. **HEADER FIELDS**: For fields like 'candidate_name' and 'candidate_id' which are usually at the top, look for the first 2-3 markers in the document. Even if they are hidden (e.g., in a table or header), you MUST map them.
+6. DO NOT use the labels next to the markers (like "Name:") as the 'marker_text'. Use the markers themselves.
+7. If you see generic markers like "[Type text]" appearing multiple times, map them in order of appearance to the most logical fields based on their surrounding text (labels).
+8. Omission of ANY detected placeholder is a CRITICAL FAILURE.
+9. For REPEATED SECTIONS (like Work Experience): If you see repeated markers (e.g., multiple '[Organisation]'), create individual fieldnames for the first 3 instances (e.g., 'job_1_organisation', 'job_2_organisation', 'job_3_organisation').
 
 Provide recommendations in the following JSON format:
-1. 'purpose': A concise description of the ideal profile for this template.
-2. 'expected_sections': A comma-separated string of the literal headers found.
-3. 'field_extraction_manifest': A list of objects, one for each physical marker in the doc.
-   Each object MUST have:
-   - 'fieldname': The unique logical key for the marker (e.g., 'candidate_id').
-   - 'marker_text': The literal text found in the template (e.g., '«CandidateID»' or '[Type text]').
-   - 'visual_context': Physical location (e.g., "Top header table, row 1" or "Under 'Professional Qualifications'").
-   - 'meaning': Description of the field's intent.
-   - 'source_hints': Comma-separated resume data points to fill this field.
-4. 'summary_guidance': Style rules for the summary.
-5. 'formatting_guidance': Specific rules for how the AI should format the harmonized text for these fields.
-
-OUTPUT FORMAT: Return ONLY a valid JSON object. No markdown, no preamble.
+1. 'purpose': A concise description of the template's target audience.
+2. 'expected_sections': Comma-separated list of major headers.
+3. 'expected_fields': Comma-separated list of all fieldnames.
+4. 'summary_guidance': Instructions for the AI summary (tone, length).
+5. 'formatting_guidance': Specific rules for data formatting (e.g., "Use bullet points for skills").
+6. 'field_extraction_manifest': A list of objects:
+   - 'fieldname': snake_case logical key.
+   - 'marker_text': The EXACT literal marker from the doc (e.g., "«CandidateFullName»").
+   - 'meaning': Description of the data required.
+   - 'source_hints': Where to find this in a typical resume.

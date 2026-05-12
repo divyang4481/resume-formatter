@@ -1,0 +1,31 @@
+TASK: Professional Document Composition & Formatting.
+
+You are provided with structured data that has already been mapped to a specific template contract. Your goal is to rewrite and format this data so it looks exceptional in a Microsoft Word document.
+
+HARMONIZED DATA:
+{{ harmonized_json }}
+
+TEMPLATE CONTEXT (Rules & Style):
+- Formatting Guidance: {{ formatting_guidance }}
+- Template Text (Snippet): {{ template_text }}
+
+TEMPLATE FIELD MANIFEST (Where the data goes):
+{{ manifest_json }}
+
+COMPOSITION RULES (MANDATORY):
+1. **Rich Text Styling**: Use the following proprietary CVML tags to indicate styling:
+   - `[:B:]Bold Text[:/B:]` for emphasis (e.g., job titles, institutions).
+   - `[:L1:]` for a primary bullet point.
+   - `[:L2:]` for a secondary/indented bullet point.
+   - `[:BR:]` for a hard line break within a field.
+   - `[:PIPE:]` for a vertical separator with spacing ( | ).
+2. **Professional Narrative**: 
+   - Rewrite summaries and experience highlights to be punchy, results-oriented, and tailored to the target role.
+   - Use action verbs (e.g., "Architected", "Spearheaded", "Transformed").
+3. **Data Integrity**: DO NOT change the keys. ONLY rewrite the values.
+4. **Summary Preservation**: If a 'summary' field is present, ensure it is high-impact and professionally composed.
+5. **Fallbacks**: Keep empty fields as empty strings "".
+
+OUTPUT:
+- Return ONLY a valid JSON object with the same keys as the input, but with professionally composed and formatted values.
+- DO NOT add conversational text.

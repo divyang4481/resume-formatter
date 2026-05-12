@@ -234,14 +234,14 @@ export class TemplateDetailComponent implements OnInit, OnDestroy {
   getStageStatus(stageId: string): string {
     if (!this.jobStatus) return 'pending';
 
-    const status = this.jobStatus.status;
+    const status = this.jobStatus.status?.toUpperCase();
     const currentStage = this.jobStatus.stage;
 
     const stageIndex = this.pipelineStages.findIndex(s => s.id === stageId);
     const currentIndex = this.pipelineStages.findIndex(s => s.id === currentStage);
 
-    if (status === 'failed' && currentStage === stageId) return 'failed';
-    if (status === 'completed') return 'completed';
+    if (status === 'FAILED' && currentStage === stageId) return 'failed';
+    if (status === 'COMPLETED' || status === 'PARTIAL_SUCCESS') return 'completed';
 
     if (stageIndex < currentIndex) return 'completed';
     if (stageIndex === currentIndex) return 'running';
@@ -302,7 +302,7 @@ export class TemplateDetailComponent implements OnInit, OnDestroy {
     this.testApi.getJob(this.currentJobId).subscribe({
       next: (res) => {
         this.jobStatus = res;
-        if (res.status === 'completed') {
+        if (res.status === 'completed' || res.status === 'partial_success') {
           this.isRunningTest = false;
           this.loadJobOutputs();
           this.refreshTestHistory(); // Refresh the history grid immediately

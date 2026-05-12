@@ -312,3 +312,36 @@ tr.example-element-row:not(.example-expanded-row):active {
 .btn-sm { font-size: 11px; padding: 0 8px; line-height: 28px; height: 28px; }
 
 
+.test-form-card {
+  mat-slide-toggle {
+    margin-right: 16px;
+    margin-bottom: 8px;
+    
+    /* Ensure MDC switch icons are visible if supported */
+    ::ng-deep .mdc-switch__icons {
+      display: flex !important;
+      opacity: 1 !important;
+    }
+    
+    ::ng-deep .mdc-switch__icon {
+       fill: currentColor;
+    }
+  }
+}
+
+.current-run-actions {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px dashed #cbd5e1;
+}
+
+.tiny-chip {
+  font-size: 10px;
+  height: 20px;
+}
+
+.manifest-list-container {
+  max-height: 400px;
+  overflow-y: auto;
+  padding-right: 8px;
+}

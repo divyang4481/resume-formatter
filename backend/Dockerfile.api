@@ -1,5 +1,5 @@
 # Use the pre-built base image containing all dependencies
-ARG BASE_IMAGE=114644266543.dkr.ecr.ap-south-1.amazonaws.com/agentic-doc-base-dev:latest
+ARG BASE_IMAGE=114644266543.dkr.ecr.ap-south-1.amazonaws.com/agentic-doc-base-dev:v1.2.0
 FROM ${BASE_IMAGE}
 
 WORKDIR /app

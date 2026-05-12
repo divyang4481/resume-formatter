@@ -98,7 +98,7 @@ export class DocumentProcessingService {
   private pollJobStatus(jobId: string) {
     this.api.getJobStatus(jobId).subscribe({
       next: (res) => {
-        if (res.status === 'completed') {
+        if (res.status === 'completed' || res.status === 'partial_success') {
           this.status.set('completed');
           this.fetchResults(jobId);
         } else if (res.status === 'failed') {

@@ -6,7 +6,7 @@ from app.agent.state import AgentState
 
 from app.domain.interfaces import LlmRuntimeAdapter
 from app.domain.interfaces import DocumentExtractionService, ExtractionContext
-from app.agent.nodes.transformation_node import create_schema_builder_node, create_resume_to_template_mapping_node
+from app.agent.nodes.transformation_node import create_schema_builder_node, create_field_harmonization_node, create_document_composition_reasoning_node
 from app.agent.nodes.agentic_nodes import (
     create_template_contract_generation_node,
     create_kb_retrieval_node,
@@ -75,6 +75,8 @@ def with_progress(node_name, node_func, stage_map, job_repo):
                 job = job_repo.get_job(job_id)
                 if job:
                     job.stage = stage_map.get(node_name, node_name)
+                    if state.get("transformed_document_json"):
+                        job.transformed_document_json = state.get("transformed_document_json")
                     job_repo.save_job(job)
             except Exception as e:
                 print(f"Non-critical: Failed to update job progress: {e}")
@@ -128,8 +130,9 @@ def build_resume_processing_graph(llm_runtime: LlmRuntimeAdapter, doc_parser: Do
         "privacy_transform": "privacy",
         "template_resolution": "classify",
         "kb_retrieval": "kb_retrieval",
-        "transform": "transform", 
-        "render": "render",
+        "harmonization": "harmonization", 
+        "composition_reasoning": "formatting",
+        "composition": "composition",
         "validate": "validate"
     }
 
@@ -148,10 +151,11 @@ def build_resume_processing_graph(llm_runtime: LlmRuntimeAdapter, doc_parser: Do
     workflow.add_node("template_resolution", with_progress("template_resolution", create_template_resolve_node(llm_runtime, storage, doc_parser), stage_map, job_repo))
     
     workflow.add_node("kb_retrieval", with_progress("kb_retrieval", create_kb_retrieval_node(), stage_map, job_repo))
-    workflow.add_node("transform", with_progress("transform", create_resume_to_template_mapping_node(), stage_map, job_repo))
+    workflow.add_node("harmonization", with_progress("harmonization", create_field_harmonization_node(ai_service), stage_map, job_repo))
+    workflow.add_node("composition_reasoning", with_progress("composition_reasoning", create_document_composition_reasoning_node(ai_service), stage_map, job_repo))
 
-    from app.agent.nodes.formatter_resume_node import create_render_node
-    workflow.add_node("render", with_progress("render", create_render_node(ai_service, generator_service, storage), stage_map, job_repo))
+    from app.agent.nodes.formatter_resume_node import create_document_composition_node
+    workflow.add_node("composition", with_progress("composition", create_document_composition_node(ai_service, generator_service, storage), stage_map, job_repo))
     workflow.add_node("validate", with_progress("validate", create_output_quality_reasoning_node(), stage_map, job_repo))
 
     workflow.set_entry_point("ingest")
@@ -161,9 +165,10 @@ def build_resume_processing_graph(llm_runtime: LlmRuntimeAdapter, doc_parser: Do
     workflow.add_edge("normalize", "privacy_transform")
     workflow.add_edge("privacy_transform", "template_resolution")
     workflow.add_edge("template_resolution", "kb_retrieval")
-    workflow.add_edge("kb_retrieval", "transform")
-    workflow.add_edge("transform", "render")
-    workflow.add_edge("render", "validate")
+    workflow.add_edge("kb_retrieval", "harmonization")
+    workflow.add_edge("harmonization", "composition_reasoning")
+    workflow.add_edge("composition_reasoning", "composition")
+    workflow.add_edge("composition", "validate")
     workflow.add_edge("validate", END)
 
     return workflow.compile()

@@ -46,6 +46,13 @@ class SqlAlchemyJobRepository(JobRepository):
             model.generated_summary = job.generated_summary
         if hasattr(job, 'render_docx_uri'):
             model.render_docx_uri = job.render_docx_uri
+        if hasattr(job, 'transformed_document_json'):
+            import json
+            data = job.transformed_document_json
+            if isinstance(data, dict):
+                model.transformed_json = json.dumps(data)
+            else:
+                model.transformed_json = data
         if hasattr(job, 'error_message'):
             model.error_message = job.error_message
         if hasattr(job, 'selected_template_id'):

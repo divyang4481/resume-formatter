@@ -7,10 +7,11 @@ Mapped Data (The Extracted Content):
 {{ mapped_data_json }}
 
 MAPPING RULES FOR EVALUATION:
-1. **Case-Insensitivity**: Treat 'EmployeeEmail' and 'employee_email' as the same field. If the content is present in ANY casing, it is NOT missing.
+1. **Case-Insensitivity & Synonyms**: Treat 'EmployeeEmail', 'employee_email', and 'candidate_email' as the same field. If the content is present in ANY of these variants, it is NOT missing.
 2. **Fuzzy Matching**: Treat 'current_position' and 'CurrentPosition' as the same field.
-3. **Inference**: If the contract asks for 'candidate_name' and the data has a 'name' field in 'personal_info', it is NOT missing.
-4. **Professional Context**: If a field like 'ExpertOpinion' is requested but missing, suggest manually filling it based on the summary.
+3. **Inference**: If the contract asks for 'candidate_name' and the data has a 'name' field, it is NOT missing.
+4. **Professional Context**: If a field like 'ExpertOpinion' or 'Summary' is requested but the name differs slightly, treat it as present.
+5. **Acceptable Defaults**: If a field like 'Salary' or 'Notice Period' is filled with "Negotiable", "TBD", or "On Request", it is NOT missing.
 
 Provide a quality assessment JSON with:
 - "needs_review": boolean (True only if CRITICAL data is actually missing or corrupted)

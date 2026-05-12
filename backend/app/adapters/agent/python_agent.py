@@ -1,6 +1,9 @@
 import json
 import logging
+import os
+import re
 from typing import Dict, Any
+from jinja2 import Template
 from app.domain.interfaces.agent import ResumeFormattingAgent
 from app.domain.interfaces.llm import LlmRuntimeAdapter
 
@@ -43,7 +46,6 @@ class PythonOrchestratedResumeFormattingAgent(ResumeFormattingAgent):
             response_text = self.llm.generate(prompt=prompt, temperature=0.1)
             logger.info(f"LLM Response (raw): {response_text}")
 
-            import re
             json_match = re.search(r"```(?:json)?\n?(.*?)```", response_text, re.DOTALL)
             if json_match:
                 cleaned_text = json_match.group(1).strip()
@@ -71,8 +73,6 @@ class PythonOrchestratedResumeFormattingAgent(ResumeFormattingAgent):
         template_text: str,
         template_metadata: Dict[str, Any]
     ) -> Dict[str, Any]:
-        import os
-        from jinja2 import Template
         
         # Load the Jinja2 template
         template_path = os.path.join(os.path.dirname(__file__), "..", "..", "agent", "prompts", "template_analysis.jinja2")
@@ -81,9 +81,8 @@ class PythonOrchestratedResumeFormattingAgent(ResumeFormattingAgent):
         
         # Prepare variables for the template
         # We'll extract potential placeholders from the text using a simple regex if not provided
-        import re
-        # Support multiple placeholder styles: <<key>>, {{key}}, [[key]], «key»
-        detected_placeholders = re.findall(r"(?:<<|\{\{|\[\[|«)(.*?)(?:>>|\}\}|\]\]|»)", template_text)
+        # Support multiple placeholder styles: <<key>>, {{key}}, [[key]], «key», [key]
+        detected_placeholders = re.findall(r"(?:<<|\{\{|\[\[|«|\[)(.*?)(?:>>|\}\}|\]\]|»|\])", template_text)
         
         prompt = jinja_template.render(
             template_text=template_text,
@@ -94,7 +93,6 @@ class PythonOrchestratedResumeFormattingAgent(ResumeFormattingAgent):
             response_text = self.llm.generate(prompt=prompt, temperature=0.1)
             logger.info(f"LLM Response (raw): {response_text}")
 
-            import re
             json_match = re.search(r"```(?:json)?\n?(.*?)```", response_text, re.DOTALL)
             if json_match:
                 cleaned_text = json_match.group(1).strip()
@@ -143,7 +141,6 @@ class PythonOrchestratedResumeFormattingAgent(ResumeFormattingAgent):
 
         # 2. Handle unclosed quotes AFTER rolling back
         # Count non-escaped quotes in the new string
-        import re
         if len(re.findall(r'(?<!\\)"', json_str)) % 2 != 0:
             json_str += '"'
 
@@ -165,8 +162,6 @@ class PythonOrchestratedResumeFormattingAgent(ResumeFormattingAgent):
         template_context: str = "",
         formatting_guidance: str = ""
     ) -> Dict[str, Any]:
-        import os
-        from jinja2 import Template
         
         template_path = os.path.join(os.path.dirname(__file__), "..", "..", "agent", "prompts", "context_aware_extraction.jinja2")
         with open(template_path, "r") as f:
@@ -182,7 +177,6 @@ class PythonOrchestratedResumeFormattingAgent(ResumeFormattingAgent):
         try:
             response_text = self.llm.generate(prompt=prompt, temperature=0.0)
             
-            import re
             json_match = re.search(r"```(?:json)?\n?(.*?)```", response_text, re.DOTALL)
             if json_match:
                 cleaned_text = json_match.group(1).strip()
@@ -217,8 +211,6 @@ class PythonOrchestratedResumeFormattingAgent(ResumeFormattingAgent):
         template_contract: Dict[str, Any],
         job_context: Dict[str, Any]
     ) -> Dict[str, Any]:
-        import os
-        from jinja2 import Template
         
         template_path = os.path.join(os.path.dirname(__file__), "..", "..", "agent", "prompts", "quality_check.jinja2")
         with open(template_path, "r") as f:
@@ -232,7 +224,6 @@ class PythonOrchestratedResumeFormattingAgent(ResumeFormattingAgent):
             response_text = self.llm.generate(prompt=prompt, temperature=0.1)
             logger.info(f"LLM Response (raw): {response_text}")
 
-            import re
             json_match = re.search(r"```(?:json)?\n?(.*?)```", response_text, re.DOTALL)
             if json_match:
                 cleaned_text = json_match.group(1).strip()

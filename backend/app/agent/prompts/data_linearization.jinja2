@@ -14,16 +14,26 @@ TEMPLATE CONTRACT (The Required Fields):
 Placeholders: {{ detected_placeholders_list | join(', ') }}
 {% endif %}
 
----
+RUNTIME CONTEXT:
+- JOB ID: {{ job_id }}
+
 MAPPING INTELLIGENCE PROTOCOL (MANDATORY):
-1. **Direct Mapping**: If a raw data field matches a contract field (e.g., 'email' in raw data vs 'employee_email' in contract), you MUST explicitly map it to the contract field name.
-2. **Inference & Logic**: 
-   - 'current_position': Look for the most recent job title in the professional experience.
-   - 'candidate_name': Extract from the resume header or personal details.
-   - 'expert_opinion': Synthesize a 3-4 sentence professional summary based on the candidate's core strengths and years of experience.
-   - 'employee_email': Use the candidate's primary contact email.
-   - 'professional_qualifications': List degrees, certifications, and licenses.
-3. **Synthesis**: Do not just copy-paste. Format the content to be professional, using third-person perspective where appropriate (especially for 'expert_opinion').
+1. **Critical Personal Info Identification**:
+   - The candidate's full name is the MOST CRITICAL field. Look for it at the very beginning of the RAW TEXT. 
+   - Even if 'candidate_name' is not explicitly labeled in the extraction, you MUST identify it from the document header and map it.
+   - Do the same for 'employee_email' (which maps to candidate's email if no other email is found, or recruiter email if specified).
+2. **Strict Fieldname Compliance**: 
+   - You MUST return the EXACT fieldnames specified in the TEMPLATE CONTRACT above. 
+   - For example, if the contract has 'employee_email', do NOT return 'email'.
+   - If the contract has 'candidate_name', do NOT return 'full_name' or 'name'.
+3. **Synonym Resolution**: 
+   - 'name', 'full_name', 'candidate' -> 'candidate_name'
+   - 'email', 'email_address', 'contact_email' -> 'employee_email'
+4. **Intelligent Inference**: 
+   - If a field represents a summary or assessment (like 'expert_opinion' or 'OurExpertOpinion'), synthesize a professional 3-5 sentence narrative based on the candidate's core strengths and career trajectory.
+   - If a field represents a status (like 'notice_period' or 'salary_required') that isn't explicitly found, use professional defaults like "TBD", "Negotiable", or "On Request".
+5. **Repeated Sections**:
+   - If the contract has fields like 'job_1_organisation', 'job_2_organisation', distribute the candidate's employment history across these slots, starting with the most recent.
 
 ---
 WRITER'S MANDATE (STRICT):

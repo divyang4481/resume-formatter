@@ -42,13 +42,24 @@ class ResumeGeneratorService:
             # 3. Render final content using docxtpl
             doc = DocxTemplate(processed_template_stream)
 
-            # Prepare render context
-            render_context = {**processed_resume_data}
-            if "personal_info" in processed_resume_data and isinstance(
-                processed_resume_data["personal_info"], dict
-            ):
-                render_context.update(processed_resume_data["personal_info"])
+            # Flatten the context for universal access
+            def flatten_dict(d, parent_key='', sep='_'):
+                items = []
+                for k, v in d.items():
+                    new_key = f"{parent_key}{sep}{k}" if parent_key else k
+                    if isinstance(v, dict):
+                        items.extend(flatten_dict(v, new_key, sep=sep).items())
+                    else:
+                        items.append((k, v)) # Add the leaf key
+                        if parent_key:
+                            items.append((new_key, v)) # Also add the path-based key
+                return dict(items)
 
+            flattened_context = flatten_dict(processed_resume_data)
+            
+            # Prepare render context
+            render_context = {**processed_resume_data, **flattened_context}
+            
             # Universal Scoped Context mapping logic:
             # We create a mapping that supports:
             # 1. Original keys
@@ -69,17 +80,20 @@ class ResumeGeneratorService:
             class CaseInsensitiveDict(dict):
                 def __getitem__(self, key):
                     if key in self:
-                        return super().__getitem__(key)
+                        val = super().__getitem__(key)
+                        return val if val is not None else ""
                     
                     # Try standardized version
                     std_key = "".join(filter(str.isalnum, key.lower()))
                     if std_key in self:
-                        return super().__getitem__(std_key)
+                        val = super().__getitem__(std_key)
+                        return val if val is not None else ""
                     
                     # Fallback to snake_case if key is PascalCase
-                    snake_key = re.sub(r'(?<!^)(?=[A-Z])', '_', key).lower()
+                    snake_key = re.sub(r'(?<!^)(?=\[A-Z\])', '_', key).lower()
                     if snake_key in self:
-                        return super().__getitem__(snake_key)
+                        val = super().__getitem__(snake_key)
+                        return val if val is not None else ""
                         
                     return "" # Return empty string instead of None to prevent 'None' appearing in Docx
 
@@ -142,20 +156,43 @@ class ResumeGeneratorService:
                 # 1. Try to find in manifest by literal marker_text match
                 if manifest:
                     for item in manifest:
-                        if item.get("marker_text") == original:
+                        m_text = item.get("marker_text", "")
+                        # Try exact match, or match without the brackets if LLM missed them in the manifest
+                        if m_text == original or m_text == raw_marker_text or f"«{m_text}»" == original:
                             target_key = item.get("fieldname")
                             logger.info(f"Manifest Match: Found '{original}', mapping to '{target_key}'")
                             break
                 
                 # 2. Sequential mapping for generic markers
                 if not target_key:
-                    is_generic = any(x in raw_marker_text.lower() for x in ["type text", "fill", "placeholder"])
+                    generic_keywords = ["type text", "fill", "placeholder", "organisation", "organization", "job description", "institution", "degree", "bullet point"]
+                    is_generic = any(x in raw_marker_text.lower() for x in generic_keywords)
                     if is_generic and current_counter < len(fields):
                         target_key = fields[current_counter]
                         current_counter += 1
                         logger.info(f"Generic Match: Mapping '{original}' to '{target_key}' (sequential)")
+
+                # 3. Smart Fuzzy Mapping for common resume fields
+                if not target_key:
+                    # Normalize raw_marker_text
+                    clean_marker = re.sub(r'[^a-z0-9]', '', raw_marker_text.lower())
+                    for field in fields:
+                        clean_field = re.sub(r'[^a-z0-9]', '', field.lower())
+                        if clean_marker == clean_field or clean_marker in clean_field or clean_field in clean_marker:
+                            if "name" in clean_marker and "name" in clean_field:
+                                target_key = field
+                                logger.info(f"Smart Match (Name): Mapping '{original}' to '{target_key}'")
+                                break
+                            if "email" in clean_marker and "email" in clean_field:
+                                target_key = field
+                                logger.info(f"Smart Match (Email): Mapping '{original}' to '{target_key}'")
+                                break
+                            if "summary" in clean_marker and "summary" in clean_field:
+                                target_key = field
+                                logger.info(f"Smart Match (Summary): Mapping '{original}' to '{target_key}'")
+                                break
                 
-                # 3. Fallback to raw marker text
+                # 4. Fallback to raw marker text
                 if not target_key:
                     target_key = raw_marker_text
                     logger.info(f"Fallback Match: Using raw marker text '{target_key}' for '{original}'")
@@ -183,7 +220,7 @@ class ResumeGeneratorService:
                         return current_counter
 
             # Then check for formal markers
-            has_marker = any(m in full_text for m in ["<<", "{{", "[[", "«", "[Type text]", "[type text]"])
+            has_marker = any(m in full_text for m in ["<<", "{{", "[[", "«", "["])
             if has_marker:
                 new_text, next_counter = transform_text(full_text, fields, current_counter, manifest)
                 if new_text != full_text:
@@ -208,6 +245,27 @@ class ResumeGeneratorService:
             return current_counter
 
         # Process all structural elements
+        for section in doc.sections:
+            for header in [section.header, section.first_page_header, section.even_page_header]:
+                if header:
+                    for p in header.paragraphs:
+                        counter = process_paragraph(p, field_list, counter, field_manifest)
+                    for table in header.tables:
+                        for row in table.rows:
+                            for cell in row.cells:
+                                for p in cell.paragraphs:
+                                    counter = process_paragraph(p, field_list, counter, field_manifest)
+            
+            for footer in [section.footer, section.first_page_footer, section.even_page_footer]:
+                if footer:
+                    for p in footer.paragraphs:
+                        counter = process_paragraph(p, field_list, counter, field_manifest)
+                    for table in footer.tables:
+                        for row in table.rows:
+                            for cell in row.cells:
+                                for p in cell.paragraphs:
+                                    counter = process_paragraph(p, field_list, counter, field_manifest)
+
         for p in doc.paragraphs:
             counter = process_paragraph(p, field_list, counter, field_manifest)
 
