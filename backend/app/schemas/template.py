@@ -19,6 +19,7 @@ class TemplateRule(BaseModel):
 
 class FieldExtractionManifestItem(BaseModel):
     fieldname: str
+    marker_text: str
     meaning: str
     source_hints: str
 
