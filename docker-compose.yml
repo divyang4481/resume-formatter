@@ -3,7 +3,7 @@ services:
     build: 
       context: ./backend
       dockerfile: Dockerfile.api
-    image: agentic-doc-api-local:v1.3.26
+    image: agentic-doc-api-local:v1.3.27
     ports:
       - "8000:8000"
     environment:
@@ -34,7 +34,7 @@ services:
     build: 
       context: ./backend
       dockerfile: Dockerfile.worker
-    image: agentic-doc-worker-local:v1.3.26
+    image: agentic-doc-worker-local:v1.3.27
     environment:
       - CLOUD_PROVIDER=aws
       - RUNTIME_MODE=aws

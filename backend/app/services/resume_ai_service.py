@@ -27,7 +27,17 @@ class ResumeAiService:
     ) -> str:
         """Restored method for worker nodes to generate professional summaries."""
         prompt = f"Summarize the following professional experience into 3 punchy bullet points. Language: {language}. Industry: {industry}.\nGuidance: {guidance}\n\n{extracted_text[:10000]}"
+        
+        logger.info("\n" + "=" * 60 + "\n--- GENERATE SUMMARY PROMPT ---\n" + "=" * 60)
+        logger.info(prompt)
+        logger.info("=" * 60 + "\n")
+        
         summary = self.llm.generate(prompt)
+        
+        logger.info("\n" + "=" * 60 + "\n--- GENERATE SUMMARY RESPONSE ---\n" + "=" * 60)
+        logger.info(summary)
+        logger.info("=" * 60 + "\n")
+        
         return summary.strip()
 
     async def summarize_experience(self, experience_text: str) -> str:
@@ -449,7 +459,10 @@ class ResumeAiService:
             example_instructions=example_instructions,
         )
 
-        logger.info("[TemplateAnalysis] Calling LLM (task=template_analysis, model=Claude Sonnet)")
+        logger.info("\n" + "=" * 60 + "\n--- TEMPLATE ANALYSIS PROMPT ---\n" + "=" * 60)
+        logger.info(prompt)
+        logger.info("=" * 60 + "\n")
+
         response = self.llm.generate(
             prompt,
             system_prompt=SYSTEM_PROMPT,
@@ -457,7 +470,10 @@ class ResumeAiService:
             temperature=settings.bedrock_temperature_template_analysis,
             max_tokens=settings.bedrock_max_output_tokens_template_analysis,
         )
-        logger.info(f"[TemplateAnalysis] LLM response length: {len(response)} chars")
+        
+        logger.info("\n" + "=" * 60 + "\n--- TEMPLATE ANALYSIS RESPONSE ---\n" + "=" * 60)
+        logger.info(response)
+        logger.info("=" * 60 + "\n")
 
         try:
             cleaned_json = LlmSanitizer.clean_json(response)
@@ -714,6 +730,11 @@ class ResumeAiService:
         try:
             cleaned_json = LlmSanitizer.clean_json(response)
             data = json.loads(cleaned_json)
+            
+            logger.info("\n" + "=" * 60 + "\n--- FINAL COMPOSITION DATA ---\n" + "=" * 60)
+            logger.info(data)
+            logger.info("=" * 60 + "\n")
+            
             return data
         except Exception as e:
             logger.error(f"Failed to parse composition logic JSON: {e}")
