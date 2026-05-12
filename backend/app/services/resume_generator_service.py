@@ -64,6 +64,11 @@ class ResumeGeneratorService:
 
             # Prepare render context
             render_context = {**processed_resume_data, **flattened_context}
+            
+            import json
+            logger.info("\n" + "=" * 60 + "\n--- FINAL RENDER CONTEXT ---\n" + "=" * 60)
+            logger.info(json.dumps(render_context, indent=2, default=str))
+            logger.info("=" * 60 + "\n")
 
             # Universal Scoped Context: supports original, lowercase snake_case, and clean alphanumeric keys
             normalized_context = {}
