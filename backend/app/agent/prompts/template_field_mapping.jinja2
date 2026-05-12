@@ -1,0 +1,35 @@
+TASK: Map Candidate Facts to a specific Template Schema.
+
+CANDIDATE FACTS (JSON):
+{{ facts_json }}
+
+RECRUITER INPUT:
+{{ recruiter_input }}
+
+TARGET TEMPLATE FIELDS:
+{{ template_fields }}
+
+---
+MAPPING RULES:
+1. KEY SELECTION: The keys in your response MUST exactly match the 'field_name' values from the TARGET TEMPLATE FIELDS.
+2. DATA TRANSFORMATION:
+   - For scalar fields: Map a single string (e.g. name, ID).
+   - For rich_text fields: Create a professional narrative or bullet list from relevant facts.
+   - For repeatable blocks: Map the list of objects (e.g. work experience entries).
+3. PRIORITIZATION: If a field is present in RECRUITER INPUT, use that value over the Candidate Facts.
+4. COMPLETENESS: Fill every target field. If no data is available, use "N/A" or an empty list.
+5. INDUSTRY CONTEXT: Adapt the tone and content of rich_text fields to match the 'meaning' provided in the template field metadata.
+
+---
+RESPONSE FORMAT:
+Return a single JSON object where:
+{
+  "field_name_1": "mapped value",
+  "field_name_2": ["list", "of", "bullets"],
+  "field_name_3": [ {"sub_key": "val"}, ... ]
+}
+
+SYSTEM RULES:
+- Return ONLY valid JSON.
+- No code fences.
+- No explanations.

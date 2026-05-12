@@ -413,8 +413,8 @@ class ResumeAiService:
 
         _alias_inverted_prompt = {
             alias.lower(): fn
-            for fn, aliases in _alias_map_for_prompt.items()
-            for alias in aliases
+            for fn, info in _alias_map_for_prompt.items()
+            for alias in info["aliases"]
         }
 
         def _marker_to_fieldname(marker: str) -> str:
@@ -507,8 +507,8 @@ class ResumeAiService:
 
         # Build inverted alias: CamelCase alias → fieldname
         alias_inverted: Dict[str, str] = {}
-        for fn, aliases in FIELD_ALIAS_MAP.items():
-            for alias in aliases:
+        for fn, info in FIELD_ALIAS_MAP.items():
+            for alias in info["aliases"]:
                 alias_inverted[alias.lower()] = fn
 
         # Track which detected markers are already used
@@ -537,9 +537,17 @@ class ResumeAiService:
                         entry["marker_text"] = canonical
                         mt = canonical
                     else:
-                        logger.warning(f"[Reconcile] Hallucinated marker '{mt}' for '{fn}' — clearing.")
-                        entry["marker_text"] = ""
-                        mt = ""
+                        # Try to heal by normalization match
+                        mt_norm = normalize_marker_name(mt)
+                        if mt_norm in norm_to_marker:
+                            actual = norm_to_marker[mt_norm]
+                            logger.info(f"[Reconcile] Fixed AI marker typo: '{mt}' -> '{actual}' for '{fn}'")
+                            entry["marker_text"] = actual
+                            mt = actual
+                        else:
+                            logger.warning(f"[Reconcile] Hallucinated marker '{mt}' for '{fn}' — clearing.")
+                            entry["marker_text"] = ""
+                            mt = ""
                 continue  # marker is valid, move on
 
             # marker_text is empty — run alias-based reconciliation
@@ -551,7 +559,8 @@ class ResumeAiService:
 
             # Try alias map first (high confidence)
             if fn in FIELD_ALIAS_MAP:
-                for alias in FIELD_ALIAS_MAP[fn]:
+                info = FIELD_ALIAS_MAP[fn]
+                for alias in info["aliases"]:
                     # Try all common wrappings to find the actual marker in the document
                     potential_matches = [
                         f"«{alias}»", f"[{alias}]", f"[[{alias}]]", f"<<{alias}>>", f"{{{alias}}}", alias
@@ -562,10 +571,11 @@ class ResumeAiService:
                     if found_marker:
                         entry["marker_text"] = found_marker
                         entry["source_kind"] = "merge_marker"
+                        entry["field_type"] = info.get("type", "scalar")
                         entry.setdefault("render_locator", {})["strategy"] = "replace_marker"
                         entry.setdefault("render_locator", {})["marker"] = found_marker
                         used_markers.add(found_marker)
-                        logger.info(f"[Reconcile] Alias matched: '{fn}' → '{found_marker}' (Upgraded from {sk})")
+                        logger.info(f"[Reconcile] Alias matched: '{fn}' → '{found_marker}' (Upgraded from {sk}, type={entry['field_type']})")
                         break
 
             # If still empty, try normalized name matching
@@ -611,11 +621,32 @@ class ResumeAiService:
                 if label and label not in known_labels:
                     drop_reason = f"hallucinated table label '{label}'"
 
-            # 4. Repeated Marker Context Enforcement
+            # 4. Repeated Marker Context Enforcement & Healing
             if mt in structure.repeated_markers and strategy == "replace_marker":
-                # Check if we can heal this by switching to a label/heading strategy
-                # AI should have provided this, but if not, it's risky
-                logger.warning(f"[Reconcile] Field '{fieldname}' uses repeated marker '{mt}' without context strategy.")
+                # Try to heal by finding a label that maps to this field
+                found_label = next((s.label for s in structure.table_label_value_pairs if s.marker == mt), None)
+                if found_label:
+                    logger.info(f"[Reconcile] Healing repeated marker '{mt}' for '{fieldname}' using label context '{found_label}'.")
+                    entry["source_kind"] = "visual_blank_slot"
+                    entry["render_locator"] = {
+                        "strategy": "fill_blank_cell_after_label",
+                        "label": found_label
+                    }
+                    # We keep mt in marker_text for visibility
+                else:
+                    logger.warning(f"[Reconcile] Field '{fieldname}' uses repeated marker '{mt}' without context strategy and no label found.")
+
+            # 5. Populate missing marker_text from structure for visibility
+            if not mt:
+                if strategy == "replace_section_body" and heading in structure.heading_to_placeholder:
+                    entry["marker_text"] = structure.heading_to_placeholder[heading]
+                    logger.info(f"[Reconcile] Populated marker_text for section '{heading}': {entry['marker_text'][:40]}...")
+                elif strategy == "fill_blank_cell_after_label":
+                    # Find the marker that belongs to this label
+                    slot = next((s for s in structure.table_label_value_pairs if s.label == label), None)
+                    if slot and slot.marker:
+                        entry["marker_text"] = slot.marker
+                        logger.info(f"[Reconcile] Populated marker_text for label '{label}': {slot.marker}")
 
             if drop_reason:
                 logger.warning(f"[Reconcile] Dropping field '{fieldname}': {drop_reason}")
@@ -636,10 +667,12 @@ class ResumeAiService:
 
             # Try to find a known fieldname via alias using normalized comparison
             fn_for_marker = None
+            f_type = "scalar"
             m_norm = normalize_marker_name(m)
-            for fn_alias, aliases in FIELD_ALIAS_MAP.items():
-                if any(normalize_marker_name(a) == m_norm for a in aliases):
+            for fn_alias, info in FIELD_ALIAS_MAP.items():
+                if any(normalize_marker_name(a) == m_norm for a in info["aliases"]):
                     fn_for_marker = fn_alias
+                    f_type = info.get("type", "scalar")
                     break
 
             if not fn_for_marker:
@@ -648,17 +681,16 @@ class ResumeAiService:
 
             manifest.append({
                 "fieldname": fn_for_marker,
-                "field_type": "scalar",
+                "field_type": f_type,
                 "source_kind": "merge_marker",
                 "marker_text": m,
-                "render_locator": {"strategy": "replace_marker", "marker": m, "label": "", "heading": ""},
-                "meaning": f"Auto-recovered: {inner}",
-                "source_hints": f"Detected in DOCX XML as {m}",
-                "required": False,
-                "confidence": 0.6,
+                "render_locator": {"strategy": "replace_marker", "marker": m},
+                "meaning": f"Auto-recovered marker: {m}",
+                "confidence": 0.8
             })
             used_markers.add(m)
             logger.info(f"[Reconcile] Auto-added missed marker: {m} → '{fn_for_marker}'")
+
 
         # ── Phase 3c: Ensure visual_blank_slots from structure are in manifest ─
         manifest_labels = {
@@ -672,19 +704,19 @@ class ResumeAiService:
                     "fieldname": fn_derived,
                     "field_type": "scalar",
                     "source_kind": "visual_blank_slot",
-                    "marker_text": "",
+                    "marker_text": slot.marker,
                     "render_locator": {
                         "strategy": "fill_blank_cell_after_label",
-                        "marker": "",
+                        "marker": slot.marker,
                         "label": slot.label,
                         "heading": "",
                     },
                     "meaning": f"Value for '{slot.label}' label in template table",
-                    "source_hints": f"Table row labelled '{slot.label}'",
+                    "source_hints": f"Table row labelled '{slot.label}' (contains {slot.marker if slot.marker else 'blank'})",
                     "required": False,
                     "confidence": 0.7,
                 })
-                logger.info(f"[Reconcile] Added visual_blank_slot for label '{slot.label}'")
+                logger.info(f"[Reconcile] Added visual_blank_slot for label '{slot.label}' with marker '{slot.marker}'")
 
         # ── Phase 4: Manifest validation ─────────────────────────────────────
         validator = TemplateManifestValidator()

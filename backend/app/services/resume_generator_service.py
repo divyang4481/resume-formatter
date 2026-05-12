@@ -228,6 +228,27 @@ class ResumeGeneratorService:
         doc = Document(template_stream)
         counter = 0
 
+        # --- Phase 0: Clear instruction blocks ---
+        if field_manifest:
+            for item in field_manifest:
+                if item.get("render_locator", {}).get("strategy") == "clear_instruction_block":
+                    target_text = item.get("marker_text", "").strip()
+                    if target_text:
+                        # Limit match to first 100 chars if it's very long, to avoid minor whitespace issues
+                        match_prefix = target_text[:100]
+                        # Clear matching paragraphs
+                        for para in doc.paragraphs:
+                            if match_prefix in para.text:
+                                para.text = ""
+                        # Check tables (common in Hays footers)
+                        for tbl in doc.tables:
+                            for row in tbl.rows:
+                                for cell in row.cells:
+                                    if match_prefix in cell.text:
+                                        for p in cell.paragraphs:
+                                            p.text = ""
+                        logger.info(f"Cleared instruction block starting with: '{match_prefix[:50]}...'")
+
         # Regex for common placeholder patterns
         MARKER_PATTERN = r"(?:<<|\{\{|\[\[|«|\[)\s*(.*?)\s*(?:>>|\}\}|\]\]|»|\])"
 

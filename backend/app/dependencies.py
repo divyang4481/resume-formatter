@@ -81,3 +81,23 @@ def resume_workflow_service_dependency(llm, parser, job_repo, template_repo, sto
         template_repository=template_repo,
         storage_provider=storage
     )
+
+def get_bedrock_analyzer():
+    from app.adapters.llm.bedrock_template_analyzer import BedrockTemplateAnalyzer
+    return BedrockTemplateAnalyzer()
+
+def get_template_analysis_service():
+    from app.services.template_analysis_service import TemplateAnalysisService
+    return TemplateAnalysisService(analyzer=get_bedrock_analyzer())
+
+def get_resume_fact_extraction_service():
+    from app.services.resume_fact_extraction_service import ResumeFactExtractionService
+    return ResumeFactExtractionService(analyzer=get_bedrock_analyzer())
+
+def get_template_field_mapper():
+    from app.services.template_field_mapper import TemplateFieldMapper
+    return TemplateFieldMapper(analyzer=get_bedrock_analyzer())
+
+def get_docx_template_renderer():
+    from app.services.docx_template_renderer import DocxTemplateRenderer
+    return DocxTemplateRenderer()

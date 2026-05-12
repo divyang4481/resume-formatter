@@ -82,85 +82,109 @@ async def process_job(db, message: dict):
         }
 
         if job_type == "TEMPLATE_PROCESSING":
-            graph = build_template_processing_graph(doc_parser, storage, job_repo)
-            result = await graph.ainvoke(initial_state)
-
-            if "_failed" in result.get("status", ""):
-                error_msg = result.get("validation_errors", ["Unknown AI failure"])[0]
-                raise ValueError(f"AI Template Processing Failed: {error_msg}")
-
-            # Update template status
-            template_id = message.get("template_id")
-            version_id = message.get("version_id")
-            if template_id and version_id:
-                from app.db.models import TemplateAsset
-                from app.schemas.enums import AssetStatus
-                template = db.query(TemplateAsset).filter_by(id=template_id, version=version_id).first()
-                if template:
-                    contract_data = result.get("canonical_model", {})
-                    
-                    if isinstance(contract_data, dict) and contract_data:
-                        # Map all available AI-generated metadata gracefully
-                        template.purpose = contract_data.get("purpose") or template.purpose
-                        template.expected_sections = contract_data.get("expected_sections") or template.expected_sections
-                        template.expected_fields = contract_data.get("expected_fields") or template.expected_fields
-                        
-                        # Serialize guidance dicts if they are not already strings
-                        summary_g = contract_data.get("summary_guidance")
-                        if summary_g:
-                            template.summary_guidance = json.dumps(summary_g) if isinstance(summary_g, (dict, list)) else summary_g
-                        
-                        formatting_g = contract_data.get("formatting_guidance")
-                        if formatting_g:
-                            template.formatting_guidance = json.dumps(formatting_g) if isinstance(formatting_g, (dict, list)) else formatting_g
-                        
-                        # The manifest itself
-                        manifest = contract_data.get("field_extraction_manifest")
-                        if manifest:
-                            template.field_extraction_manifest = json.dumps(manifest) if isinstance(manifest, (dict, list)) else manifest
-                            
-                            # Derive expected_fields directly from the manifest's fieldnames
-                            if isinstance(manifest, list):
-                                extracted_fields = [f.get("fieldname") for f in manifest if isinstance(f, dict) and f.get("fieldname")]
-                                if extracted_fields:
-                                    template.expected_fields = ",".join(extracted_fields)
-                        
-                        template.status = AssetStatus.READY_FOR_TESTING.value
-                        logger.info(f"Template {template_id} processed successfully. Status: {template.status}")
-                        
-                        template.status = AssetStatus.READY_FOR_TESTING.value
-                        logger.info(f"Template {template_id} processed successfully. Status: {template.status}")
-                    else:
-                        template.status = AssetStatus.FAILED.value
-                        logger.warning(f"Template {template_id} processing failed: No useful metadata extracted.")
-                        template.field_extraction_manifest = json.dumps([])
-                    db.commit()
-
-                # Update job status
-                job.status = JobStatus.COMPLETED.value
-                job_repo.save_job(job)
-                logger.info(f"Worker successfully processed job_id: {job_id} with job_type: {job_type}")
-
-        elif job_type == "RESUME_FORMATTING":
-            graph = build_resume_processing_graph(llm_runtime, doc_parser, storage, job_repo)
-            # template_id from message or job record
-            final_template_id = template_id or message.get("template_id")
+            from app.dependencies import get_template_analysis_service
+            analysis_service = get_template_analysis_service()
             
-            # Prepare initial state with the selected template ID
-            state_input = {**initial_state}
-            if final_template_id:
-                state_input["selected_template_id"] = final_template_id
+            # Fetch raw DOCX from storage
+            template_bytes = storage.get_bytes(input_uri)
             
-            result = await graph.ainvoke(state_input)
+            # Run Production Analysis
+            analysis = await analysis_service.analyze_template_asset(template_bytes, template_id)
+            
+            # Persist to DB
+            from app.db.models import TemplateAsset
+            template = db.query(TemplateAsset).filter_by(id=template_id).first()
+            if template:
+                template.analysis_json = analysis.model_dump_json()
+                template.status = AssetStatus.READY_FOR_TESTING.value
+                
+                # Enrich TemplateAsset columns from analysis
+                template.purpose = analysis.purpose
+                template.summary_guidance = analysis.summary_guidance
+                template.formatting_guidance = analysis.formatting_guidance
+                template.validation_guidance = analysis.validation_guidance
+                template.pii_guidance = analysis.pii_guidance
+                template.expected_sections = ",".join(analysis.expected_sections)
+
+                # Backward compatibility for legacy UI and existing rendering components
+                all_fields = list(analysis.fields)
+                for s in analysis.sections: all_fields.extend(s.fields)
+                
+                template.expected_fields = ",".join([f.field_name for f in all_fields])
+                
+                # Convert new TemplateField objects to legacy manifest format
+                legacy_manifest = []
+                for f in all_fields:
+                    legacy_manifest.append({
+                        "fieldname": f.field_name,
+                        "field_type": f.field_type,
+                        "meaning": f.meaning,
+                        "source_hints": f.source_hints,
+                        "marker_text": f.marker_text,
+                        "render_locator": f.render_locator.model_dump()
+                    })
+                template.field_extraction_manifest = json.dumps(legacy_manifest)
+                
+                db.commit()
+                logger.info(f"[Worker] Template {template_id} analyzed and persisted (including legacy manifest).")
+
             job.status = JobStatus.COMPLETED.value
             job_repo.save_job(job)
-            if "_failed" in result.get("status", ""):
-                error_msg = result.get("validation_errors", ["Unknown AI failure"])[0]
-                raise ValueError(f"AI Resume Processing Failed: {error_msg}")
 
-            job.render_docx_uri = result.get("render_docx_uri")
-            job.summary_uri = result.get("summary_uri")
-            job.error_message = "\n".join(result.get("validation_warnings", [])) if result.get("validation_warnings") else None
+        elif job_type == "RESUME_FORMATTING":
+            from app.dependencies import (
+                get_resume_fact_extraction_service, 
+                get_template_field_mapper, 
+                get_docx_template_renderer,
+                get_template_analysis_service
+            )
+            from app.schemas.template_analysis import TemplateAnalysis
+            from app.db.models import TemplateAsset
+            
+            fact_service = get_resume_fact_extraction_service()
+            mapper_service = get_template_field_mapper()
+            renderer_service = get_docx_template_renderer()
+            
+            # 1. Fetch Template and Analysis
+            template = db.query(TemplateAsset).filter_by(id=template_id).first()
+            if not template:
+                raise ValueError(f"Template {template_id} not found.")
+            
+            template_bytes = storage.get_bytes(template.storage_uri)
+            if template.analysis_json:
+                analysis = TemplateAnalysis.model_validate_json(template.analysis_json)
+            else:
+                logger.info(f"Template {template_id} missing analysis. Running ad-hoc analysis...")
+                analysis_service = get_template_analysis_service()
+                analysis = await analysis_service.analyze_template_asset(template_bytes, template_id)
+
+            # 2. Extract Facts from Resume
+            # Fetch resume bytes first
+            resume_bytes = storage.get_bytes(input_uri)
+            
+            # Use Docling (doc_parser) to get clean text
+            # ParserRouter.extract(file_bytes, filename, content_type)
+            resume_extraction = await doc_parser.extract(resume_bytes, filename, content_type)
+            resume_text = resume_extraction.extracted_text
+            facts = await fact_service.extract_candidate_facts(resume_text, analysis=analysis)
+            
+            # Persist facts for audit
+            job.candidate_facts_json = facts.model_dump_json()
+
+            # 3. Map Facts to Template
+            fill_plan = await mapper_service.generate_fill_plan(facts, analysis)
+            
+            # 4. Render Final DOCX
+            final_docx_bytes = renderer_service.render(template_bytes, fill_plan, analysis)
+            
+            # 5. Save Output
+            output_key = f"output/{job_id}/{filename}"
+            storage.put_bytes(final_docx_bytes, output_key)
+            
+            job.render_docx_uri = output_key
+            job.status = JobStatus.COMPLETED.value
+            job_repo.save_job(job)
+            logger.info(f"[Worker] Resume formatting completed for job {job_id}")
 
         else:
             raise ValueError(f"Unsupported job_type: {job_type}")

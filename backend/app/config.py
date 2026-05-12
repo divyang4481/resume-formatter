@@ -55,7 +55,7 @@ class Settings(BaseSettings):
 
     # Template analysis uses Claude Sonnet for superior instruction-following
     # and deterministic JSON generation. Set to empty string to fall back to default.
-    bedrock_template_analysis_model_id: str = "anthropic.claude-3-5-sonnet-20241022-v2:0"
+    bedrock_template_analysis_model_id: str = "apac.anthropic.claude-3-5-sonnet-20241022-v2:0"
 
     # Resume summary generation — Qwen is fine for narrative tasks
     bedrock_resume_summary_model_id: str = ""  # falls back to default

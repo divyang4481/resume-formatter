@@ -1,7 +1,10 @@
 import hashlib
 import uuid
+import logging
 from datetime import datetime
 from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 from app.domain.interfaces import StorageProvider, TemplateRepository, EventBus, DocumentExtractionService, KnowledgeIndex, ExtractionContext
 from app.schemas.template import TemplateAsset

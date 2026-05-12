@@ -18,6 +18,7 @@ class TemplateAsset(Base):
     pii_guidance = Column(Text, nullable=True)
     selection_weight = Column(Integer, default=50)
     is_default_for_industry = Column(Boolean, default=False)
+    analysis_json = Column(Text, nullable=True) # Full TemplateAnalysis model
 
     __tablename__ = "template_assets"
 
@@ -60,6 +61,7 @@ class CandidateResume(Base):
     resume_summary = Column(Text, nullable=True)
     industry_hint = Column(String, nullable=True)
     template_hint = Column(String, nullable=True)
+    candidate_facts_json = Column(Text, nullable=True) # Canonical CandidateFacts model
     created_at = Column(DateTime, default=datetime.utcnow)
 
 class ProcessingJob(Base):

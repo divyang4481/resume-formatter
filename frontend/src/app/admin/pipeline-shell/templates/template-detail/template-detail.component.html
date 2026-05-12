@@ -139,57 +139,143 @@
     <!-- Required Data field Tab -->
     <mat-tab label="Required Data field">
       <div class="governance-container p-3">
+        
+        <!-- Analysis Insights Dashboard -->
+        <div class="analysis-insights-grid mb-4" *ngIf="template?.purpose">
+          <mat-card appearance="outlined" class="insight-card purpose-card">
+            <mat-card-content>
+              <div class="insight-header">
+                <mat-icon>auto_awesome</mat-icon>
+                <span>AI Purpose Narrative</span>
+              </div>
+              <p class="purpose-text">{{ template.purpose }}</p>
+            </mat-card-content>
+          </mat-card>
+
+          <mat-card appearance="outlined" class="insight-card">
+            <mat-card-content>
+              <div class="insight-header">
+                <mat-icon>schema</mat-icon>
+                <span>Intelligence Profile</span>
+              </div>
+              <div class="insight-stat">
+                <strong>{{ (template?.field_extraction_manifest | jsonParse)?.length || 0 }}</strong>
+                <span>Detected Fields</span>
+              </div>
+              <div class="insight-subtext">Optimized for {{ template?.brand || 'Standard' }} Branding</div>
+            </mat-card-content>
+          </mat-card>
+        </div>
+
         <mat-card appearance="outlined">
           <mat-card-header class="mb-3">
-            <mat-card-title>Data Extraction Requirements</mat-card-title>
-
+            <mat-card-title>Data Extraction & Rendering Logic</mat-card-title>
           </mat-card-header>
           <mat-card-content>
-            <p class="text-muted mb-4">
-              Specify the sections and fields that must be successfully extracted and identified on a candidate's resume to correctly populate this template's placeholders.
-            </p>
-
             <div class="row mb-4">
-              <div class="col-md-6">
+              <div class="col-md-5">
                 <form [formGroup]="requirementsForm" class="flex-column gap-16">
-                  <mat-form-field appearance="outline" class="w-100 mb-3">
-                    <mat-label>Logical Sections Expected</mat-label>
-                    <textarea matInput formControlName="expected_sections" placeholder="Summary, Experience, Skills, Education..." rows="3"></textarea>
-                    <mat-hint>Key sections the system will prioritize during its parsing and classifying stages.</mat-hint>
-                  </mat-form-field>
-    
-                  <mat-form-field appearance="outline" class="w-100 mb-n1">
-                    <mat-label>Mandatory Data Fields (Placeholders)</mat-label>
-                    <textarea matInput formControlName="expected_fields" placeholder="summary, skills, technical_experience, education..." rows="3"></textarea>
-                    <mat-hint>Field identifiers that must be present in the AI extraction manifest for successful document mapping.</mat-hint>
-                  </mat-form-field>
+                  <div class="structured-list-view">
+                    <label class="list-label">Logical Sections Expected</label>
+                    <div class="chip-container mb-3">
+                      <mat-chip-set>
+                        <mat-chip *ngFor="let section of template?.expected_sections?.split(',')" class="section-chip">
+                          {{ section.trim() }}
+                        </mat-chip>
+                      </mat-chip-set>
+                    </div>
+                    
+                    <mat-form-field appearance="outline" class="w-100 mb-3 tiny-textarea">
+                      <mat-label>Edit Sections (Comma Separated)</mat-label>
+                      <textarea matInput formControlName="expected_sections" rows="2"></textarea>
+                    </mat-form-field>
+                  </div>
+
+                  <div class="structured-list-view">
+                    <label class="list-label">Mandatory Data Fields</label>
+                    <div class="chip-container mb-3">
+                      <mat-chip-set>
+                        <mat-chip *ngFor="let field of template?.expected_fields?.split(',')" class="field-chip">
+                          {{ field.trim() }}
+                        </mat-chip>
+                      </mat-chip-set>
+                    </div>
+
+                    <mat-form-field appearance="outline" class="w-100 mb-n1 tiny-textarea">
+                      <mat-label>Edit Fields (Comma Separated)</mat-label>
+                      <textarea matInput formControlName="expected_fields" rows="2"></textarea>
+                    </mat-form-field>
+                  </div>
     
                   <div class="actions mt-3">
-                    <button mat-raised-button color="primary" type="button" (click)="saveRequirements()">Save Extraction Logic</button>
+                    <button mat-raised-button color="primary" type="button" (click)="saveRequirements()">
+                      <mat-icon>save</mat-icon> Update Logic
+                    </button>
                   </div>
                 </form>
               </div>
 
-              <div class="col-md-6 border-start ps-4">
-                <h4 class="mb-3 d-flex align-items-center gap-8">
-                  <mat-icon color="accent">psychology</mat-icon>
-                  AI Extraction Manifest (Smart Hints)
+              <div class="col-md-7 border-start ps-4">
+                <h4 class="mb-3 d-flex align-items-center justify-content-between">
+                  <div class="d-flex align-items-center gap-8">
+                    <mat-icon color="accent">psychology</mat-icon>
+                    AI Extraction Manifest
+                  </div>
+                  <span class="badge bg-soft-primary" *ngIf="template?.field_extraction_manifest">
+                    {{ (template?.field_extraction_manifest | jsonParse)?.length }} Fields Mapped
+                  </span>
                 </h4>
                 
-                <div *ngIf="!template?.field_extraction_manifest" class="p-4 bg-light rounded text-center border dashed">
+                <div *ngIf="!template?.field_extraction_manifest" class="p-5 bg-light rounded text-center border dashed">
+                  <mat-icon class="large-icon mb-2" color="disabled">find_in_page</mat-icon>
                   <p class="text-muted mb-0">No smart manifest detected yet. Run <strong>Analyze Template</strong> to generate one.</p>
                 </div>
 
-                <div *ngIf="template?.field_extraction_manifest" class="manifest-list-container">
-                   <div class="manifest-item p-2 mb-2 border rounded bg-white shadow-sm" *ngFor="let field of (template?.field_extraction_manifest | jsonParse)">
-                      <div class="d-flex justify-content-between align-items-center mb-1">
-                        <strong class="text-primary">{{ field.fieldname }}</strong>
-                        <mat-chip-set><mat-chip class="tiny-chip">REQUIRED</mat-chip></mat-chip-set>
+                <div *ngIf="template?.field_extraction_manifest" class="manifest-scroll-area">
+                   <div class="manifest-card mb-3" *ngFor="let field of (template?.field_extraction_manifest | jsonParse)">
+                      <div class="manifest-card-header">
+                        <div class="field-info">
+                          <strong class="field-name">{{ field.fieldname }}</strong>
+                          <span class="field-type-tag">{{ field.field_type }}</span>
+                        </div>
+                        <div class="strategy-badge" [title]="field.render_locator?.strategy">
+                          <mat-icon *ngIf="field.render_locator?.strategy === 'replace_marker'">label</mat-icon>
+                          <mat-icon *ngIf="field.render_locator?.strategy === 'fill_blank_cell_after_label'">table_rows</mat-icon>
+                          <mat-icon *ngIf="field.render_locator?.strategy === 'replace_section_body'">segment</mat-icon>
+                          <mat-icon *ngIf="field.render_locator?.strategy === 'replace_bullets_under_heading'">format_list_bulleted</mat-icon>
+                          {{ field.render_locator?.strategy?.replace('replace_', '')?.replace('fill_', '')?.replace('_', ' ') }}
+                        </div>
                       </div>
-                      <div class="small text-muted mb-1"><em>{{ field.meaning }}</em></div>
-                      <div class="tiny text-accent"><strong>Hints:</strong> {{ field.source_hints }}</div>
+                      <div class="manifest-card-body">
+                        <div class="meaning-text">{{ field.meaning }}</div>
+                        <div class="locator-details" *ngIf="field.render_locator?.marker || field.render_locator?.label || field.render_locator?.heading">
+                           <span *ngIf="field.render_locator?.marker" class="locator-tag marker">Marker: <code>{{ field.render_locator.marker }}</code></span>
+                           <span *ngIf="field.render_locator?.label" class="locator-tag label">Label: <code>{{ field.render_locator.label }}</code></span>
+                           <span *ngIf="field.render_locator?.heading" class="locator-tag heading">Heading: <code>{{ field.render_locator.heading }}</code></span>
+                        </div>
+                        <div class="hint-box">
+                          <mat-icon>lightbulb</mat-icon>
+                          <span><strong>Extraction Hint:</strong> {{ field.source_hints }}</span>
+                        </div>
+                      </div>
                    </div>
                 </div>
+
+                <!-- Raw JSON Debug View -->
+                <mat-expansion-panel class="mt-4 developer-view">
+                  <mat-expansion-panel-header>
+                    <mat-panel-title>
+                      <mat-icon class="me-2">code</mat-icon>
+                      Raw Intelligence Manifest (JSON)
+                    </mat-panel-title>
+                    <mat-panel-description>
+                      Inspect dynamic field logic
+                    </mat-panel-description>
+                  </mat-expansion-panel-header>
+                  <div class="json-debug-container">
+                    <pre>{{ template?.field_extraction_manifest | jsonParse | json }}</pre>
+                  </div>
+                </mat-expansion-panel>
               </div>
             </div>
           </mat-card-content>

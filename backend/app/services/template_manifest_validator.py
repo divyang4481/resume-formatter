@@ -141,13 +141,13 @@ class TemplateManifestValidator:
                 else:
                     mapped_count += 1
 
-                # Duplicate marker check (warn unless it's a shared marker like [Type text])
+                # Duplicate marker check (FAIL if it's a repeated marker without context)
                 if mt in repeated_markers:
                     strategy = locator.get("strategy", "")
                     if strategy == "replace_marker":
-                        result.warn(
-                            f"Field '{fn}' uses repeated marker '{mt}' without context strategy "
-                            "(use label or heading based locator instead)."
+                        result.fail(
+                            f"Field '{fn}' uses repeated marker '{mt}' with plain 'replace_marker' strategy. "
+                            "This is unsafe. Use 'fill_blank_cell_after_label' or a heading-based strategy instead."
                         )
                 
                 # Global duplicate check (different fields using same marker)

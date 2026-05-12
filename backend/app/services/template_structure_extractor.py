@@ -25,28 +25,29 @@ NS = {"w": W_NS}
 # Known alias map: fieldname → list of expected marker CamelCase names
 # Used in reconciliation to map LLM-produced fieldnames → detected markers
 # ---------------------------------------------------------------------------
-FIELD_ALIAS_MAP: Dict[str, List[str]] = {
-    "candidate_name": ["CandidateFullName", "FullName", "CandidateName"],
-    "candidate_id": ["CandidateID", "CandidateId"],
-    "notice_period": ["NoticePeriod"],
-    "salary_required": ["ExpectedSalary", "SalaryRequired", "ExpectedSalaryAmount"],
-    "living_in": ["CandidateTown", "CandidateLocation", "Town"],
-    "expert_opinion": ["CVcomments", "ExpertOpinion", "CVComments", "Cvcomments"],
-    "employee_name": ["EmployeeName"],
-    "employee_job_title": ["EmployeeJobTitle"],
-    "employee_email": ["EmployeeEmail"],
-    "employee_tel_no": ["EmployeeTelNo", "EmployeeTelNumber"],
-    "employee_specialist_area": ["EmployeeSpecialistArea"],
-    "candidate_name_full": ["CandidateFullName"],
-    "cv_comments": ["CVcomments", "CVComments"],
-    "position_required": ["PositionRequired"],
-    "current_salary_benefits": ["CurrentSalary", "Salary", "CurrentSalaryBenefits"],
+FIELD_ALIAS_MAP: Dict[str, Dict[str, Any]] = {
+    "candidate_name": {"type": "scalar", "aliases": ["CandidateFullName", "FullName", "CandidateName", "Candidate_Full_Name"]},
+    "candidate_id": {"type": "scalar", "aliases": ["CandidateID", "CandidateId", "ID", "Candidate_ID"]},
+    "notice_period": {"type": "scalar", "aliases": ["NoticePeriod", "Notice_Period", "Availability"]},
+    "salary_required": {"type": "scalar", "aliases": ["ExpectedSalary", "SalaryRequired", "ExpectedSalaryAmount", "Salary_Required"]},
+    "living_in": {"type": "scalar", "aliases": ["CandidateTown", "CandidateLocation", "Town", "Current_Location"]},
+    "expert_opinion": {"type": "rich_text", "aliases": ["CVcomments", "ExpertOpinion", "CVComments", "Cvcomments", "ConsultantComments"]},
+    "employee_name": {"type": "scalar", "aliases": ["EmployeeName", "ConsultantName", "PresenterName"]},
+    "employee_job_title": {"type": "scalar", "aliases": ["EmployeeJobTitle", "ConsultantJobTitle", "JobTitle"]},
+    "employee_email": {"type": "scalar", "aliases": ["EmployeeEmail", "ConsultantEmail", "Email"]},
+    "employee_tel_no": {"type": "scalar", "aliases": ["EmployeeTelNo", "EmployeeTelNumber", "ConsultantTelNo", "Phone"]},
+    "employee_specialist_area": {"type": "scalar", "aliases": ["EmployeeSpecialistArea", "SpecialistArea", "ConsultantSpecialism"]},
+    "current_salary_benefits": {"type": "scalar", "aliases": ["CurrentSalary", "Salary", "CurrentSalaryBenefits", "Current_Salary"]},
+    "work_experience": {"type": "rich_text", "aliases": ["WorkExperience", "EmploymentHistory", "Work_Experience", "Experience"]},
+    "education": {"type": "rich_text", "aliases": ["Education", "AcademicBackground", "Qualifications"]},
+    "skills": {"type": "rich_text", "aliases": ["Skills", "KeySkills", "CoreCompetencies"]},
+    "interests_and_activities": {"type": "rich_text", "aliases": ["InterestsAndActivities", "Hobbies", "PersonalInterests"]},
 }
 
 # Inverted alias map: CamelCase marker → canonical fieldname
 _ALIAS_INVERTED: Dict[str, str] = {}
-for _fn, _aliases in FIELD_ALIAS_MAP.items():
-    for _alias in _aliases:
+for _fn, _info in FIELD_ALIAS_MAP.items():
+    for _alias in _info["aliases"]:
         _ALIAS_INVERTED[_alias.lower()] = _fn
 
 PASTE_ZONE_KEYWORDS = [
@@ -129,6 +130,9 @@ class TemplateStructure:
     repeated_markers: List[str] = field(default_factory=list)
     """Markers found more than once in the document"""
 
+    heading_to_placeholder: Dict[str, str] = field(default_factory=dict)
+    """Mapping of heading text to its first non-empty paragraph content"""
+
     layout_style: str = "freeflow"
     """table_based | freeflow | mixed"""
 
@@ -146,6 +150,7 @@ class TemplateStructure:
             "all_headings": self.all_headings,
             "all_table_labels": self.all_table_labels,
             "repeated_markers": self.repeated_markers,
+            "heading_to_placeholder": self.heading_to_placeholder,
             "layout_style": self.layout_style,
         }
 
@@ -376,6 +381,14 @@ class TemplateStructureExtractor:
                         struct.paste_zones.append(para_text)
                 continue
 
+            # If we just saw a heading, the next non-empty paragraph might be its placeholder
+            if current_heading and not para_text.startswith("["): # skip if already a bracket marker
+                 if current_heading not in struct.heading_to_placeholder:
+                     # Only take short-to-medium snippets as placeholders
+                     if 5 < len(para_text) < 300:
+                         struct.heading_to_placeholder[current_heading] = para_text
+                         logger.info(f"Placeholder for '{current_heading}': {para_text[:50]}...")
+
             # Detect guillemet markers by reconstructing para text
             # Use both literal and hex escape for robustness (\xab = «, \xbb = »)
             found_guillemets = re.findall(r"[\xab\u00ab]\s*(.*?)\s*[\xbb\u00bb]", para_text_raw)
@@ -396,10 +409,13 @@ class TemplateStructureExtractor:
                         heading_has_bullets = True
 
             # Detect instruction blocks (red/italic/quoted paragraphs)
-            if _is_red_or_colored(para) or _is_all_italic(para):
+            # EXCLUDE common placeholders like [Organisation] or [Job description] or [Bullet point list]
+            is_content_placeholder = bool(re.search(r"\[(Job description|Organisation|Bullet point|Date|Title|List|Grades)\]", para_text, re.I))
+            
+            if (_is_red_or_colored(para) or _is_all_italic(para)) and not is_content_placeholder:
                 if para_text not in struct.instruction_blocks:
                     struct.instruction_blocks.append(para_text[:400])
-            elif para_text.startswith('"') and para_text.endswith('"') and len(para_text) > 20:
+            elif para_text.startswith('"') and para_text.endswith('"') and len(para_text) > 20 and not is_content_placeholder:
                 if para_text not in struct.instruction_blocks:
                     struct.instruction_blocks.append(para_text[:400])
 
@@ -481,25 +497,30 @@ class TemplateStructureExtractor:
                 if label_text not in struct.all_table_labels:
                     struct.all_table_labels.append(label_text)
 
-                # Look for a guillemet marker in the value cell
-                guillemets = re.findall(r"[\xab\u00ab]\s*(.*?)\s*[\xbb\u00bb]", value_text)
+                # Look for a marker in the value cell
                 marker_found = ""
+                # Guillemets first
+                guillemets = re.findall(r"[\xab\u00ab]\s*(.*?)\s*[\xbb\u00bb]", value_text)
                 if guillemets:
                     marker_found = f"«{guillemets[0].strip()}»"
+                else:
+                    # Brackets second
+                    brackets = re.findall(r"\[(.*?)\]", value_text)
+                    if brackets:
+                        marker_found = f"[{brackets[0].strip()}]"
+
+                # Check if the marker is a generic placeholder like [Type text]
+                is_generic = marker_found.lower() in ("[type text]", "[consultant comments]", "[...]", "type text")
+                
+                is_blank = not value_text or is_generic
+                
+                if marker_found and not is_generic:
+                    slot = TableLabelSlot(label=label_text, marker=marker_found, is_blank=False)
                     if marker_found not in part_markers:
                         part_markers.append(marker_found)
-
-                is_blank = not value_text or value_text.lower() in {
-                    "[type text]", "type text", "", "-", "n/a",
-                    "[consultant comments]", '"[consultant comments]"',
-                }
-
-                slot = TableLabelSlot(
-                    label=label_text,
-                    marker=marker_found,
-                    is_blank=is_blank and not marker_found,
-                )
+                else:
+                    slot = TableLabelSlot(label=label_text, marker=marker_found if is_generic else "", is_blank=True)
+                    if label_text not in struct.blank_label_slots:
+                        struct.blank_label_slots.append(label_text)
+                
                 struct.table_label_value_pairs.append(slot)
-
-                if is_blank and not marker_found:
-                    struct.blank_label_slots.append(label_text)
