@@ -1,94 +1,216 @@
-from app.domain.interfaces import LlmRuntimeAdapter
-import boto3
 import json
+import logging
+import time
 from typing import Optional
+
+import boto3
+from botocore.exceptions import ClientError
+
+from app.domain.interfaces import LlmRuntimeAdapter
+
+logger = logging.getLogger(__name__)
+
+# Task-name → config attribute mapping (resolved lazily to avoid import cycles)
+_TASK_MODEL_MAP = {
+    "template_analysis": "bedrock_template_analysis_model_id",
+    "resume_summary": "bedrock_resume_summary_model_id",
+    "data_mapping": "bedrock_data_mapping_model_id",
+}
+
+_TASK_MAX_TOKENS_MAP = {
+    "template_analysis": "bedrock_max_output_tokens_template_analysis",
+}
+
+_TASK_TEMPERATURE_MAP = {
+    "template_analysis": "bedrock_temperature_template_analysis",
+}
+
+# Model-specific hard caps on output tokens
+_MODEL_TOKEN_CAPS = {
+    "llama3": 2048,
+    "qwen3-235b": 8192,
+    "gemma-3": 8192,
+    "nova": 10000,
+    "claude": 8192,   # Claude 3.5+ supports up to 8192 output tokens
+    "anthropic": 8192,
+}
+
+# Error codes that warrant a fallback attempt (access / capability issues)
+_FALLBACK_TRIGGER_CODES = {
+    "AccessDeniedException",
+    "ValidationException",
+    "ResourceNotFoundException",
+    "ModelNotReadyException",
+    "ModelErrorException",
+}
+
+# Error codes that warrant a retry with backoff on the same model
+_RETRY_CODES = {
+    "ThrottlingException",
+    "ModelStreamErrorException",
+    "ServiceUnavailableException",
+    "InternalServerException",
+}
+
 
 class AwsBedrockLlmRuntime(LlmRuntimeAdapter):
     """
-    Adapter for Amazon Bedrock using boto3.
-    Requires AWS credentials to be configured in the environment.
+    Adapter for Amazon Bedrock using the Converse API.
+
+    Supports:
+    - Task-level model routing: pass task_name="template_analysis" etc.
+    - Per-call model override: pass model_id="..."
+    - Automatic fallback to bedrock_fallback_model_id on access / validation errors
+    - Exponential-backoff retry for throttling errors
+    - Safe logging: never logs full prompt content in production
     """
 
     def __init__(self, model_id: Optional[str] = None, region_name: Optional[str] = None):
         from app.config import settings
-        self.model_id = model_id or settings.llm_model_name
+        self._settings = settings
+        self.default_model_id = model_id or settings.bedrock_default_model_id or settings.llm_model_name
         self.region_name = region_name or settings.aws_region
-        self.client = boto3.client(service_name='bedrock-runtime', region_name=self.region_name)
+        self.client = boto3.client(service_name="bedrock-runtime", region_name=self.region_name)
+
+    # ------------------------------------------------------------------
+    # Public interface
+    # ------------------------------------------------------------------
 
     def generate(self, prompt: str, **kwargs) -> str:
-        import time
-        from botocore.exceptions import ClientError
+        """
+        Generate a completion from Bedrock.
 
-        system_prompt = kwargs.get("system_prompt", "")
-        max_retries = 5
-        base_delay = 2
+        Keyword args:
+            system_prompt (str): System-level instruction block.
+            model_id (str): Override the model for this call.
+            task_name (str): Logical task name for routing ("template_analysis", etc.)
+            temperature (float): Sampling temperature.
+            max_tokens (int): Max output tokens.
+        """
+        task_name: Optional[str] = kwargs.get("task_name")
+        system_prompt: str = kwargs.get("system_prompt", "")
+
+        # Resolve model for this task
+        primary_model = self._resolve_model(
+            explicit_model_id=kwargs.get("model_id"),
+            task_name=task_name,
+        )
+        fallback_model = self._settings.bedrock_fallback_model_id or None
+
+        # Resolve temperature and max_tokens (task overrides → kwargs → defaults)
+        temperature = kwargs.get(
+            "temperature",
+            self._task_temperature(task_name),
+        )
+        max_tokens = kwargs.get(
+            "max_tokens",
+            self._task_max_tokens(task_name),
+        )
+
+        # First attempt: primary model
+        try:
+            return self._invoke(primary_model, prompt, system_prompt, temperature, max_tokens)
+        except ClientError as e:
+            code = e.response["Error"]["Code"]
+            if code in _FALLBACK_TRIGGER_CODES and fallback_model and fallback_model != primary_model:
+                logger.warning(
+                    f"[Bedrock] Primary model '{primary_model}' failed ({code}). "
+                    f"Falling back to '{fallback_model}'."
+                )
+                return self._invoke(fallback_model, prompt, system_prompt, temperature, max_tokens)
+            raise
+
+    # ------------------------------------------------------------------
+    # Private helpers
+    # ------------------------------------------------------------------
+
+    def _resolve_model(self, explicit_model_id: Optional[str], task_name: Optional[str]) -> str:
+        """Priority: explicit call arg > task config > default."""
+        if explicit_model_id:
+            return explicit_model_id
+        if task_name and task_name in _TASK_MODEL_MAP:
+            attr = _TASK_MODEL_MAP[task_name]
+            task_model = getattr(self._settings, attr, "")
+            if task_model:
+                return task_model
+        return self.default_model_id
+
+    def _task_temperature(self, task_name: Optional[str]) -> float:
+        if task_name and task_name in _TASK_TEMPERATURE_MAP:
+            return getattr(self._settings, _TASK_TEMPERATURE_MAP[task_name], self._settings.bedrock_temperature_default)
+        return self._settings.bedrock_temperature_default
+
+    def _task_max_tokens(self, task_name: Optional[str]) -> int:
+        if task_name and task_name in _TASK_MAX_TOKENS_MAP:
+            return getattr(self._settings, _TASK_MAX_TOKENS_MAP[task_name], self._settings.bedrock_max_output_tokens_default)
+        return self._settings.bedrock_max_output_tokens_default
+
+    def _model_token_cap(self, model_id: str) -> int:
+        model_lower = model_id.lower()
+        for keyword, cap in _MODEL_TOKEN_CAPS.items():
+            if keyword in model_lower:
+                return cap
+        return 4096
+
+    def _invoke(
+        self,
+        model_id: str,
+        prompt: str,
+        system_prompt: str,
+        temperature: float,
+        max_tokens: int,
+        max_retries: int = 5,
+        base_delay: int = 2,
+    ) -> str:
+        """Inner call with exponential-backoff retry for throttling."""
+        capped_tokens = min(max_tokens, self._model_token_cap(model_id))
+
+        messages = [{"role": "user", "content": [{"text": prompt}]}]
+        system = [{"text": system_prompt}] if system_prompt else []
+        inference_config = {
+            "maxTokens": capped_tokens,
+            "temperature": temperature,
+            "topP": 0.9,
+        }
 
         for attempt in range(max_retries):
             try:
-                # Use the Converse API for standard, robust handling of all Bedrock models
-                messages = [{"role": "user", "content": [{"text": prompt}]}]
-                system = [{"text": system_prompt}] if system_prompt else []
-                
-                # Determine max tokens based on model limits
-                # Mumbai ap-south-1 Llama3 limit is strictly 2048.
-                # Claude 3 models (including APAC profiles) support 4096 tokens.
-                max_tokens = kwargs.get("max_tokens", 4096)
-                model_id_lower = self.model_id.lower()
-                
-                if "llama3" in model_id_lower:
-                    max_tokens = min(max_tokens, 2048)
-                elif "qwen3-235b" in model_id_lower:
-                    max_tokens = min(max_tokens, 8192)
-                elif "gemma-3" in model_id_lower:
-                    max_tokens = min(max_tokens, 8192)
-                elif "nova" in model_id_lower:
-                    max_tokens = min(max_tokens, 10000)
-                elif "anthropic" in model_id_lower or "claude" in model_id_lower:
-                    # Maximizing for better data extraction as requested
-                    max_tokens = min(max_tokens, 4096)
-                else:
-                    max_tokens = min(max_tokens, 4096)
-                
-                inference_config = {
-                    "maxTokens": max_tokens,
-                    "temperature": kwargs.get("temperature", 0.1),
-                    "topP": kwargs.get("top_p", 0.9)
-                }
-
                 response = self.client.converse(
-                    modelId=self.model_id,
+                    modelId=model_id,
                     messages=messages,
                     system=system,
-                    inferenceConfig=inference_config
+                    inferenceConfig=inference_config,
                 )
-                
-                stop_reason = response.get('stopReason')
-                import logging
-                logger = logging.getLogger(__name__)
-                if stop_reason == 'max_tokens':
-                    logger.warning(f"Bedrock response truncated for model {self.model_id} (max_tokens hit)")
-                
-                return response['output']['message']['content'][0]['text']
+                stop_reason = response.get("stopReason")
+                if stop_reason == "max_tokens":
+                    logger.warning(
+                        f"[Bedrock] Response truncated for model '{model_id}' "
+                        f"(maxTokens={capped_tokens} hit)."
+                    )
+                return response["output"]["message"]["content"][0]["text"]
 
             except ClientError as e:
-                error_code = e.response['Error']['Code']
-                error_message = e.response['Error']['Message']
-                request_id = e.response.get('ResponseMetadata', {}).get('RequestId', 'N/A')
-                import logging
-                logger = logging.getLogger(__name__)
+                code = e.response["Error"]["Code"]
+                rid = e.response.get("ResponseMetadata", {}).get("RequestId", "N/A")
 
-                log_details = f"Model: {self.model_id} | Region: {self.region_name} | RequestID: {request_id}"
-
-                if error_code in ['ThrottlingException', 'ModelStreamErrorException', 'ModelNotReadyException'] and attempt < max_retries - 1:
-                    wait_time = base_delay * (2 ** attempt)
-                    logger.warning(f"[Bedrock Attempt {attempt+1}/{max_retries}] Throttled: {error_code} - {error_message}. {log_details}. Retrying in {wait_time}s...")
-                    time.sleep(wait_time)
+                if code in _RETRY_CODES and attempt < max_retries - 1:
+                    wait = base_delay * (2 ** attempt)
+                    logger.warning(
+                        f"[Bedrock attempt {attempt+1}/{max_retries}] {code} on '{model_id}' "
+                        f"(RequestId={rid}). Retrying in {wait}s..."
+                    )
+                    time.sleep(wait)
                     continue
-                
-                logger.error(f"[Bedrock Final Error] {error_code}: {error_message}. {log_details}")
-                raise e
-            except Exception as e:
-                import logging
-                logging.getLogger(__name__).error(f"[Bedrock Unexpected Error] {str(e)} | Model: {self.model_id}")
-                raise e
 
+                # Non-retriable or exhausted — raise so caller can decide fallback
+                logger.error(
+                    f"[Bedrock] {code} on model='{model_id}' RequestId={rid}: "
+                    f"{e.response['Error']['Message']}"
+                )
+                raise
+
+            except Exception as e:
+                logger.error(f"[Bedrock] Unexpected error on model='{model_id}': {type(e).__name__}")
+                raise
+
+        raise RuntimeError(f"[Bedrock] All {max_retries} retries exhausted for model '{model_id}'")

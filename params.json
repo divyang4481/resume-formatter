@@ -1,0 +1,38 @@
+[
+  {
+    "ParameterKey": "Environment",
+    "ParameterValue": "dev"
+  },
+  {
+    "ParameterKey": "VpcId",
+    "ParameterValue": "vpc-77ca851f"
+  },
+  {
+    "ParameterKey": "SubnetIds",
+    "ParameterValue": "subnet-0fbd1d43,subnet-4c26e037,subnet-abb1c2c3"
+  },
+  {
+    "ParameterKey": "DatabaseUrl",
+    "ParameterValue": "postgresql://dbadmin:HaysDemo_%23123@agentic-platform-db-dev.ctgoo20ag6cj.ap-south-1.rds.amazonaws.com:5432/agenticdb"
+  },
+  {
+    "ParameterKey": "SqsQueueUrl",
+    "ParameterValue": "https://sqs.ap-south-1.amazonaws.com/114644266543/agentic-platform-queue-dev"
+  },
+  {
+    "ParameterKey": "SqsQueueArn",
+    "ParameterValue": "arn:aws:sqs:ap-south-1:114644266543:agentic-platform-queue-dev"
+  },
+  {
+    "ParameterKey": "BedrockAgentId",
+    "ParameterValue": "IUJ4II3JAI"
+  },
+  {
+    "ParameterKey": "BedrockAgentAliasId",
+    "ParameterValue": "VYKEJ4BOMZ"
+  },
+  {
+    "ParameterKey": "S3BucketName",
+    "ParameterValue": "agentic-platform-storage-dev-114644266543-ap-south-1"
+  }
+]

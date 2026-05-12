@@ -1,133 +1,164 @@
-TASK: Analyze a Resume Template and Generate a Field Extraction Manifest.
+TASK: Analyze a Hays resume template DOCX and produce a precise field extraction manifest.
 
-TEMPLATE CONTEXT (Text Extraction):
+---
+STRUCTURAL ANALYSIS (Pre-computed deterministically — treat as ground truth):
 {{ template_text }}
 
-DETECTED MARKERS (The ONLY valid strings for marker_text):
+DETECTED MARKERS (the ONLY valid values for marker_text):
 {{ detected_placeholders | join(', ') }}
 
 ---
-STEP 1 — VISUAL LAYOUT ANALYSIS (Do this first):
+STEP 1 — UNDERSTAND THE TEMPLATE STRUCTURE:
 
-Before mapping any fields, analyze the structural layout of this template:
-- **layout_style**: Is the template primarily "table_based" (fields placed in table rows/cells), "freeflow" (fields in plain paragraphs), or "mixed"?
-- **has_instruction_blocks**: Are there paragraphs of human-readable instructions (often in red, italic, or inside quotes) that are NOT placeholders but tell the user what to do? E.g. "Paste the candidate's own CV here", "Delete this text before finalising". These MUST be captured as fields so they can be replaced/cleared.
-- **has_paste_zone**: Is there a large blank or instructional area intended to receive the candidate's entire CV text? This is a `paste_zone` field.
+Read the [STRUCTURAL HINTS FROM DOCX ANALYSIS] block embedded above.
+It contains:
+- Layout Style: table_based | freeflow | mixed
+- Table Loops Detected: mail-merge loops with loop_variable and item_fields
+- Paste Zone Headings: headings indicating large CV paste areas
+- Instruction Block Paragraphs: red/italic text to be cleared, NOT data fields
+- The [STRUCTURED TABLE LABEL→VALUE PAIRS] section maps each table label to its adjacent marker or blank
 
-Output this analysis in the top-level `layout_analysis` object.
-
----
-STEP 2 — FIELD TYPE CLASSIFICATION:
-
-Every field in the manifest must be assigned one of these types:
-
-1. **scalar** — A single string value. E.g. «CandidateFullName», «NoticePeriod», a single [Type text] next to one label.
-
-2. **array_simple** — A list of plain strings. Signs:
-   - Multiple consecutive bullet points each containing the SAME generic marker under ONE section header (e.g. 3× "[Type text]" under "Key skills").
-   - Output as a JSON array of strings: ["skill1", "skill2", ...].
-   - Include `repeat_count` = number of bullet slots visible in the template.
-
-3. **array_complex** — A repeating block of structured sub-fields. Signs:
-   - A section where the SAME SET of markers repeats 2+ times (e.g. WORK EXPERIENCE: "[Job description, Date]" + "[Organisation]" + "[Bullet point responsibilities]" appearing 3 times).
-   - Use `array_item_schema` to define sub-fields. Do NOT flatten into job_1_title, job_2_title, etc.
-
-4. **table_loop** — A Word mail-merge loop. Signs:
-   - «TableStart:NAME» and «TableEnd:NAME» markers with body markers inside.
-   - `loop_variable` = NAME extracted from «TableStart:NAME».
-   - `loop_item_fields` = all field names found between TableStart and TableEnd.
-   - At render time this becomes a docxtpl `{% tr for item in NAME %}` construct.
-
-5. **paste_zone** — A large freeform area (whole section or page) where the candidate's formatted CV is pasted wholesale. Signs:
-   - A heading like "CANDIDATE'S OWN CV" or "CV SECTION" followed by a large empty space.
-   - May contain instructional text telling the recruiter to paste content there.
-   - This field receives the full formatted CV text as a single block value.
-
-6. **instruction_block** — Human-readable instruction text embedded in the template (often red-coloured, italic, or in quotes). Signs:
-   - Text like "Paste the candidate's own CV in this space and please delete these instructions..."
-   - "Use bullets if required"
-   - "[Consultant comments]"
-   - These are NOT data fields — they must be REPLACED with actual content at render time or cleared.
-   - `marker_text` = the EXACT instruction text string (verbatim, not a guillemet marker).
-   - `replacement_field` = the fieldname whose value should replace this instruction text (or "" if it should be cleared).
+Use these structural hints as the PRIMARY source of truth for field classification.
 
 ---
-STEP 3 — MAPPING RULES:
-1. **EXCLUSIVE SOURCE OF TRUTH**: Every 'marker_text' you provide MUST exist exactly as-is in the "DETECTED MARKERS" list above — EXCEPT for instruction_block fields, where marker_text is the verbatim instruction string.
-2. **STRICT PROHIBITION**: DO NOT use bold labels (e.g., "**Salary required**") as marker_text unless they are in the DETECTED MARKERS list.
-3. **TABLE LABEL→VALUE PAIRS**: If the template context contains a "[STRUCTURED TABLE LABEL→VALUE PAIRS]" section, use the VALUE/MARKER column directly as the marker_text source.
-4. **ARRAY DETECTION**: Count how many times the same generic marker appears consecutively under one section. If > 1, classify as array_simple or array_complex.
-5. **TABLE LOOP DETECTION**: «TableStart:NAME»/«TableEnd:NAME» pairs MUST be classified as `table_loop`. Never split them into scalars.
-6. **INSTRUCTION DETECTION**: Any quoted string like "[Consultant comments]", "Use bullets if required", or large red/italic paragraphs instructing the recruiter = instruction_block.
-7. **NO HALLUCINATION**: If a scalar/array field has no matching marker, set marker_text to "".
-8. **COMPLETE COVERAGE**: Every item in DETECTED MARKERS must appear in exactly one manifest entry.
+STEP 2 — FIELD TYPE + SOURCE KIND RULES:
+
+Every manifest entry MUST have field_type AND source_kind.
+
+field_type options: scalar | rich_text | array_simple | array_complex | table_loop | paste_zone | instruction_block
+source_kind options: merge_marker | visual_blank_slot | bullet_slots | table_loop | paste_zone | section_body | instruction_block
+
+Rules by source_kind:
+
+merge_marker
+  → marker_text = exact string from DETECTED MARKERS (guillemet «...» or bracket [...])
+  → render_locator.strategy = replace_marker
+
+visual_blank_slot
+  → table row: bold label cell, value cell is blank or says "Type text" — NO guillemet marker
+  → marker_text = ""  (DO NOT invent one)
+  → render_locator.strategy = fill_blank_cell_after_label
+  → render_locator.label = EXACT bold label text
+
+bullet_slots
+  → repeated generic placeholder (e.g. [Type text]) under a section heading
+  → field_type = array_simple
+  → render_locator.strategy = replace_bullets_under_heading
+  → render_locator.heading = exact section heading text
+
+table_loop
+  → «TableStart:NAME» / «TableEnd:NAME» pair detected
+  → loop_variable = NAME, loop_item_fields = fields between start and end
+  → render_locator.strategy = replace_marker
+
+paste_zone
+  → large section for pasting the candidate's full CV
+  → marker_text = "" (unless a marker was found in that area)
+  → render_locator.strategy = replace_section_body
+  → render_locator.heading = heading text
+
+instruction_block
+  → human instruction text (red, italic, or quoted) — must be CLEARED, never output
+  → fieldname MUST start with _instruction_
+  → marker_text = verbatim instruction text
+  → render_locator.strategy = clear_instruction_block
+
+section_body
+  → free-form text area (e.g. expert opinion) under a heading
+  → render_locator.strategy = replace_section_body
+  → render_locator.heading = section heading
 
 ---
-OUTPUT JSON FORMAT:
+STEP 3 — ANTI-HALLUCINATION RULES (MANDATORY):
+
+1. marker_text MUST exactly equal one string from DETECTED MARKERS — or be EMPTY.
+   NEVER invent a marker. NEVER use bold label text as marker_text.
+
+2. [STRUCTURED TABLE LABEL→VALUE PAIRS] is your primary mapping source:
+   - If VALUE/MARKER column = a guillemet «...» → use as marker_text, source_kind=merge_marker
+   - If VALUE/MARKER column = [blank] or [Type text] → marker_text="", source_kind=visual_blank_slot
+
+3. COMPLETE COVERAGE: Every item in DETECTED MARKERS must appear in exactly one entry.
+
+4. confidence: 1.0 for exact marker match, 0.7 for visual_blank_slot with confirmed label, 0.5 for inferred.
+
+---
+DYNAMIC EXAMPLES FROM THIS TEMPLATE:
+
+{% if example_merge_markers %}
+EXAMPLE — merge_marker (actual markers from this template):
+{% for ex in example_merge_markers %}
+  Marker "{{ ex.marker }}" → fieldname "{{ ex.fieldname }}" (source_kind=merge_marker)
+{% endfor %}
+{% endif %}
+
+{% if example_blank_slots %}
+EXAMPLE — visual_blank_slot (actual blank labels from this template):
+{% for ex in example_blank_slots %}
+  Label "{{ ex.label }}" → fieldname "{{ ex.fieldname }}" (source_kind=visual_blank_slot, marker_text="")
+{% endfor %}
+{% endif %}
+
+{% if example_table_loops %}
+EXAMPLE — table_loop (actual loops from this template):
+{% for ex in example_table_loops %}
+  Loop "{{ ex.loop_name }}" with item fields {{ ex.item_fields }}
+{% endfor %}
+{% endif %}
+
+{% if example_paste_zones %}
+EXAMPLE — paste_zone (actual zones from this template):
+{% for ex in example_paste_zones %}
+  Heading "{{ ex }}" → source_kind=paste_zone, marker_text=""
+{% endfor %}
+{% endif %}
+
+{% if example_instructions %}
+EXAMPLE — instruction_block (actual instruction text from this template):
+{% for ex in example_instructions %}
+  Text: "{{ ex[:120] }}..." → fieldname starts with _instruction_, strategy=clear_instruction_block
+{% endfor %}
+{% endif %}
+
+---
+OUTPUT JSON SCHEMA (return this structure exactly, populated for THIS template):
 {
-  "purpose": "What this template is used for",
-  "expected_sections": "Comma-separated sections (e.g. Header, Profile, Work Experience, Education)",
-  "expected_fields": "Comma-separated fieldnames",
-  "summary_guidance": "How to write the expert_opinion / summary field",
-  "formatting_guidance": "Date format, currency, bullet style rules",
-  "validation_guidance": "What to verify in final output",
+  "purpose": "One sentence: what is this template for?",
+  "expected_sections": ["Header", "Profile", "Work Experience", "..."],
+  "expected_fields": ["candidate_name", "notice_period", "..."],
+  "summary_guidance": "How to write the expert_opinion / CV summary",
+  "formatting_guidance": "Date format, currency, bullets",
+  "validation_guidance": "What to verify before finalising",
+  "pii_guidance": "PII fields — candidate_name, employee_email, etc.",
   "layout_analysis": {
     "layout_style": "table_based | freeflow | mixed",
     "has_instruction_blocks": true,
     "has_paste_zone": false,
-    "notes": "Brief description of the visual structure"
+    "notes": "Brief visual description"
   },
   "field_extraction_manifest": [
     {
-      "fieldname": "candidate_name",
-      "field_type": "scalar",
-      "marker_text": "«CandidateFullName»",
-      "meaning": "Full name of the candidate",
-      "source_hints": "Header row of CANDIDATE PROFILE table"
-    },
-    {
-      "fieldname": "key_skills",
-      "field_type": "array_simple",
-      "marker_text": "[Type text]",
-      "meaning": "List of key technical and soft skills",
-      "source_hints": "Bullet list under Key skills section",
-      "repeat_count": 3
-    },
-    {
-      "fieldname": "work_experience",
-      "field_type": "array_complex",
-      "marker_text": "",
-      "meaning": "Full employment history, most-recent first",
-      "source_hints": "WORK EXPERIENCE section — repeating block of job title+org+bullets",
-      "array_item_schema": [
-        {"sub_field": "title_date", "marker_text": "[Job description, Date]", "meaning": "Job title and date range"},
-        {"sub_field": "organisation", "marker_text": "[Organisation]", "meaning": "Employer name"},
-        {"sub_field": "responsibilities", "marker_text": "[Bullet point responsibilities]", "meaning": "Key responsibilities as bullet points"}
-      ]
-    },
-    {
-      "fieldname": "bCheckType",
-      "field_type": "table_loop",
-      "marker_text": "«TableStart:bCheckType»",
-      "meaning": "Repeating table rows for professional qualifications",
-      "source_hints": "Professional qualifications table",
-      "loop_variable": "bCheckType",
-      "loop_item_fields": ["CheckType"]
-    },
-    {
-      "fieldname": "candidate_cv_body",
-      "field_type": "paste_zone",
-      "marker_text": "",
-      "meaning": "Area where the candidate's full formatted CV is pasted",
-      "source_hints": "CANDIDATE'S OWN CV section — large blank area below heading"
-    },
-    {
-      "fieldname": "_instruction_cv_paste",
-      "field_type": "instruction_block",
-      "marker_text": "Paste the candidate's own CV in this space and please delete these instructions before finalising the document.",
-      "meaning": "Recruiter instruction text to be replaced/cleared at render time",
-      "source_hints": "Red instructional text under CANDIDATE'S OWN CV heading",
-      "replacement_field": "candidate_cv_body"
+      "fieldname": "snake_case_name",
+      "field_type": "scalar | array_simple | table_loop | paste_zone | instruction_block",
+      "source_kind": "merge_marker | visual_blank_slot | bullet_slots | table_loop | paste_zone | section_body | instruction_block",
+      "marker_text": "exact string from DETECTED MARKERS, or empty string",
+      "render_locator": {
+        "strategy": "replace_marker | fill_blank_cell_after_label | replace_bullets_under_heading | replace_section_body | clear_instruction_block",
+        "marker": "marker string if strategy=replace_marker",
+        "label": "label text if strategy=fill_blank_cell_after_label",
+        "heading": "heading text if strategy involves a heading"
+      },
+      "meaning": "what this field contains",
+      "source_hints": "where to find this data in the candidate's resume",
+      "required": false,
+      "confidence": 0.9
     }
   ]
 }
+
+SYSTEM RULES:
+- Return ONLY valid JSON. No markdown, no code fences, no explanations.
+- Start with { and end with }.
+- Never invent marker_text. Never copy examples above if they don't apply to this template.
+- Fieldnames must be snake_case.
+- instruction_block fieldnames must start with _instruction_.

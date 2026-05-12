@@ -289,230 +289,352 @@ class ResumeAiService:
         lines.append("[END TABLE PAIRS]")
         return "\n".join(lines)
 
-    async def analyze_template(self, content: bytes, filename: str) -> Dict[str, str]:
-        """Analyzes a .docx template to suggest metadata... (Uses Context Injection)"""
+    async def analyze_template(self, content: bytes, filename: str) -> Dict[str, Any]:
+        """
+        Analyzes a .docx template using a 3-phase pipeline:
+        1. Deterministic extraction (TemplateStructureExtractor)
+        2. LLM semantic interpretation (Claude Sonnet, temp=0)
+        3. Deterministic reconciliation + validation
+        """
+        from app.services.template_structure_extractor import (
+            TemplateStructureExtractor, FIELD_ALIAS_MAP, canonical_marker, normalize_marker_name
+        )
+        from app.services.template_manifest_validator import TemplateManifestValidator
+
         if not self.extraction_service:
             return {}
 
+        # ── Phase 1: Deterministic structure extraction ──────────────────────
+        extractor = TemplateStructureExtractor()
+        structure = extractor.extract(content, filename)
+
+        detected_markers = structure.detected_markers
+        logger.info(f"[TemplateAnalysis] Detected {len(detected_markers)} markers: {detected_markers}")
+        logger.info(f"[TemplateAnalysis] Blank label slots: {structure.blank_label_slots}")
+        logger.info(f"[TemplateAnalysis] Table loops: {[l.loop_name for l in structure.table_loops]}")
+        logger.info(f"[TemplateAnalysis] Layout: {structure.layout_style}")
+
+        # ── Phase 1b: Docling text extraction for semantic context ────────────
         extracted_doc = await self.extraction_service.extract(
             content,
             filename,
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         )
+        text_content = extracted_doc.extracted_text or ""
 
-        text_content = extracted_doc.extracted_text
+        # ── Phase 1c: Build rich context block for the LLM ───────────────────
+        context_blocks: List[str] = []
 
-        # 1. Gather all placeholders
-        xml_placeholders = []
-        if filename.lower().endswith(".docx"):
-            xml_placeholders = self._get_docx_placeholders_from_xml(content)
-            logger.info(f"Deep XML Scan found: {xml_placeholders}")
+        # Structural hints block
+        hints_block = "[STRUCTURAL HINTS FROM DOCX ANALYSIS]\n"
+        hints_block += f"Layout Style: {structure.layout_style}\n"
 
-        regex_patterns = [
-            r"<<\s*.*?\s*>>",
-            r"\{\{\s*.*?\s*\}\}",
-            r"\[\[\s*.*?\s*\]\]",
-            r"«\s*.*?\s*»",
-            r"\[\s*[^\]\s].*?\s*\]",
+        if structure.table_loops:
+            hints_block += "Table Loops Detected (field_type=table_loop):\n"
+            for loop in structure.table_loops:
+                hints_block += f"  - Loop '{loop.loop_name}' with item fields: {loop.item_fields}\n"
+
+        if structure.paste_zones:
+            hints_block += "Paste Zone Headings (field_type=paste_zone):\n"
+            for pz in structure.paste_zones:
+                hints_block += f"  - '{pz}'\n"
+
+        if structure.instruction_blocks:
+            hints_block += "Instruction Block Paragraphs (field_type=instruction_block, clear at render):\n"
+            for inst in structure.instruction_blocks:
+                hints_block += f"  - '{inst[:200]}'\n"
+
+        if structure.bullet_slots:
+            hints_block += "Bullet Slot Sections (source_kind=bullet_slots, array_simple):\n"
+            for bs in structure.bullet_slots:
+                hints_block += f"  - Heading: '{bs}'\n"
+
+        hints_block += "[END STRUCTURAL HINTS]\n"
+        context_blocks.append(hints_block)
+
+        # Table label→value pairs block
+        if structure.table_label_value_pairs:
+            pairs_block = "[STRUCTURED TABLE LABEL→VALUE PAIRS]\n"
+            pairs_block += "LABEL | VALUE/MARKER | BLANK?\n"
+            pairs_block += "-" * 60 + "\n"
+            for slot in structure.table_label_value_pairs:
+                pairs_block += f"{slot.label} | {slot.marker or '[blank]'} | {slot.is_blank}\n"
+            pairs_block += "[END TABLE PAIRS]\n"
+            context_blocks.append(pairs_block)
+
+        # Hidden markers not visible in extracted text
+        hidden = [
+            m for m in detected_markers
+            if m not in text_content and m.strip("«»[] ") not in text_content
         ]
+        if hidden:
+            hidden_block = "[HIDDEN MARKERS IN DOCUMENT XML — must be assigned to fields]\n"
+            for m in hidden:
+                inner = m.strip("«»[] ")
+                hidden_block += f"  Marker: {m} → field alias: '{inner}'\n"
+            hidden_block += "[END HIDDEN MARKERS]\n"
+            context_blocks.append(hidden_block)
 
-        detected_raw = []
-        for pattern in regex_patterns:
-            matches = re.findall(pattern, text_content)
-            detected_raw.extend(matches)
-        
-        # XML scan results should already have markers if we fix the helper
-        detected_raw.extend(xml_placeholders)
+        full_context = "\n".join(context_blocks) + "\n\n" + text_content
 
-        seen = set()
-        detected_placeholders = [
-            p.strip()
-            for p in detected_raw
-            if p.strip() and not (p.strip() in seen or seen.add(p.strip()))
-        ]
-
-        # 2. CONTEXT INJECTION: inject hidden markers not found in extracted text
-        missing_from_text = [
-            p
-            for p in xml_placeholders
-            if p not in text_content and p.strip("«»") not in text_content
-        ]
-        if missing_from_text:
-            injection_header = (
-                "\n[SYSTEM: HIDDEN METADATA MARKERS DETECTED IN DOCUMENT XML]\n"
-            )
-            for p in missing_from_text:
-                inner = p.strip("«»[]")
-                injection_header += f"Marker: «{inner}» → must be assigned to logical field '{inner}'\n"
-            injection_header += "[END HIDDEN METADATA]\n\n"
-            text_content = injection_header + text_content
-
-        # 2b. Structural hints: layout style, instruction blocks, paste zones, table loops
-        if filename.lower().endswith(".docx"):
-            struct_hints = self._detect_structural_hints(content)
-            logger.info(f"Structural hints detected: {struct_hints}")
-
-            struct_block = "\n[STRUCTURAL HINTS FROM DOCX ANALYSIS]\n"
-            struct_block += f"Layout Style: {struct_hints.get('layout_style', 'unknown')}\n"
-
-            loops = struct_hints.get("table_loops", [])
-            if loops:
-                struct_block += "Table Loops Detected (field_type=table_loop):\n"
-                for loop in loops:
-                    struct_block += f"  - Loop: '{loop['loop_name']}' with item fields: {loop['item_fields']}\n"
-
-            paste_zones = struct_hints.get("paste_zone_headings", [])
-            if paste_zones:
-                struct_block += "Paste Zone Headings Detected (field_type=paste_zone):\n"
-                for pz in paste_zones:
-                    struct_block += f"  - '{pz}'\n"
-
-            instructions = struct_hints.get("instruction_paragraphs", [])
-            if instructions:
-                struct_block += "Instruction Block Paragraphs Detected (field_type=instruction_block):\n"
-                for inst in instructions:
-                    struct_block += f"  - '{inst}'\n"
-
-            struct_block += "[END STRUCTURAL HINTS]\n"
-            text_content = struct_block + text_content
-
-        # 2b. Append structured table label→value context so AI can map labels to markers
-        table_context = self._build_table_label_context(extracted_doc)
-        if table_context:
-            text_content += table_context
-
-        # 2c. Legacy structured table rows (kept for backward compat)
-        if extracted_doc.structured_data and "items" in extracted_doc.structured_data:
-            tables = [item for item in extracted_doc.structured_data["items"] if item.get("role") == "table"]
-            if tables:
-                text_content += "\n\n[STRUCTURED TABLE DATA]\n"
-                for table in tables:
-                    if "cells" in table:
-                        rows: Dict[int, Dict[int, str]] = {}
-                        for cell in table["cells"]:
-                            r, c = cell.get("row_index", 0), cell.get("column_index", 0)
-                            txt = cell.get("text", "").strip()
-                            rows.setdefault(r, {})[c] = txt
-                        for r_idx in sorted(rows.keys()):
-                            row_vals = [rows[r_idx].get(c_idx, "") for c_idx in sorted(rows[r_idx].keys())]
-                            text_content += "| " + " | ".join(row_vals) + " |\n"
-                text_content += "[END TABLE DATA]\n"
-
-        # 3. LLM Analysis - Single "Smart" Text Source
-        prompt = prompt_manager.get_prompt(
-            "template_analysis.jinja2",
-            template_text=text_content[:12000],
-            detected_placeholders=detected_placeholders,
+        # ── Phase 2: LLM semantic analysis (Claude Sonnet, temp=0) ───────────
+        SYSTEM_PROMPT = (
+            "You are a document structure analyst. Your output MUST be a single valid JSON object. "
+            "No markdown, no code fences, no prose. Start with { and end with }. "
+            "Never invent marker_text values — they must exactly match the DETECTED MARKERS list. "
+            "Never use label text like 'Candidate name' as a marker_text value. "
+            "For blank table cells, use source_kind=visual_blank_slot and provide render_locator.label."
         )
 
-        logger.info("\n" + "="*60 + "\n--- TEMPLATE ANALYSIS PROMPT ---\n" + "="*60)
-        logger.info(prompt)
-        logger.info("="*60 + "\n")
+        # ── Build dynamic examples from actual detected structure ─────────────
+        # These replace hardcoded examples in the prompt — every example shown
+        # to the LLM is derived from THIS template's structure.
+        from app.services.template_structure_extractor import FIELD_ALIAS_MAP as _alias_map_for_prompt
 
-        response = self.llm.generate(prompt)
+        _alias_inverted_prompt = {
+            alias.lower(): fn
+            for fn, aliases in _alias_map_for_prompt.items()
+            for alias in aliases
+        }
 
-        logger.info("\n" + "="*60 + "\n--- TEMPLATE ANALYSIS LLM RESPONSE ---\n" + "="*60)
-        logger.info(response)
-        logger.info("="*60 + "\n")
+        def _marker_to_fieldname(marker: str) -> str:
+            inner = marker.strip("«»[] ")
+            from_alias = _alias_inverted_prompt.get(inner.lower())
+            if from_alias:
+                return from_alias
+            return normalize_marker_name(marker).replace(" ", "_") or inner.lower()
+
+        # Merge marker examples — pick first 3 non-loop markers
+        example_merge_markers = []
+        for m in detected_markers[:8]:
+            inner = m.strip("«»[] ")
+            if inner.startswith("TableStart:") or inner.startswith("TableEnd:"):
+                continue
+            example_merge_markers.append({
+                "marker": m,
+                "fieldname": _marker_to_fieldname(m),
+            })
+            if len(example_merge_markers) >= 3:
+                break
+
+        # Blank slot examples — pick first 2
+        example_blank_slots = []
+        for slot in structure.table_label_value_pairs[:5]:
+            if slot.is_blank and not slot.marker:
+                fn_derived = re.sub(r"[^a-z0-9]+", "_", slot.label.lower()).strip("_")
+                example_blank_slots.append({"label": slot.label, "fieldname": fn_derived})
+                if len(example_blank_slots) >= 2:
+                    break
+
+        # Table loop examples
+        example_table_loops = [
+            {"loop_name": l.loop_name, "item_fields": l.item_fields}
+            for l in structure.table_loops[:2]
+        ]
+
+        # Paste zone examples
+        example_paste_zones = structure.paste_zones[:2]
+
+        # Instruction block examples
+        example_instructions = structure.instruction_blocks[:2]
+
+        prompt = prompt_manager.get_prompt(
+            "template_analysis.jinja2",
+            template_text=full_context[:14000],
+            detected_placeholders=detected_markers,
+            example_merge_markers=example_merge_markers,
+            example_blank_slots=example_blank_slots,
+            example_table_loops=example_table_loops,
+            example_paste_zones=example_paste_zones,
+            example_instructions=example_instructions,
+        )
+
+        logger.info("[TemplateAnalysis] Calling LLM (task=template_analysis, model=Claude Sonnet)")
+        response = self.llm.generate(
+            prompt,
+            system_prompt=SYSTEM_PROMPT,
+            task_name="template_analysis",
+            temperature=settings.bedrock_temperature_template_analysis,
+            max_tokens=settings.bedrock_max_output_tokens_template_analysis,
+        )
+        logger.info(f"[TemplateAnalysis] LLM response length: {len(response)} chars")
 
         try:
             cleaned_json = LlmSanitizer.clean_json(response)
             data = json.loads(cleaned_json)
         except Exception as e:
-            logger.error(f"Failed to parse template analysis JSON: {e}")
+            logger.error(f"[TemplateAnalysis] Failed to parse LLM JSON response: {e}")
             data = {}
 
-        manifest = data.get("field_extraction_manifest", [])
+        manifest: List[Dict[str, Any]] = data.get("field_extraction_manifest", [])
         if not isinstance(manifest, list):
             manifest = []
 
-        # ---------------------------------------------------------------
-        # AI HEALING PASS: Fill in empty marker_text fields.
-        # Strategy: for each manifest entry that has no marker_text, try to
-        # find a detected placeholder whose inner name fuzzy-matches the
-        # fieldname or source_hints label.
-        # ---------------------------------------------------------------
-        def _fuzzy_match_placeholder(fieldname: str, source_hints: str, candidates: List[str]) -> str:
-            """Return the best matching placeholder from candidates, or empty string."""
-            # Build a set of keywords from fieldname and source_hints
-            keywords = set(re.sub(r"[^a-z0-9]", " ", fieldname.lower()).split())
-            label_words = set(re.sub(r"[^a-z0-9]", " ", (source_hints or "").lower()).split())
-            keywords |= label_words
-            # Strip common stop-words
-            keywords -= {"in", "the", "of", "to", "a", "an", "is", "and", "or", "for", "at", "by", "located", "next", "label", "table", "under", "header", "section", "candidate", "profile"}
+        # ── Phase 3: Deterministic reconciliation ─────────────────────────────
+        # Build a fast lookup: normalised_marker_name → canonical marker string
+        norm_to_marker: Dict[str, str] = {}
+        for m in detected_markers:
+            norm_to_marker[normalize_marker_name(m)] = m
+            # Also index by inner name directly
+            inner = m.strip("«»[] ")
+            norm_to_marker[inner.lower()] = m
 
-            best_match = ""
-            best_score = 0
-            for cand in candidates:
-                inner = re.sub(r"[^a-z0-9]", " ", cand.strip("«»[]").lower())
-                cand_words = set(inner.split())
-                score = len(keywords & cand_words)
-                if score > best_score:
-                    best_score = score
-                    best_match = cand
-            return best_match if best_score > 0 else ""
+        # Build inverted alias: CamelCase alias → fieldname
+        alias_inverted: Dict[str, str] = {}
+        for fn, aliases in FIELD_ALIAS_MAP.items():
+            for alias in aliases:
+                alias_inverted[alias.lower()] = fn
+
+        # Track which detected markers are already used
+        used_markers: set = {
+            e.get("marker_text", "").strip()
+            for e in manifest
+            if e.get("marker_text", "").strip()
+        }
 
         for entry in manifest:
+            fn = entry.get("fieldname", "")
+            mt = (entry.get("marker_text") or "").strip()
+            sk = entry.get("source_kind", "")
+
+            # Skip instruction blocks
+            if entry.get("field_type") == "instruction_block":
+                continue
+
+            # Validate existing marker_text
+            if mt:
+                if mt not in detected_markers:
+                    # Try canonical wrap
+                    canonical = canonical_marker(mt.strip("«»[] "))
+                    if canonical in detected_markers:
+                        logger.info(f"[Reconcile] Fixed wrapping: '{mt}' → '{canonical}' for '{fn}'")
+                        entry["marker_text"] = canonical
+                        mt = canonical
+                    else:
+                        logger.warning(f"[Reconcile] Hallucinated marker '{mt}' for '{fn}' — clearing.")
+                        entry["marker_text"] = ""
+                        mt = ""
+                continue  # marker is valid, move on
+
+            # marker_text is empty — run alias-based reconciliation
+            if sk in ("visual_blank_slot", "bullet_slots", "paste_zone", "instruction_block", "section_body"):
+                continue  # these legitimately have no marker
+
+            # Try alias map first (high confidence)
+            if fn in FIELD_ALIAS_MAP:
+                for alias in FIELD_ALIAS_MAP[fn]:
+                    canonical = f"«{alias}»"
+                    if canonical in detected_markers and canonical not in used_markers:
+                        entry["marker_text"] = canonical
+                        entry["source_kind"] = "merge_marker"
+                        entry.setdefault("render_locator", {})["strategy"] = "replace_marker"
+                        entry.setdefault("render_locator", {})["marker"] = canonical
+                        used_markers.add(canonical)
+                        logger.info(f"[Reconcile] Alias matched: '{fn}' → '{canonical}'")
+                        break
+
+            # If still empty, try normalized name matching
             if not entry.get("marker_text"):
-                fieldname = entry.get("fieldname", "")
-                source_hints = entry.get("source_hints", "")
-                healed = _fuzzy_match_placeholder(fieldname, source_hints, detected_placeholders)
-                if healed:
-                    entry["marker_text"] = healed
-                    logger.info(f"HEALED (fuzzy): '{fieldname}' → '{healed}'")
+                fn_norm = normalize_marker_name(fn)
+                if fn_norm in norm_to_marker:
+                    m_candidate = norm_to_marker[fn_norm]
+                    if m_candidate not in used_markers:
+                        entry["marker_text"] = m_candidate
+                        entry["source_kind"] = "merge_marker"
+                        used_markers.add(m_candidate)
+                        logger.info(f"[Reconcile] Norm matched: '{fn}' → '{m_candidate}'")
 
-        # 4. Final Reconciliation & Hallucination Guard
-        manifest_markers = [str(m.get("marker_text", "")) for m in manifest if m.get("marker_text")]
-        
-        # --- HALLUCINATION GUARD: Check for repetitive markers ---
-        if len(manifest_markers) > 3:
-            from collections import Counter
-            counts = Counter(manifest_markers)
-            most_common, count = counts.most_common(1)[0]
-            if count / len(manifest_markers) > 0.6:
-                logger.error(f"HALLUCINATION DETECTED: Marker '{most_common}' repeated {count} times. Rejecting manifest.")
-                # Force a partial cleanup: remove the hallucinated markers from fields that clearly don't match
-                for m in manifest:
-                    if m.get("marker_text") == most_common and most_common.lower().strip("«»") not in m.get("fieldname", "").lower():
-                        if "email" not in m.get("fieldname", "").lower():
-                            m["marker_text"] = "" 
-                            logger.info(f"Cleaned hallucinated marker from {m.get('fieldname')}")
+        # ── Phase 3b: Add any completely missed detected markers ──────────────
+        for m in detected_markers:
+            if m in used_markers:
+                continue
+            # Skip loop boundary markers
+            inner = m.strip("«»[] ")
+            if inner.startswith("TableStart:") or inner.startswith("TableEnd:"):
+                continue
 
-        for p in detected_placeholders:
-            found = False
-            for m in manifest_markers:
-                if p in m:
-                    found = True
+            # Try to find a known fieldname via alias
+            fn_for_marker = None
+            for fn_alias, aliases in FIELD_ALIAS_MAP.items():
+                if inner in aliases:
+                    fn_for_marker = fn_alias
                     break
 
-            if not found:
-                logger.warning(f"AI STILL missed placeholder '{p}'. Using fallback.")
-                clean_name = re.sub(r"[^a-z0-9]", "_", p.lower()).strip("_")
-                if not clean_name:
-                    clean_name = f"field_{p}"
-                manifest.insert(
-                    0,
-                    {
-                        "fieldname": clean_name,
-                        "marker_text": f"«{p}»",
-                        "visual_context": "Automatically identified at document level",
-                        "meaning": f"Metadata placeholder for {p}",
-                        "source_hints": clean_name.replace("_", " "),
+            if not fn_for_marker:
+                # Derive from the inner name
+                fn_for_marker = normalize_marker_name(m).replace(" ", "_")
+
+            manifest.append({
+                "fieldname": fn_for_marker,
+                "field_type": "scalar",
+                "source_kind": "merge_marker",
+                "marker_text": m,
+                "render_locator": {"strategy": "replace_marker", "marker": m, "label": "", "heading": ""},
+                "meaning": f"Auto-recovered: {inner}",
+                "source_hints": f"Detected in DOCX XML as {m}",
+                "required": False,
+                "confidence": 0.6,
+            })
+            used_markers.add(m)
+            logger.info(f"[Reconcile] Auto-added missed marker: {m} → '{fn_for_marker}'")
+
+        # ── Phase 3c: Ensure visual_blank_slots from structure are in manifest ─
+        manifest_labels = {
+            (e.get("render_locator") or {}).get("label", "").lower()
+            for e in manifest
+        }
+        for slot in structure.table_label_value_pairs:
+            if slot.is_blank and not slot.marker and slot.label.lower() not in manifest_labels:
+                fn_derived = re.sub(r"[^a-z0-9]+", "_", slot.label.lower()).strip("_")
+                manifest.append({
+                    "fieldname": fn_derived,
+                    "field_type": "scalar",
+                    "source_kind": "visual_blank_slot",
+                    "marker_text": "",
+                    "render_locator": {
+                        "strategy": "fill_blank_cell_after_label",
+                        "marker": "",
+                        "label": slot.label,
+                        "heading": "",
                     },
-                )
+                    "meaning": f"Value for '{slot.label}' label in template table",
+                    "source_hints": f"Table row labelled '{slot.label}'",
+                    "required": False,
+                    "confidence": 0.7,
+                })
+                logger.info(f"[Reconcile] Added visual_blank_slot for label '{slot.label}'")
+
+        # ── Phase 4: Manifest validation ─────────────────────────────────────
+        validator = TemplateManifestValidator()
+        validation_result = validator.validate(manifest, detected_markers)
+        logger.info(f"[TemplateAnalysis] Validation: {validation_result.to_dict()}")
+        if validation_result.status == "FAIL":
+            logger.error(f"[TemplateAnalysis] Manifest FAILED validation: {validation_result.errors}")
+
+        # ── Assemble final result ─────────────────────────────────────────────
+        expected_sections = data.get("expected_sections") or []
+        if isinstance(expected_sections, list):
+            expected_sections_str = ", ".join(expected_sections)
+        else:
+            expected_sections_str = str(expected_sections)
 
         fields = [m.get("fieldname") for m in manifest if m.get("fieldname")]
-        expected_fields = ", ".join(fields)
+        expected_fields_str = ", ".join(fields)
 
         return {
             "purpose": data.get("purpose") or "General Template",
-            "expected_sections": data.get("expected_sections") or "Summary, Experience",
-            "expected_fields": expected_fields,
+            "expected_sections": expected_sections_str,
+            "expected_fields": expected_fields_str,
             "summary_guidance": data.get("summary_guidance", ""),
             "formatting_guidance": data.get("formatting_guidance", ""),
             "validation_guidance": data.get("validation_guidance", ""),
+            "pii_guidance": data.get("pii_guidance", ""),
+            "layout_analysis": data.get("layout_analysis", {"layout_style": structure.layout_style}),
             "field_extraction_manifest": manifest,
+            "_validation": validation_result.to_dict(),
         }
+
+
 
     async def harmonize_data_to_template_style(
         self,
