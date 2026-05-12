@@ -126,6 +126,135 @@ class ResumeAiService:
                 unique.append(ps)
         return unique
 
+    def _detect_structural_hints(self, content: bytes) -> Dict[str, Any]:
+        """
+        Scans DOCX XML to detect structural and visual presentation hints:
+        - Layout style: table_based, freeflow, or mixed
+        - Instruction blocks: paragraphs with red/colored text (w:color) or italic style
+        - Paste zones: headings that contain 'own cv', 'paste', 'insert cv'
+        - Table loops: «TableStart:NAME» markers signaling mail-merge loops
+        """
+        hints: Dict[str, Any] = {
+            "layout_style": "freeflow",
+            "instruction_paragraphs": [],
+            "paste_zone_headings": [],
+            "table_loops": [],  # List of {loop_name, item_fields}
+        }
+        W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+        ns = {"w": W_NS}
+        W = f"{{{W_NS}}}"
+
+        PASTE_ZONE_KEYWORDS = ["own cv", "paste", "insert cv", "candidate cv", "candidate's cv"]
+        INSTRUCTION_COLOR_RED = {"ff0000", "ff0000", "c00000", "dc143c"}
+
+        try:
+            import io
+
+            with zipfile.ZipFile(io.BytesIO(content)) as z:
+                if "word/document.xml" not in z.namelist():
+                    return hints
+
+                xml_content = z.read("word/document.xml")
+                root = ET.fromstring(xml_content)
+
+                # 1. Layout style: count tables vs non-table paragraphs
+                table_count = len(root.xpath("//w:tbl", namespaces=ns))
+                para_count = len(root.xpath("//w:p", namespaces=ns))
+                if table_count > 0 and para_count > 0:
+                    hints["layout_style"] = "mixed" if para_count > table_count * 3 else "table_based"
+                elif table_count > 0:
+                    hints["layout_style"] = "table_based"
+
+                # 2. Detect instruction blocks (colored / italic paragraphs)
+                for para in root.xpath("//w:p", namespaces=ns):
+                    run_texts = [t.text or "" for t in para.xpath(".//w:t", namespaces=ns)]
+                    para_text = "".join(run_texts).strip()
+                    if not para_text or len(para_text) < 10:
+                        continue
+
+                    is_instruction = False
+
+                    # Check for red/colored runs
+                    for color_el in para.xpath(".//w:color", namespaces=ns):
+                        color_val = (color_el.get(f"{W}val") or "").lower()
+                        if color_val in INSTRUCTION_COLOR_RED or (color_val not in ("auto", "000000", "") and color_val != "auto"):
+                            is_instruction = True
+                            break
+
+                    # Check for italic-only runs (common for instruction text)
+                    italic_runs = para.xpath(".//w:i", namespaces=ns)
+                    if italic_runs and not is_instruction:
+                        # Only flag if ALL content is italic (instruction style)
+                        total_runs = para.xpath(".//w:r", namespaces=ns)
+                        if total_runs and len(italic_runs) >= len(total_runs):
+                            is_instruction = True
+
+                    # Check for quoted instruction text
+                    if not is_instruction and para_text.startswith('"') and para_text.endswith('"') and len(para_text) > 20:
+                        is_instruction = True
+
+                    if is_instruction and para_text not in hints["instruction_paragraphs"]:
+                        hints["instruction_paragraphs"].append(para_text[:300])  # Truncate long ones
+
+                # 3. Detect paste-zone headings (bold headings containing paste-zone keywords)
+                for para in root.xpath("//w:p", namespaces=ns):
+                    # Check heading style
+                    style_el = para.xpath(".//w:pStyle", namespaces=ns)
+                    is_heading = any(
+                        (s.get(f"{W}val") or "").lower().startswith("heading")
+                        for s in style_el
+                    )
+                    run_texts = [t.text or "" for t in para.xpath(".//w:t", namespaces=ns)]
+                    para_text = "".join(run_texts).strip().lower()
+
+                    # Check bold runs as proxy for headings
+                    bold_els = para.xpath(".//w:b", namespaces=ns)
+                    if (is_heading or bold_els) and any(kw in para_text for kw in PASTE_ZONE_KEYWORDS):
+                        hints["paste_zone_headings"].append("".join(run_texts).strip())
+
+                # 4. Detect table loops from MERGEFIELD instructions
+                loop_names: Dict[str, list] = {}
+                # Simple fields
+                for fld in root.xpath("//w:fldSimple", namespaces=ns):
+                    instr = fld.get(f"{W}instr") or ""
+                    if "MERGEFIELD" in instr:
+                        parts = instr.split()
+                        if len(parts) >= 2:
+                            name = parts[parts.index("MERGEFIELD") + 1]
+                            if name.startswith("TableStart:"):
+                                loop_name = name[len("TableStart:"):]
+                                loop_names.setdefault(loop_name, [])
+                            elif name.startswith("TableEnd:"):
+                                pass  # already tracked
+                            else:
+                                # Could be a loop body field — associate with most recent loop
+                                for ln in loop_names:
+                                    if name not in loop_names[ln]:
+                                        loop_names[ln].append(name)
+                # Complex fields
+                for instr_text in root.xpath("//w:instrText", namespaces=ns):
+                    text = instr_text.text or ""
+                    if "MERGEFIELD" in text:
+                        parts = text.split()
+                        if len(parts) >= 2:
+                            name = parts[parts.index("MERGEFIELD") + 1]
+                            if name.startswith("TableStart:"):
+                                loop_name = name[len("TableStart:"):]
+                                loop_names.setdefault(loop_name, [])
+                            elif not name.startswith("TableEnd:"):
+                                for ln in loop_names:
+                                    if name not in loop_names[ln]:
+                                        loop_names[ln].append(name)
+
+                hints["table_loops"] = [
+                    {"loop_name": k, "item_fields": v} for k, v in loop_names.items()
+                ]
+
+        except Exception as e:
+            logger.error(f"Error detecting structural hints: {e}")
+
+        return hints
+
     def _build_table_label_context(self, extracted_doc) -> str:
         """
         Builds a structured text block describing table label→value pairs from
@@ -217,6 +346,35 @@ class ResumeAiService:
                 injection_header += f"Marker: «{inner}» → must be assigned to logical field '{inner}'\n"
             injection_header += "[END HIDDEN METADATA]\n\n"
             text_content = injection_header + text_content
+
+        # 2b. Structural hints: layout style, instruction blocks, paste zones, table loops
+        if filename.lower().endswith(".docx"):
+            struct_hints = self._detect_structural_hints(content)
+            logger.info(f"Structural hints detected: {struct_hints}")
+
+            struct_block = "\n[STRUCTURAL HINTS FROM DOCX ANALYSIS]\n"
+            struct_block += f"Layout Style: {struct_hints.get('layout_style', 'unknown')}\n"
+
+            loops = struct_hints.get("table_loops", [])
+            if loops:
+                struct_block += "Table Loops Detected (field_type=table_loop):\n"
+                for loop in loops:
+                    struct_block += f"  - Loop: '{loop['loop_name']}' with item fields: {loop['item_fields']}\n"
+
+            paste_zones = struct_hints.get("paste_zone_headings", [])
+            if paste_zones:
+                struct_block += "Paste Zone Headings Detected (field_type=paste_zone):\n"
+                for pz in paste_zones:
+                    struct_block += f"  - '{pz}'\n"
+
+            instructions = struct_hints.get("instruction_paragraphs", [])
+            if instructions:
+                struct_block += "Instruction Block Paragraphs Detected (field_type=instruction_block):\n"
+                for inst in instructions:
+                    struct_block += f"  - '{inst}'\n"
+
+            struct_block += "[END STRUCTURAL HINTS]\n"
+            text_content = struct_block + text_content
 
         # 2b. Append structured table label→value context so AI can map labels to markers
         table_context = self._build_table_label_context(extracted_doc)
