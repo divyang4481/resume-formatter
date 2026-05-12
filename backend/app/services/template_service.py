@@ -61,6 +61,11 @@ class TemplateService:
                 content_type=content_type,
                 context=context
             )
+            
+            logger.info("\n" + "=" * 60 + "\n--- DOCLING EXTRACTION RESULT (Knowledge Asset) ---\n" + "=" * 60)
+            logger.info(extracted_doc.extracted_text or "No text extracted")
+            logger.info("=" * 60 + "\n")
+            
             extracted_text = extracted_doc.extracted_text
             backend_used = extracted_doc.backend_used
 

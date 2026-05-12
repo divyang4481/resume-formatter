@@ -43,8 +43,16 @@ class PythonOrchestratedResumeFormattingAgent(ResumeFormattingAgent):
         """
 
         try:
+            logger.info("\n" + "=" * 60 + "\n--- MAP RESUME TO TEMPLATE PROMPT ---\n" + "=" * 60)
+            logger.info(prompt)
+            logger.info("=" * 60 + "\n")
+
             response_text = self.llm.generate(prompt=prompt, temperature=0.1)
-            logger.info(f"LLM Response (raw): {response_text}")
+
+            logger.info("\n" + "=" * 60 + "\n--- MAP RESUME TO TEMPLATE RESPONSE ---\n" + "=" * 60)
+            logger.info(response_text)
+            logger.info("=" * 60 + "\n")
+
 
             json_match = re.search(r"```(?:json)?\n?(.*?)```", response_text, re.DOTALL)
             if json_match:
@@ -90,8 +98,16 @@ class PythonOrchestratedResumeFormattingAgent(ResumeFormattingAgent):
         )
 
         try:
+            logger.info("\n" + "=" * 60 + "\n--- GENERATE TEMPLATE CONTRACT PROMPT ---\n" + "=" * 60)
+            logger.info(prompt)
+            logger.info("=" * 60 + "\n")
+
             response_text = self.llm.generate(prompt=prompt, temperature=0.1)
-            logger.info(f"LLM Response (raw): {response_text}")
+
+            logger.info("\n" + "=" * 60 + "\n--- GENERATE TEMPLATE CONTRACT RESPONSE ---\n" + "=" * 60)
+            logger.info(response_text)
+            logger.info("=" * 60 + "\n")
+
 
             json_match = re.search(r"```(?:json)?\n?(.*?)```", response_text, re.DOTALL)
             if json_match:
@@ -175,7 +191,15 @@ class PythonOrchestratedResumeFormattingAgent(ResumeFormattingAgent):
         )
 
         try:
+            logger.info("\n" + "=" * 60 + "\n--- EXTRACT STRUCTURED DATA PROMPT ---\n" + "=" * 60)
+            logger.info(prompt)
+            logger.info("=" * 60 + "\n")
+
             response_text = self.llm.generate(prompt=prompt, temperature=0.0)
+            
+            logger.info("\n" + "=" * 60 + "\n--- EXTRACT STRUCTURED DATA RESPONSE ---\n" + "=" * 60)
+            logger.info(response_text)
+            logger.info("=" * 60 + "\n")
             
             json_match = re.search(r"```(?:json)?\n?(.*?)```", response_text, re.DOTALL)
             if json_match:
@@ -221,8 +245,15 @@ class PythonOrchestratedResumeFormattingAgent(ResumeFormattingAgent):
             mapped_data_json=json.dumps(mapped_data, indent=2)
         )
         try:
+            logger.info("\n" + "=" * 60 + "\n--- EVALUATE OUTPUT QUALITY PROMPT ---\n" + "=" * 60)
+            logger.info(prompt)
+            logger.info("=" * 60 + "\n")
+
             response_text = self.llm.generate(prompt=prompt, temperature=0.1)
-            logger.info(f"LLM Response (raw): {response_text}")
+            
+            logger.info("\n" + "=" * 60 + "\n--- EVALUATE OUTPUT QUALITY RESPONSE ---\n" + "=" * 60)
+            logger.info(response_text)
+            logger.info("=" * 60 + "\n")
 
             json_match = re.search(r"```(?:json)?\n?(.*?)```", response_text, re.DOTALL)
             if json_match:

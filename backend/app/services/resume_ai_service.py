@@ -330,6 +330,11 @@ class ResumeAiService:
             filename,
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         )
+        
+        logger.info("\n" + "=" * 60 + "\n--- DOCLING EXTRACTION RESULT ---\n" + "=" * 60)
+        logger.info(extracted_doc.extracted_text or "No text extracted")
+        logger.info("=" * 60 + "\n")
+        
         text_content = extracted_doc.extracted_text or ""
 
         # ── Phase 1c: Build rich context block for the LLM ───────────────────
