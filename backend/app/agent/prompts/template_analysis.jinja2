@@ -1,30 +1,35 @@
 TASK: Analyze a Resume Template and Generate a Field Extraction Manifest.
 
-TEMPLATE CONTEXT (Text Extraction & Markers):
+TEMPLATE CONTEXT (Text Extraction):
 {{ template_text }}
 
-DETECTED MARKERS (The literal strings found in the document):
+DETECTED MARKERS (The ONLY valid strings for marker_text):
 {{ detected_placeholders | join(', ') }}
 
 INSTRUCTIONS:
-1. Identify all placeholders/markers in the template. Use the "DETECTED MARKERS" list as your primary source of truth for 'marker_text'.
-2. For each marker, determine its logical purpose (e.g., "Full name of the candidate") and assign a 'fieldname' in snake_case (e.g., 'candidate_name').
-3. **MANDATORY**: Every 'fieldname' MUST have a non-empty 'marker_text'. 
-4. **CRITICAL**: The 'marker_text' MUST be the exact literal string found in the document, including brackets/quotes if applicable (e.g., "«CandidateFullName»" or "[Type text]"). 
-5. **HEADER FIELDS**: For fields like 'candidate_name' and 'candidate_id' which are usually at the top, look for the first 2-3 markers in the document. Even if they are hidden (e.g., in a table or header), you MUST map them.
-6. DO NOT use the labels next to the markers (like "Name:") as the 'marker_text'. Use the markers themselves.
-7. If you see generic markers like "[Type text]" appearing multiple times, map them in order of appearance to the most logical fields based on their surrounding text (labels).
-8. Omission of ANY detected placeholder is a CRITICAL FAILURE.
-9. For REPEATED SECTIONS (like Work Experience): If you see repeated markers (e.g., multiple '[Organisation]'), create individual fieldnames for the first 3 instances (e.g., 'job_1_organisation', 'job_2_organisation', 'job_3_organisation').
+1. **EXCLUSIVE SOURCE OF TRUTH**: Every 'marker_text' you provide MUST exist exactly as-is in the "DETECTED MARKERS" list above.
+2. **STRICT PROHIBITION**: DO NOT use bold text (e.g., "**Salary required**"), headers, or labels from the TEMPLATE CONTEXT as a 'marker_text'. These are LABELS, not placeholders.
+3. **MANDATORY MAPPING**: For each logical field (e.g., 'candidate_name'), identify its LABEL in the text and pick the NEAREST valid string from the "DETECTED MARKERS" list to be its 'marker_text'.
+4. **TABLE LABEL→VALUE PAIRS**: If the template context contains a "[STRUCTURED TABLE LABEL→VALUE PAIRS]" section, use it directly. The VALUE/MARKER column shows what sits next to each LABEL — that adjacent VALUE/MARKER is the placeholder you must assign as 'marker_text'. This is your highest-priority mapping source.
+5. **NO HALLUCINATION**: If a field does not have a corresponding marker in the "DETECTED MARKERS" list, set marker_text to "" — do NOT invent one.
+6. **HEADER FIELDS**: For fields like 'candidate_name' and 'candidate_id', look for literal markers at the top of the document (e.g., "«CandidateFullName»").
+7. **GENERIC MARKERS**: If you see generic markers like "[Type text]" appearing multiple times in the "DETECTED MARKERS" list, map them in the order they appear in the text to the most logical fields based on the surrounding labels.
+8. **COMPLETE COVERAGE**: Every marker in the "DETECTED MARKERS" list must be assigned to exactly one fieldname. Omitting a known marker is a failure.
 
 Provide recommendations in the following JSON format:
-1. 'purpose': A concise description of the template's target audience.
-2. 'expected_sections': Comma-separated list of major headers.
-3. 'expected_fields': Comma-separated list of all fieldnames.
-4. 'summary_guidance': Instructions for the AI summary (tone, length).
-5. 'formatting_guidance': Specific rules for data formatting (e.g., "Use bullet points for skills").
-6. 'field_extraction_manifest': A list of objects:
-   - 'fieldname': snake_case logical key.
-   - 'marker_text': The EXACT literal marker from the doc (e.g., "«CandidateFullName»").
-   - 'meaning': Description of the data required.
-   - 'source_hints': Where to find this in a typical resume.
+{
+  "purpose": "Concise description",
+  "expected_sections": "Header, Experience, etc",
+  "expected_fields": "List of all fieldnames",
+  "summary_guidance": "Instructions for AI summary",
+  "formatting_guidance": "Rules for data formatting",
+  "validation_guidance": "Critical checks to perform on the final output",
+  "field_extraction_manifest": [
+    {
+      "fieldname": "snake_case_name",
+      "marker_text": "EXACT_STRING_FROM_DETECTED_MARKERS_LIST",
+      "meaning": "Description",
+      "source_hints": "Where to find in resume"
+    }
+  ]
+}
