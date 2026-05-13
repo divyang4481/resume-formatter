@@ -378,7 +378,7 @@ class ResumeAiService:
             pairs_block += "LABEL | VALUE/MARKER | BLANK?\n"
             pairs_block += "-" * 60 + "\n"
             for slot in structure.table_label_value_pairs:
-                pairs_block += f"{slot.label} | {slot.marker or '[blank]'} | {slot.is_blank}\n"
+                pairs_block += f"{slot.label} | {slot.marker_text or '[blank]'} | {slot.is_blank}\n"
             pairs_block += "[END TABLE PAIRS]\n"
             context_blocks.append(pairs_block)
 
@@ -440,7 +440,7 @@ class ResumeAiService:
         # Blank slot examples — pick first 2
         example_blank_slots = []
         for slot in structure.table_label_value_pairs[:5]:
-            if slot.is_blank and not slot.marker:
+            if slot.is_blank and not slot.marker_text:
                 fn_derived = re.sub(r"[^a-z0-9]+", "_", slot.label.lower()).strip("_")
                 example_blank_slots.append({"label": slot.label, "fieldname": fn_derived})
                 if len(example_blank_slots) >= 2:
@@ -624,7 +624,7 @@ class ResumeAiService:
             # 4. Repeated Marker Context Enforcement & Healing
             if mt in structure.repeated_markers and strategy == "replace_marker":
                 # Try to heal by finding a label that maps to this field
-                found_label = next((s.label for s in structure.table_label_value_pairs if s.marker == mt), None)
+                found_label = next((s.label for s in structure.table_label_value_pairs if s.marker_text == mt), None)
                 if found_label:
                     logger.info(f"[Reconcile] Healing repeated marker '{mt}' for '{fieldname}' using label context '{found_label}'.")
                     entry["source_kind"] = "visual_blank_slot"
@@ -644,9 +644,9 @@ class ResumeAiService:
                 elif strategy == "fill_blank_cell_after_label":
                     # Find the marker that belongs to this label
                     slot = next((s for s in structure.table_label_value_pairs if s.label == label), None)
-                    if slot and slot.marker:
-                        entry["marker_text"] = slot.marker
-                        logger.info(f"[Reconcile] Populated marker_text for label '{label}': {slot.marker}")
+                    if slot and slot.marker_text:
+                        entry["marker_text"] = slot.marker_text
+                        logger.info(f"[Reconcile] Populated marker_text for label '{label}': {slot.marker_text}")
 
             if drop_reason:
                 logger.warning(f"[Reconcile] Dropping field '{fieldname}': {drop_reason}")
@@ -684,7 +684,7 @@ class ResumeAiService:
                 "field_type": f_type,
                 "source_kind": "merge_marker",
                 "marker_text": m,
-                "render_locator": {"strategy": "replace_marker", "marker": m},
+                "render_locator": {"strategy": "replace_marker", "marker_text": m},
                 "meaning": f"Auto-recovered marker: {m}",
                 "confidence": 0.8
             })
@@ -698,25 +698,25 @@ class ResumeAiService:
             for e in manifest
         }
         for slot in structure.table_label_value_pairs:
-            if slot.is_blank and not slot.marker and slot.label.lower() not in manifest_labels:
+            if slot.is_blank and not slot.marker_text and slot.label.lower() not in manifest_labels:
                 fn_derived = re.sub(r"[^a-z0-9]+", "_", slot.label.lower()).strip("_")
                 manifest.append({
                     "fieldname": fn_derived,
                     "field_type": "scalar",
                     "source_kind": "visual_blank_slot",
-                    "marker_text": slot.marker,
+                    "marker_text": slot.marker_text,
                     "render_locator": {
                         "strategy": "fill_blank_cell_after_label",
-                        "marker": slot.marker,
+                        "marker_text": slot.marker_text,
                         "label": slot.label,
                         "heading": "",
                     },
                     "meaning": f"Value for '{slot.label}' label in template table",
-                    "source_hints": f"Table row labelled '{slot.label}' (contains {slot.marker if slot.marker else 'blank'})",
+                    "source_hints": f"Table row labelled '{slot.label}' (contains {slot.marker_text if slot.marker_text else 'blank'})",
                     "required": False,
                     "confidence": 0.7,
                 })
-                logger.info(f"[Reconcile] Added visual_blank_slot for label '{slot.label}' with marker '{slot.marker}'")
+                logger.info(f"[Reconcile] Added visual_blank_slot for label '{slot.label}' with marker '{slot.marker_text}'")
 
         # ── Phase 4: Manifest validation ─────────────────────────────────────
         validator = TemplateManifestValidator()
@@ -789,20 +789,54 @@ class ResumeAiService:
             cleaned_json = LlmSanitizer.clean_json(response)
             logger.info("\n" + "=" * 60 + "\n--- CLEANED JSON ---\n" + "=" * 60)
             logger.info(cleaned_json)
-            logger.info("=" * 60 + "\n")
             data = json.loads(cleaned_json)
 
+            # --- HALLUCINATION GUARD & DATA HEALING ---
+            if "template_fill_result" in data:
+                fill_result = data["template_fill_result"]
+                allowed_keys = {f.get("fieldname") for f in field_manifest if f.get("fieldname")}
+                manifest_markers = {f.get("fieldname"): f.get("marker_text") for f in field_manifest if f.get("fieldname")}
+                
+                # Use list(keys) to avoid "dictionary changed size during iteration"
+                for key in list(fill_result.keys()):
+                    if key not in allowed_keys:
+                        logger.warning(f"[HallucinationGuard] Removing hallucinated key: '{key}'")
+                        # Move to additional facts for visibility
+                        if "additional_resume_facts_available" not in data:
+                            data["additional_resume_facts_available"] = {}
+                        data["additional_resume_facts_available"][key] = fill_result[key]
+                        del fill_result[key]
+                    else:
+                        # Heal marker_text if AI hallucinated or used old "marker" key
+                        entry = fill_result[key]
+                        actual_marker = manifest_markers.get(key)
+                        
+                        # AI might have used "marker" instead of "marker_text"
+                        ai_marker = entry.get("marker_text") or entry.get("marker")
+                        
+                        if actual_marker and ai_marker != actual_marker:
+                            logger.info(f"[DataHealing] Healing marker for '{key}': '{ai_marker}' -> '{actual_marker}'")
+                            entry["marker_text"] = actual_marker
+                        elif not entry.get("marker_text") and actual_marker:
+                            entry["marker_text"] = actual_marker
             logger.info(
-                "\n" + "=" * 60 + "\n--- FINAL HARMONIZED DATA ---\n" + "=" * 60
+                "\n" + "=" * 60 + "\n--- FINAL HARMONIZED DATA (HEALED) ---\n" + "=" * 60
             )
-            logger.info(data)
+            logger.info(json.dumps(data, indent=2))
             logger.info("=" * 60 + "\n")
 
             return data
         except Exception as e:
             logger.error(f"Failed to parse harmonized data JSON: {e}")
-            # Fallback: Return raw data if AI fails
-            return structured_data
+            # Fallback: Return a skeleton dictionary based on the manifest instead of raw data
+            # This ensures downstream nodes don't crash or process raw text as if it were mapped.
+            fallback = {}
+            if field_manifest:
+                for f in field_manifest:
+                    fn = f.get("fieldname")
+                    if fn:
+                        fallback[fn] = "" if f.get("field_type") != "array_complex" else []
+            return fallback if fallback else structured_data
 
     async def apply_composition_logic(self, harmonized_data: Dict[str, Any], template_text: str, manifest: List[Dict[str, Any]] = None, formatting_guidance: str = "") -> Dict[str, Any]:
         """Performs a secondary formatting and professional phrasing pass."""

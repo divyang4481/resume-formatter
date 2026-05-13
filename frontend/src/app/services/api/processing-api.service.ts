@@ -87,4 +87,16 @@ export class ProcessingApiService {
   submitJobFeedback(jobId: string, feedback: string): Observable<any> {
     return this.http.post<any>(`${this.apiUrl}/jobs/${jobId}/feedback`, { feedback });
   }
+
+  getJobFacts(jobId: string): Observable<any> {
+    return this.http.get<any>(`${this.apiUrl}/jobs/${jobId}/facts`);
+  }
+
+  getJobTransformation(jobId: string): Observable<any> {
+    return this.http.get<any>(`${this.apiUrl}/jobs/${jobId}/transformation`);
+  }
+
+  getJobTemplate(jobId: string): Observable<any> {
+    return this.http.get<any>(`${this.apiUrl}/jobs/${jobId}/template`);
+  }
 }

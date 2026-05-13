@@ -1,0 +1,115 @@
+{
+    "containerDefinitions": [
+        {
+            "name": "worker",
+            "image": "114644266543.dkr.ecr.ap-south-1.amazonaws.com/agentic-doc-worker-dev:v1.5.1",
+            "cpu": 0,
+            "links": [],
+            "portMappings": [],
+            "essential": true,
+            "entryPoint": [],
+            "command": [],
+            "environment": [
+                {
+                    "name": "PROCESSING_MODE",
+                    "value": "async"
+                },
+                {
+                    "name": "BEDROCK_AGENT_ID",
+                    "value": "IUJ4II3JAI"
+                },
+                {
+                    "name": "S3_BUCKET_INPUT",
+                    "value": "agentic-platform-storage-dev-114644266543-ap-south-1"
+                },
+                {
+                    "name": "AWS_REGION",
+                    "value": "ap-south-1"
+                },
+                {
+                    "name": "STORAGE_PROVIDER",
+                    "value": "s3"
+                },
+                {
+                    "name": "QUEUE_PROVIDER",
+                    "value": "sqs"
+                },
+                {
+                    "name": "KNOWLEDGE_PROVIDER",
+                    "value": "bedrock_kb"
+                },
+                {
+                    "name": "SQS_PROCESSING_QUEUE_URL",
+                    "value": "https://sqs.ap-south-1.amazonaws.com/114644266543/agentic-platform-queue-dev"
+                },
+                {
+                    "name": "LLM_MAX_TOKENS",
+                    "value": "8192"
+                },
+                {
+                    "name": "S3_BUCKET_OUTPUT",
+                    "value": "agentic-platform-storage-dev-114644266543-ap-south-1"
+                },
+                {
+                    "name": "BEDROCK_AGENT_ALIAS_ID",
+                    "value": "VYKEJ4BOMZ"
+                },
+                {
+                    "name": "DATABASE_URL",
+                    "value": "postgresql://dbadmin:HaysDemo_%23123@agentic-platform-db-dev.ctgoo20ag6cj.ap-south-1.rds.amazonaws.com:5432/agenticdb"
+                },
+                {
+                    "name": "AGENT_PROVIDER",
+                    "value": "python_orchestrated"
+                },
+                {
+                    "name": "RUNTIME_MODE",
+                    "value": "aws"
+                },
+                {
+                    "name": "LLM_MODEL_NAME",
+                    "value": "qwen.qwen3-235b-a22b-2507-v1:0"
+                },
+                {
+                    "name": "CLOUD_PROVIDER",
+                    "value": "aws"
+                }
+            ],
+            "environmentFiles": [],
+            "mountPoints": [],
+            "volumesFrom": [],
+            "secrets": [],
+            "dnsServers": [],
+            "dnsSearchDomains": [],
+            "extraHosts": [],
+            "dockerSecurityOptions": [],
+            "dockerLabels": {},
+            "ulimits": [],
+            "logConfiguration": {
+                "logDriver": "awslogs",
+                "options": {
+                    "awslogs-group": "/ecs/agentic-doc-worker-dev",
+                    "awslogs-region": "ap-south-1",
+                    "awslogs-stream-prefix": "worker"
+                },
+                "secretOptions": []
+            },
+            "systemControls": [],
+            "credentialSpecs": []
+        }
+    ],
+    "family": "agentic-doc-worker-dev",
+    "taskRoleArn": "arn:aws:iam::114644266543:role/cv-architect-services-v2-TaskRole-uXDvdW707ws5",
+    "executionRoleArn": "arn:aws:iam::114644266543:role/cv-architect-services-v2-EcsTaskExecutionRole-WhiUwpgxstD1",
+    "networkMode": "awsvpc",
+    "volumes": [],
+    "placementConstraints": [],
+    "requiresCompatibilities": [
+        "FARGATE"
+    ],
+    "cpu": "4096",
+    "memory": "8192",
+    "ephemeralStorage": {
+        "sizeInGiB": 30
+    }
+}

@@ -70,6 +70,16 @@ class AwsBedrockLlmRuntime(LlmRuntimeAdapter):
         self._settings = settings
         self.default_model_id = model_id or settings.bedrock_default_model_id or settings.llm_model_name
         self.region_name = region_name or settings.aws_region
+        
+        # Check for Bearer Token authentication (API Key)
+        bearer_token = getattr(settings, "aws_bearer_token_bedrock", None)
+        
+        if bearer_token:
+            import os
+            logger.info("[Bedrock] Applying Bearer Token to environment")
+            # Set the environment variable that newer botocore/boto3 versions expect
+            os.environ["AWS_BEDROCK_API_KEY"] = bearer_token
+            
         self.client = boto3.client(service_name="bedrock-runtime", region_name=self.region_name)
 
     # ------------------------------------------------------------------
@@ -173,6 +183,12 @@ class AwsBedrockLlmRuntime(LlmRuntimeAdapter):
             "topP": 0.9,
         }
 
+        # Log Full Prompt for Deep Debugging
+        logger.info(f"\n{'='*80}\n[BEDROCK REQUEST] Model: {model_id}\n{'='*80}")
+        if system:
+            logger.info(f"SYSTEM PROMPT:\n{system[0]['text']}")
+        logger.info(f"USER PROMPT:\n{prompt}\n{'='*80}")
+
         for attempt in range(max_retries):
             try:
                 response = self.client.converse(
@@ -182,12 +198,18 @@ class AwsBedrockLlmRuntime(LlmRuntimeAdapter):
                     inferenceConfig=inference_config,
                 )
                 stop_reason = response.get("stopReason")
+                
+                output_text = response["output"]["message"]["content"][0]["text"]
+                
+                # Log Full Response
+                logger.info(f"\n{'='*80}\n[BEDROCK RESPONSE] Model: {model_id}\n{'='*80}\n{output_text}\n{'='*80}")
+
                 if stop_reason == "max_tokens":
                     logger.warning(
                         f"[Bedrock] Response truncated for model '{model_id}' "
                         f"(maxTokens={capped_tokens} hit)."
                     )
-                return response["output"]["message"]["content"][0]["text"]
+                return output_text
 
             except ClientError as e:
                 code = e.response["Error"]["Code"]

@@ -1,5 +1,5 @@
 import logging
-from typing import Optional
+from typing import Optional, Any
 
 from app.adapters.llm.bedrock_template_analyzer import BedrockTemplateAnalyzer
 from app.schemas.template_analysis import CandidateFacts

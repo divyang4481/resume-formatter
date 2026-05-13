@@ -62,5 +62,8 @@ class TemplateAsset(BaseModel):
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
+    # Full analysis payload (includes raw_structure)
+    analysis_json: Optional[str] = None
+
     # Extension for provider-specific details
     extension_metadata: Dict[str, Any] = Field(default_factory=dict)

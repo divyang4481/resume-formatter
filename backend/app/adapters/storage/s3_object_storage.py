@@ -27,12 +27,13 @@ class S3ObjectStorage(ObjectStorage):
 
     def get_file(self, uri: str, target_path: str) -> str:
         try:
-            if not uri.startswith("s3://"):
-                raise ValueError(f"Invalid S3 URI: {uri}")
-
-            parts = uri.replace("s3://", "").split("/", 1)
-            bucket = parts[0]
-            key = parts[1]
+            if uri.startswith("s3://"):
+                parts = uri.replace("s3://", "").split("/", 1)
+                bucket = parts[0]
+                key = parts[1]
+            else:
+                bucket = self.bucket
+                key = uri
 
             self.s3.download_file(bucket, key, target_path)
             return target_path
@@ -74,12 +75,13 @@ class S3ObjectStorage(ObjectStorage):
 
     def exists(self, uri: str) -> bool:
         try:
-            if not uri.startswith("s3://"):
-                return False
-
-            parts = uri.replace("s3://", "").split("/", 1)
-            bucket = parts[0]
-            key = parts[1]
+            if uri.startswith("s3://"):
+                parts = uri.replace("s3://", "").split("/", 1)
+                bucket = parts[0]
+                key = parts[1]
+            else:
+                bucket = self.bucket
+                key = uri
             self.s3.head_object(Bucket=bucket, Key=key)
             return True
         except Exception:
@@ -87,11 +89,15 @@ class S3ObjectStorage(ObjectStorage):
 
     def get_bytes(self, uri: str) -> bytes:
         try:
-            if not uri.startswith("s3://"):
-                raise ValueError(f"Invalid S3 URI: {uri}")
-            parts = uri.replace("s3://", "").split("/", 1)
-            bucket = parts[0]
-            key = parts[1]
+            if uri.startswith("s3://"):
+                parts = uri.replace("s3://", "").split("/", 1)
+                bucket = parts[0]
+                key = parts[1]
+            else:
+                # Treat as raw key in default bucket
+                bucket = self.bucket
+                key = uri
+                
             response = self.s3.get_object(Bucket=bucket, Key=key)
             return response['Body'].read()
         except Exception as e:

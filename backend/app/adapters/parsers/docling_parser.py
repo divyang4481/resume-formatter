@@ -37,25 +37,47 @@ class DoclingParser(DocumentParser):
             tables = []
             text_chunks = []
 
+            # Initial "Intro" section for any text appearing before the first header
+            current_section = ParsedSection(title="Intro", level=1, content="")
+            sections.append(current_section)
+
             # Extract text and sections
             for item, level in doc.iterate_items():
-                if item.label == "text" or item.label == "paragraph":
-                    text_chunks.append(item.text)
-                elif item.label == "section_header":
-                    sections.append(ParsedSection(
-                        title=item.text,
-                        level=level,
-                        content="" # Will append content below in a more complex implementation
-                    ))
+                # Recognize various header labels
+                if item.label in ("section_header", "heading", "title"):
+                    # If we found a real header, and our current section is just the empty Intro, rename it
+                    if current_section and not current_section.content and current_section.title == "Intro":
+                        current_section.title = item.text
+                        current_section.level = level
+                    else:
+                        current_section = ParsedSection(
+                            title=item.text,
+                            level=level,
+                            content=""
+                        )
+                        sections.append(current_section)
+                # Recognize various text labels
+                elif item.label in ("text", "paragraph", "list_item", "item", "caption", "footnote"):
+                    txt = getattr(item, "text", "")
+                    if txt:
+                        text_chunks.append(txt)
+                        if current_section:
+                            if current_section.content:
+                                current_section.content += "\n" + txt
+                            else:
+                                current_section.content = txt
                 elif item.label == "table":
                     # Simple table extraction
                     table_data = []
                     if hasattr(item, 'data') and hasattr(item.data, 'grid'):
                         grid = item.data.grid
                         for row in grid:
-                            table_data.append([cell.text for cell in row])
+                            table_data.append([getattr(cell, "text", "") for cell in row])
                     tables.append(ParsedTable(data=table_data))
 
+            # Clean up: if Intro section is still empty at the end, remove it
+            if sections and sections[0].title == "Intro" and not sections[0].content:
+                sections.pop(0)
 
             return ParsedDocument(
                 text=full_text,

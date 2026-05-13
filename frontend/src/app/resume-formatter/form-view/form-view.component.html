@@ -87,6 +87,9 @@
             <a mat-stroked-button color="primary" [routerLink]="['/view-document', docService.currentJobId()]" target="_blank" *ngIf="docService.currentJobId()">
               <mat-icon>visibility</mat-icon> View
             </a>
+            <button mat-stroked-button color="accent" (click)="showDeepReview = !showDeepReview">
+              <mat-icon>analytics</mat-icon> Deep Review (JSON)
+            </button>
           </div>
           <ng-template #loadingDownload>
             <div class="flex-row align-center gap-8 py-2">
@@ -96,6 +99,31 @@
           </ng-template>
         </mat-card-content>
       </mat-card>
+
+      <!-- Deep Review / Side-by-Side JSON Viewer -->
+      <div class="deep-review-container mt-3" *ngIf="showDeepReview">
+        <mat-card class="result-card">
+          <mat-card-header>
+            <mat-card-title>Pipeline Analysis (Deep Review)</mat-card-title>
+          </mat-card-header>
+          <mat-card-content>
+            <div class="json-grid">
+              <div class="json-panel">
+                <h3>1. Template Manifest</h3>
+                <pre class="json-viewer">{{ docService.jobTemplate() | json }}</pre>
+              </div>
+              <div class="json-panel">
+                <h3>2. Extracted Resume Facts</h3>
+                <pre class="json-viewer">{{ docService.jobFacts() | json }}</pre>
+              </div>
+              <div class="json-panel">
+                <h3>3. Mapping / Transformation Plan</h3>
+                <pre class="json-viewer">{{ docService.jobTransformation() | json }}</pre>
+              </div>
+            </div>
+          </mat-card-content>
+        </mat-card>
+      </div>
 
       <mat-card class="result-card mt-3">
         <mat-card-header>

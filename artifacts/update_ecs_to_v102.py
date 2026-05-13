@@ -15,7 +15,7 @@ def update_and_register(family, original_file, new_tag):
             with open(original_file, 'r', encoding='utf-8') as f:
                 data = json.load(f)
     
-    task_def = data['taskDefinition']
+    task_def = data.get('taskDefinition', data)
     
     # Remove fields not allowed in register-task-definition
     keys_to_remove = [
@@ -60,19 +60,25 @@ def update_service(cluster, service, task_def_arn):
 
 if __name__ == "__main__":
     cluster = "agentic-doc-cluster-dev"
-    version = sys.argv[1] if len(sys.argv) > 1 else "v1.1.5"
     
+    # Defaults or from command line
+    # Usage: python update_ecs.py <api_worker_tag> <frontend_tag>
+    api_worker_tag = sys.argv[1] if len(sys.argv) > 1 else "v1.5.1"
+    frontend_tag = sys.argv[2] if len(sys.argv) > 2 else "v1.2.5"
+    
+    print(f"Deploying with tags: API/Worker={api_worker_tag}, Frontend={frontend_tag}")
+
     # Update API
-    api_arn = update_and_register("api", "temp_api_task_def.json", version)
+    api_arn = update_and_register("api", "temp_api_task_def.json", api_worker_tag)
     if api_arn:
         update_service(cluster, "api-service-dev", api_arn)
     
     # Update Worker
-    worker_arn = update_and_register("worker", "temp_worker_task_def.json", version)
+    worker_arn = update_and_register("worker", "temp_worker_task_def.json", api_worker_tag)
     if worker_arn:
         update_service(cluster, "worker-service-dev", worker_arn)
 
     # Update Frontend
-    frontend_arn = update_and_register("frontend", "temp_frontend_task_def.json", version)
+    frontend_arn = update_and_register("frontend", "temp_frontend_task_def.json", frontend_tag)
     if frontend_arn:
         update_service(cluster, "frontend-service-dev", frontend_arn)

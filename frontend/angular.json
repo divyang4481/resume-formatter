@@ -40,6 +40,9 @@
           },
           "configurations": {
             "production": {
+              "optimization": {
+                "fonts": false
+              },
               "fileReplacements": [
                 {
                   "replace": "src/environments/environment.ts",

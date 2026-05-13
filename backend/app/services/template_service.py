@@ -149,6 +149,7 @@ class TemplateService:
             original_file_ref=storage_uri,
             checksum=checksum,
             created_by=uploaded_by,
+            analysis_json=suggestions.model_dump_json() if hasattr(suggestions, 'model_dump_json') else ensure_str(suggestions),
             extension_metadata={"document_extractor_backend": backend_used} if backend_used else {}
         )
 

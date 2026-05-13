@@ -459,6 +459,67 @@ async def get_job_summary(
 
     return {"summary": "Summary not available yet."}
 
+@router.get("/jobs/{id}/facts")
+async def get_job_facts(
+    id: str,
+    job_repository: JobRepository = Depends(get_job_repository)
+):
+    """Returns the extracted candidate facts JSON."""
+    job = job_repository.get_job(id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    
+    # We return the raw JSON string if it exists
+    facts = getattr(job, "candidate_facts_json", None)
+    import json
+    try:
+        return json.loads(facts) if facts else {}
+    except:
+        return {"error": "Invalid facts JSON"}
+
+@router.get("/jobs/{id}/transformation")
+async def get_job_transformation(
+    id: str,
+    job_repository: JobRepository = Depends(get_job_repository)
+):
+    """Returns the LLM-generated transformation/mapping plan JSON."""
+    job = job_repository.get_job(id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    
+    transformed = getattr(job, "transformed_json", None)
+    import json
+    try:
+        return json.loads(transformed) if transformed else {}
+    except:
+        return {"error": "Invalid transformation JSON"}
+
+@router.get("/jobs/{id}/template")
+async def get_job_template(
+    id: str,
+    job_repository: JobRepository = Depends(get_job_repository),
+    template_repository: TemplateRepository = Depends(get_template_repository)
+):
+    """Returns the template manifest used for this job."""
+    job = job_repository.get_job(id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    
+    tpl_id = getattr(job, "selected_template_id", None) or getattr(job, "template_asset_id", None)
+    if not tpl_id:
+        raise HTTPException(status_code=404, detail="Template not associated with this job")
+    
+    template = template_repository.get_template(tpl_id)
+    if not template:
+        raise HTTPException(status_code=404, detail="Template not found")
+    
+    return {
+        "template_id": template.id,
+        "name": template.name,
+        "manifest": template.field_extraction_manifest,
+        "expected_fields": template.expected_fields.split(",") if template.expected_fields else []
+    }
+
 @router.post("/documents/{id}/feedback")
 async def submit_feedback(id: str):
     """

@@ -154,11 +154,13 @@ OUTPUT JSON SCHEMA (return this structure exactly, populated for THIS template):
       "marker_text": "exact string from DETECTED MARKERS, or empty string",
       "render_locator": {
         "strategy": "replace_marker | fill_blank_cell_after_label | replace_bullets_under_heading | replace_section_body | clear_instruction_block",
-        "marker": "marker string if strategy=replace_marker",
+        "marker_text": "marker string if strategy=replace_marker",
         "label": "label text if strategy=fill_blank_cell_after_label",
         "heading": "heading text if strategy involves a heading"
       },
       "meaning": "what this field contains",
+      "item_schema": "For array types, describe the object structure (e.g. {job_title, company, dates, bullets})",
+      "formatting_hints": "Describe the visual pattern (e.g. 'Bold Title on line 1, Italics Org on line 2, followed by bullets')",
       "source_hints": "where to find this data in the candidate's resume",
       "required": false,
       "confidence": 0.9

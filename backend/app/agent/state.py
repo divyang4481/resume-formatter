@@ -60,6 +60,7 @@ class AgentState(TypedDict):
     actor_role: Optional[str]
     filename: Optional[str]
     content_type: Optional[str]
+    missing_fields: Optional[list]
 
     # Additional contextual metadata
     runtime_metadata: Optional[Dict[str, Any]]

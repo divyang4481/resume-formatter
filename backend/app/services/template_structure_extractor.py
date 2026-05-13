@@ -26,22 +26,22 @@ NS = {"w": W_NS}
 # Used in reconciliation to map LLM-produced fieldnames → detected markers
 # ---------------------------------------------------------------------------
 FIELD_ALIAS_MAP: Dict[str, Dict[str, Any]] = {
-    "candidate_name": {"type": "scalar", "aliases": ["CandidateFullName", "FullName", "CandidateName", "Candidate_Full_Name"]},
+    "candidate_full_name": {"type": "scalar", "aliases": ["CandidateFullName", "FullName", "CandidateName", "Candidate_Full_Name", "Name", "Candidate name"]},
     "candidate_id": {"type": "scalar", "aliases": ["CandidateID", "CandidateId", "ID", "Candidate_ID"]},
-    "notice_period": {"type": "scalar", "aliases": ["NoticePeriod", "Notice_Period", "Availability"]},
-    "salary_required": {"type": "scalar", "aliases": ["ExpectedSalary", "SalaryRequired", "ExpectedSalaryAmount", "Salary_Required"]},
-    "living_in": {"type": "scalar", "aliases": ["CandidateTown", "CandidateLocation", "Town", "Current_Location"]},
-    "expert_opinion": {"type": "rich_text", "aliases": ["CVcomments", "ExpertOpinion", "CVComments", "Cvcomments", "ConsultantComments"]},
-    "employee_name": {"type": "scalar", "aliases": ["EmployeeName", "ConsultantName", "PresenterName"]},
+    "notice_period": {"type": "scalar", "aliases": ["NoticePeriod", "Notice_Period", "Availability", "Notice_period"]},
+    "expected_salary": {"type": "scalar", "aliases": ["ExpectedSalary", "SalaryRequired", "ExpectedSalaryAmount", "Salary_Required", "SalaryRequiredValue", "Salary required", "salary_required"]},
+    "candidate_town": {"type": "scalar", "aliases": ["CandidateTown", "CandidateLocation", "Town", "Current_Location", "living_in", "Living in"]},
+    "cv_comments": {"type": "rich_text", "aliases": ["CVcomments", "ExpertOpinion", "CVComments", "Cvcomments", "ConsultantComments", "Consultant_comments", "Expert_Opinion", "expert_opinion", "Our expert opinion"]},
+    "employee_name": {"type": "scalar", "aliases": ["EmployeeName", "ConsultantName", "PresenterName", "HaysConsultant"]},
     "employee_job_title": {"type": "scalar", "aliases": ["EmployeeJobTitle", "ConsultantJobTitle", "JobTitle"]},
     "employee_email": {"type": "scalar", "aliases": ["EmployeeEmail", "ConsultantEmail", "Email"]},
     "employee_tel_no": {"type": "scalar", "aliases": ["EmployeeTelNo", "EmployeeTelNumber", "ConsultantTelNo", "Phone"]},
     "employee_specialist_area": {"type": "scalar", "aliases": ["EmployeeSpecialistArea", "SpecialistArea", "ConsultantSpecialism"]},
     "current_salary_benefits": {"type": "scalar", "aliases": ["CurrentSalary", "Salary", "CurrentSalaryBenefits", "Current_Salary"]},
-    "work_experience": {"type": "rich_text", "aliases": ["WorkExperience", "EmploymentHistory", "Work_Experience", "Experience"]},
-    "education": {"type": "rich_text", "aliases": ["Education", "AcademicBackground", "Qualifications"]},
-    "skills": {"type": "rich_text", "aliases": ["Skills", "KeySkills", "CoreCompetencies"]},
-    "interests_and_activities": {"type": "rich_text", "aliases": ["InterestsAndActivities", "Hobbies", "PersonalInterests"]},
+    "work_experience": {"type": "rich_text", "aliases": ["WorkExperience", "EmploymentHistory", "Work_Experience", "Experience", "Employment_History"]},
+    "education": {"type": "rich_text", "aliases": ["Education", "AcademicBackground", "Qualifications", "Academic_Background"]},
+    "skills": {"type": "rich_text", "aliases": ["Skills", "KeySkills", "CoreCompetencies", "Key_Skills"]},
+    "interests_and_activities": {"type": "rich_text", "aliases": ["InterestsAndActivities", "Hobbies", "PersonalInterests", "Interests_and_Activities"]},
 }
 
 # Inverted alias map: CamelCase marker → canonical fieldname
@@ -53,7 +53,7 @@ for _fn, _info in FIELD_ALIAS_MAP.items():
 PASTE_ZONE_KEYWORDS = [
     "own cv", "paste", "insert cv", "candidate cv", "candidate's cv",
     "work experience", "employment history", "professional experience",
-    "education", "academic background", "qualifications",
+    "education", "academic background", "key skills",
     "interests and activities", "hobbies", "personal interests"
 ]
 INSTRUCTION_COLORS_RED = {"ff0000", "c00000", "dc143c", "b22222"}
@@ -85,11 +85,11 @@ class TableLoop:
 class TableLabelSlot:
     """A table row where a bold/label cell is followed by a blank or marker cell."""
     label: str
-    marker: str = ""        # If marker found in value cell
+    marker_text: str = ""   # If marker found in value cell
     is_blank: bool = False  # True when value cell has no useful content
 
     def to_dict(self) -> Dict[str, Any]:
-        return {"label": self.label, "marker": self.marker, "is_blank": self.is_blank}
+        return {"label": self.label, "marker_text": self.marker_text, "is_blank": self.is_blank}
 
 
 @dataclass
@@ -136,6 +136,12 @@ class TemplateStructure:
     layout_style: str = "freeflow"
     """table_based | freeflow | mixed"""
 
+    heading_to_loop: Dict[str, str] = field(default_factory=dict)
+    """Maps a heading text to the name of the TableLoop that immediately follows it."""
+
+    heading_to_smart_pattern: Dict[str, List[str]] = field(default_factory=dict)
+    """Maps a heading to a sequence of multi-line placeholders that form an object template."""
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "detected_markers": self.detected_markers,
@@ -152,6 +158,8 @@ class TemplateStructure:
             "repeated_markers": self.repeated_markers,
             "heading_to_placeholder": self.heading_to_placeholder,
             "layout_style": self.layout_style,
+            "heading_to_loop": self.heading_to_loop,
+            "heading_to_smart_pattern": self.heading_to_smart_pattern,
         }
 
 
@@ -199,8 +207,19 @@ def canonical_marker(raw: str) -> str:
 
 
 def _para_text(para: ET._Element) -> str:
-    """Reconstruct full paragraph text from all <w:t> children."""
-    return "".join(t.text or "" for t in para.xpath(".//w:t", namespaces=NS))
+    """Reconstruct full paragraph text, including Word symbols and fields."""
+    parts = []
+    # Iterate through all children to catch w:t and w:sym
+    for el in para.xpath(".//*", namespaces=NS):
+        if el.tag == f"{W}t":
+            parts.append(el.text or "")
+        elif el.tag == f"{W}sym":
+            # Convert common guillemet symbols
+            char = el.get(f"{W}char") or ""
+            if char.upper() == "AB": parts.append("«")
+            elif char.upper() == "BB": parts.append("»")
+    
+    return "".join(parts).strip()
 
 
 def _is_bold(para: ET._Element) -> bool:
@@ -228,7 +247,7 @@ def _extract_mergefield_name(instr: str) -> Optional[str]:
     parts = instr.split()
     try:
         idx = parts.index("MERGEFIELD")
-        return parts[idx + 1].strip("\\*MERGEFORMAT").strip()
+        return parts[idx + 1].replace("\\*MERGEFORMAT", "").strip()
     except (ValueError, IndexError):
         return None
 
@@ -268,6 +287,12 @@ class TemplateStructureExtractor:
                     raw_markers.extend(part_markers)
 
                 struct.table_loops = list(loop_tracker.values())
+
+                # Final pass: Refine loops with structural containment (must happen after table_loops is populated)
+                # We need the root of document.xml for this
+                if "word/document.xml" in available:
+                    doc_xml = ET.fromstring(z.read("word/document.xml"))
+                    self._refine_table_loops(doc_xml, struct, raw_markers)
 
                 # Deduplicate markers preserving order
                 seen: set = set()
@@ -361,7 +386,7 @@ class TemplateStructureExtractor:
                 (s.get(f"{W}val") or "").lower().startswith("heading")
                 for s in style_els
             )
-            is_bold_short = _is_bold(para) and len(para_text) < 60
+            is_bold_short = _is_bold(para) and len(para_text) < 60 and not para_text.startswith("[")
 
             if is_heading_style or is_bold_short:
                 # Save previous heading's bullet status
@@ -390,11 +415,17 @@ class TemplateStructureExtractor:
                          logger.info(f"Placeholder for '{current_heading}': {para_text[:50]}...")
 
             # Detect guillemet markers by reconstructing para text
-            # Use both literal and hex escape for robustness (\xab = «, \xbb = »)
             found_guillemets = re.findall(r"[\xab\u00ab]\s*(.*?)\s*[\xbb\u00bb]", para_text_raw)
             for g in found_guillemets:
                 m = f"«{g.strip()}»"
                 part_markers.append(m)
+                
+                # LINK HEADING TO LOOP: If this is a TableStart marker and we just saw a heading
+                if m.startswith("«TableStart:") and current_heading:
+                    loop_name = m.replace("«TableStart:", "").replace("»", "").strip()
+                    struct.heading_to_loop[current_heading] = loop_name
+                    logger.info(f"Linked heading '{current_heading}' to loop '{loop_name}'")
+
                 if is_header_footer and m not in struct.headers_footers_markers:
                     struct.headers_footers_markers.append(m)
 
@@ -418,6 +449,24 @@ class TemplateStructureExtractor:
             elif para_text.startswith('"') and para_text.endswith('"') and len(para_text) > 20 and not is_content_placeholder:
                 if para_text not in struct.instruction_blocks:
                     struct.instruction_blocks.append(para_text[:400])
+
+            # Detect object template patterns (multi-line placeholder sequences)
+            # Handle quoted or bulleted placeholders like "[Job title]", "“Job title”", or • [Organisation]
+            # Strip standard and smart quotes, bullets, and whitespace
+            clean_para = para_text.strip(' "•\t“”‘’')
+            
+            if current_heading and clean_para:
+                if clean_para.startswith("[") and clean_para.endswith("]"):
+                    if current_heading not in struct.heading_to_smart_pattern:
+                        struct.heading_to_smart_pattern[current_heading] = []
+                    
+                    # Capture ALL structural placeholders; the LLM will decide if they form an object
+                    struct.heading_to_smart_pattern[current_heading].append(clean_para)
+                    logger.info(f"Captured structural placeholder for '{current_heading}': {clean_para}")
+                else:
+                    # If we see non-placeholder text after a heading, it might break the pattern
+                    # logger.debug(f"Non-placeholder text after '{current_heading}': {clean_para[:30]}")
+                    pass
 
         # Save last heading's bullet status
         if current_heading and heading_has_bullets:
@@ -445,25 +494,87 @@ class TemplateStructureExtractor:
         name: str,
         part_markers: List[str],
         struct: TemplateStructure,
-        loop_tracker: Dict[str, "TableLoop"],
+        loop_tracker: Dict[str, TableLoop],
         is_header_footer: bool,
     ):
-        """Process a detected MERGEFIELD name — handle loops separately."""
+        """Process a detected MERGEFIELD name."""
         if name.startswith(TABLE_LOOP_PREFIX):
             loop_name = name[len(TABLE_LOOP_PREFIX):]
             if loop_name not in loop_tracker:
                 loop_tracker[loop_name] = TableLoop(loop_name=loop_name)
         elif name.startswith(TABLE_LOOP_SUFFIX):
-            pass  # End marker — already tracked by start
+            pass 
         else:
             marker = f"«{name}»"
             part_markers.append(marker)
             if is_header_footer and marker not in struct.headers_footers_markers:
                 struct.headers_footers_markers.append(marker)
-            # Associate body fields with most recent open loop
-            for loop in loop_tracker.values():
-                if name not in loop.item_fields:
-                    loop.item_fields.append(name)
+
+    def _refine_table_loops(self, root: ET._Element, struct: TemplateStructure, all_found_markers: List[str]):
+        """
+        Scan the paragraph flow to see which markers actually belong inside which loops.
+        Uses aggressive alphanumeric normalization to bypass encoding issues.
+        """
+        def normalize(s: str) -> str:
+            return "".join(re.findall(r"[A-Za-z0-9]+", s)).lower()
+
+        raw_to_full = {}
+        for m in all_found_markers:
+            norm = normalize(m)
+            if norm:
+                raw_to_full[norm] = m
+
+        all_paras = root.xpath("//w:p", namespaces=NS)
+        
+        for loop in struct.table_loops:
+            start_tag_norm = normalize(f"TableStart:{loop.loop_name}")
+            end_tag_norm = normalize(f"TableEnd:{loop.loop_name}")
+            loop.item_fields = []
+            in_loop = False
+            
+            for p in all_paras:
+                p_text_raw = _para_text(p)
+                if not p_text_raw: continue
+                p_norm = normalize(p_text_raw)
+                
+                has_start = start_tag_norm in p_norm
+                has_end = end_tag_norm in p_norm
+
+                found_in_para = []
+                for norm_name in raw_to_full:
+                    if "tablestart" in norm_name or "tableend" in norm_name: continue
+                    if norm_name in p_norm:
+                        found_in_para.append(norm_name)
+
+                if has_start and has_end:
+                    # Same para containment: just add them all since we normalized
+                    for norm_name in found_in_para:
+                        full_marker = raw_to_full[norm_name].strip("«»[] ")
+                        if full_marker not in loop.item_fields:
+                            loop.item_fields.append(full_marker)
+                    continue
+
+                if has_start:
+                    in_loop = True
+                    for norm_name in found_in_para:
+                        if norm_name not in loop.item_fields:
+                            full_marker = raw_to_full[norm_name].strip("«»[] ")
+                            loop.item_fields.append(full_marker)
+                    continue
+
+                if has_end:
+                    for norm_name in found_in_para:
+                        if norm_name not in loop.item_fields:
+                            full_marker = raw_to_full[norm_name].strip("«»[] ")
+                            loop.item_fields.append(full_marker)
+                    in_loop = False
+                    continue
+
+                if in_loop:
+                    for norm_name in found_in_para:
+                        if norm_name not in loop.item_fields:
+                            full_marker = raw_to_full[norm_name].strip("«»[] ")
+                            loop.item_fields.append(full_marker)
 
     def _extract_table_pairs(
         self,
@@ -493,9 +604,10 @@ class TemplateStructureExtractor:
 
                 if not label_text or len(label_text) > 80:
                     continue
-
-                if label_text not in struct.all_table_labels:
-                    struct.all_table_labels.append(label_text)
+                if "TableStart:" in label_text or "TableEnd:" in label_text:
+                    continue
+                if "TableStart:" in value_text or "TableEnd:" in value_text:
+                    continue
 
                 # Look for a marker in the value cell
                 marker_found = ""
@@ -514,12 +626,15 @@ class TemplateStructureExtractor:
                 
                 is_blank = not value_text or is_generic
                 
+                if label_text not in struct.all_table_labels:
+                    struct.all_table_labels.append(label_text)
+
                 if marker_found and not is_generic:
-                    slot = TableLabelSlot(label=label_text, marker=marker_found, is_blank=False)
+                    slot = TableLabelSlot(label=label_text, marker_text=marker_found, is_blank=False)
                     if marker_found not in part_markers:
                         part_markers.append(marker_found)
                 else:
-                    slot = TableLabelSlot(label=label_text, marker=marker_found if is_generic else "", is_blank=True)
+                    slot = TableLabelSlot(label=label_text, marker_text=marker_found if is_generic else "", is_blank=True)
                     if label_text not in struct.blank_label_slots:
                         struct.blank_label_slots.append(label_text)
                 

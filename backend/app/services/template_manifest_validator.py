@@ -144,10 +144,12 @@ class TemplateManifestValidator:
                 # Duplicate marker check (FAIL if it's a repeated marker without context)
                 if mt in repeated_markers:
                     strategy = locator.get("strategy", "")
-                    if strategy == "replace_marker":
+                    is_header_footer = mt in (structure.headers_footers_markers or [])
+                    
+                    if strategy == "replace_marker" and not is_header_footer:
                         result.fail(
                             f"Field '{fn}' uses repeated marker '{mt}' with plain 'replace_marker' strategy. "
-                            "This is unsafe. Use 'fill_blank_cell_after_label' or a heading-based strategy instead."
+                            "This is unsafe for non-header markers. Use 'fill_blank_cell_after_label' or a heading-based strategy instead."
                         )
                 
                 # Global duplicate check (different fields using same marker)

@@ -4,8 +4,8 @@ FROM ${BASE_IMAGE}
 
 WORKDIR /app
 
-# Install boto3 crt extension for AWS SSO credential resolving
-RUN pip install --no-cache-dir "boto3[crt]"
+# Install dependencies not present in base image
+RUN pip install --no-cache-dir "boto3[crt]" lxml docxtpl
 
 # Copy application code
 COPY ./app ./app

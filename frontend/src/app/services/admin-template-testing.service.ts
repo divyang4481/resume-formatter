@@ -45,4 +45,16 @@ export class AdminTemplateTestingService {
     });
     return this.http.get(`${this.processingUrl}/jobs/${jobId}/summary`, { headers });
   }
+
+  getJobFacts(jobId: string): Observable<any> {
+    return this.http.get(`${this.processingUrl}/jobs/${jobId}/facts`);
+  }
+
+  getJobTransformation(jobId: string): Observable<any> {
+    return this.http.get(`${this.processingUrl}/jobs/${jobId}/transformation`);
+  }
+
+  getJobTemplate(jobId: string): Observable<any> {
+    return this.http.get(`${this.processingUrl}/jobs/${jobId}/template`);
+  }
 }

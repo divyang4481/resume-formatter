@@ -57,7 +57,8 @@ class SqlAlchemyTemplateRepository(TemplateRepository):
             extraction_artifact_ref=model.extraction_uri,
             created_by=model.created_by,
             created_at=model.created_at or datetime.utcnow(),
-            updated_at=model.updated_at or datetime.utcnow()
+            updated_at=model.updated_at or datetime.utcnow(),
+            analysis_json=model.analysis_json
         )
 
     def save_template(self, template_asset: TemplateAsset) -> str:
@@ -98,6 +99,7 @@ class SqlAlchemyTemplateRepository(TemplateRepository):
         model.created_by = template_asset.created_by
         model.created_at = template_asset.created_at
         model.updated_at = template_asset.updated_at
+        model.analysis_json = template_asset.analysis_json
 
         self.db.commit()
         return model.id
@@ -154,7 +156,8 @@ class SqlAlchemyTemplateRepository(TemplateRepository):
                     extraction_artifact_ref=model.extraction_uri,
                     created_by=model.created_by,
                     created_at=model.created_at or datetime.utcnow(),
-                    updated_at=model.updated_at or datetime.utcnow()
+                    updated_at=model.updated_at or datetime.utcnow(),
+                    analysis_json=model.analysis_json
                 )
             )
         return results

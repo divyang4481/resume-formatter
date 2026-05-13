@@ -300,8 +300,6 @@
                 <input matInput formControlName="industry_id" id="industryOverride" title="Industry Override" placeholder="Optional industry override">
               </mat-form-field>
 
-              <mat-slide-toggle formControlName="redact_pii">Redact PII</mat-slide-toggle>
-              <mat-slide-toggle formControlName="generate_summary">Generate Summary</mat-slide-toggle>
 
               <div class="actions mt-2 flex-align-center flex-gap-8">
                 <button mat-raised-button color="primary" type="submit" [disabled]="!selectedFile || isRunningTest">
@@ -353,13 +351,40 @@
           <mat-card-content>
             <h3>Summary Output</h3>
             <pre class="summary-box">{{ jobOutputs.summary }}</pre>
-            <div class="mt-2 flex-gap-8" *ngIf="jobStatus && (jobStatus.status?.toUpperCase() === 'COMPLETED' || jobStatus.status?.toUpperCase() === 'PARTIAL_SUCCESS')">
-              <a mat-raised-button color="primary" [href]="'/api/v1/processing/documents/' + jobStatus.job_id + '/download'" target="_blank">
+            <div class="result-actions" *ngIf="jobStatus.status?.toLowerCase() === 'completed' || jobStatus.status?.toLowerCase() === 'partial_success'">
+              <a mat-button color="primary" [href]="env.baseApiUrl + '/api/v1/processing/documents/' + jobStatus.job_id + '/download'" target="_blank">
                 <mat-icon>download</mat-icon> Download Formatted DOCX
               </a>
-              <a mat-stroked-button color="primary" [routerLink]="['/view-document', jobStatus.job_id]" target="_blank">
+              <a mat-button [routerLink]="['/view-document', jobStatus.job_id]" target="_blank">
                 <mat-icon>visibility</mat-icon> View
               </a>
+              <button mat-button color="accent" (click)="showDeepReview = !showDeepReview">
+                <mat-icon>analytics</mat-icon> Deep Review (JSON)
+              </button>
+            </div>
+
+            <!-- Side-by-Side JSON Viewer for Admin Review -->
+            <div class="deep-review-container mt-3" *ngIf="showDeepReview">
+              <div class="json-grid">
+                <div class="json-panel">
+                  <h3>1. Template Manifest</h3>
+                  <div class="json-viewer-wrapper">
+                    <pre class="json-viewer">{{ jobTemplateJson | json }}</pre>
+                  </div>
+                </div>
+                <div class="json-panel">
+                  <h3>2. Extracted Resume Facts</h3>
+                  <div class="json-viewer-wrapper">
+                    <pre class="json-viewer">{{ jobFacts | json }}</pre>
+                  </div>
+                </div>
+                <div class="json-panel">
+                  <h3>3. Mapping / Transformation Plan</h3>
+                  <div class="json-viewer-wrapper">
+                    <pre class="json-viewer">{{ jobTransformation | json }}</pre>
+                  </div>
+                </div>
+              </div>
             </div>
 
             <div class="current-run-actions" *ngIf="getCurrentTestRunId()">
@@ -439,6 +464,9 @@
                 <button mat-icon-button color="accent" (click)="$event.stopPropagation(); openJsonInspector(jsonInspectorDialog, 'Mapping Results', element.mapping_results)" title="View Mapping Results">
                   <mat-icon>transform</mat-icon>
                 </button>
+                <button mat-icon-button color="accent" (click)="$event.stopPropagation(); openDeepReviewDialog(deepReviewDialog, element)" title="Deep Review (Side-by-Side JSON)">
+                  <mat-icon>analytics</mat-icon>
+                </button>
                 <button mat-stroked-button color="primary" class="btn-sm" *ngIf="!element.decision" (click)="$event.stopPropagation(); reviewTestRun(element.id, 'PASS')">PASS</button>
                 <button mat-stroked-button color="warn" class="btn-sm" *ngIf="!element.decision" (click)="$event.stopPropagation(); reviewTestRun(element.id, 'FAIL')">FAIL</button>
               </div>
@@ -458,7 +486,7 @@
                     </div>
                     
                     <div class="flex-gap-8 mt-2">
-                        <a mat-raised-button color="primary" [href]="'/api/v1/processing/documents/' + element.job_id + '/download'" target="_blank">
+                        <a mat-raised-button color="primary" [href]="env.baseApiUrl + '/api/v1/processing/documents/' + element.job_id + '/download'" target="_blank">
                             <mat-icon>download</mat-icon> Download Formatted DOCX
                         </a>
                         
@@ -589,7 +617,7 @@
       <h4><strong>Formatted Artifact</strong></h4>
       <div class="flex-row gap-8">
         <a mat-raised-button color="primary" class="flex-1 py-2"
-           [href]="'/api/v1/processing/documents/' + data.run.job_id + '/download'"
+           [href]="env.baseApiUrl + '/api/v1/processing/documents/' + data.run.job_id + '/download'"
            target="_blank">
           <mat-icon>download</mat-icon> Download Formatted DOCX
         </a>
@@ -602,6 +630,39 @@
     </div>
   </mat-dialog-content>
 
+  <mat-dialog-actions align="end">
+    <button mat-button mat-dialog-close>Close</button>
+  </mat-dialog-actions>
+</ng-template>
+
+<!-- Deep Review Side-by-Side Dialog Template -->
+<ng-template #deepReviewDialog let-data>
+  <h2 mat-dialog-title class="flex-align-center flex-gap-8">
+    <mat-icon color="accent">analytics</mat-icon>
+    Deep Review: {{ data.run.created_at | date:'short' }}
+  </h2>
+  <mat-dialog-content class="mat-typography">
+    <div class="json-grid">
+      <div class="json-panel">
+        <h3>1. Template Manifest</h3>
+        <div class="json-viewer-wrapper">
+          <pre class="json-viewer">{{ data.template?.field_extraction_manifest | jsonParse | json }}</pre>
+        </div>
+      </div>
+      <div class="json-panel">
+        <h3>2. Extracted Resume Facts</h3>
+        <div class="json-viewer-wrapper">
+          <pre class="json-viewer">{{ data.run.extraction_facts | jsonParse | json }}</pre>
+        </div>
+      </div>
+      <div class="json-panel">
+        <h3>3. Mapping / Transformation Plan</h3>
+        <div class="json-viewer-wrapper">
+          <pre class="json-viewer">{{ data.run.mapping_results | jsonParse | json }}</pre>
+        </div>
+      </div>
+    </div>
+  </mat-dialog-content>
   <mat-dialog-actions align="end">
     <button mat-button mat-dialog-close>Close</button>
   </mat-dialog-actions>

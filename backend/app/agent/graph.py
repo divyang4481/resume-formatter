@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import json
 from typing import Any
 from langgraph.graph import StateGraph, END
 from app.agent.state import AgentState
@@ -76,7 +77,9 @@ def with_progress(node_name, node_func, stage_map, job_repo):
                 if job:
                     job.stage = stage_map.get(node_name, node_name)
                     if state.get("transformed_document_json"):
-                        job.transformed_document_json = state.get("transformed_document_json")
+                        job.transformed_json = json.dumps(state.get("transformed_document_json")) if isinstance(state.get("transformed_document_json"), dict) else str(state.get("transformed_document_json"))
+                    if state.get("raw_parsed_data"):
+                        job.candidate_facts_json = json.dumps(state.get("raw_parsed_data")) if isinstance(state.get("raw_parsed_data"), dict) else str(state.get("raw_parsed_data"))
                     job_repo.save_job(job)
             except Exception as e:
                 print(f"Non-critical: Failed to update job progress: {e}")
@@ -124,16 +127,17 @@ def build_resume_processing_graph(llm_runtime: LlmRuntimeAdapter, doc_parser: Do
     if storage is None: storage = get_storage_provider()
 
     stage_map = {
-        "ingest": "ingest",
-        "parse": "parse",
-        "normalize": "normalize",
-        "privacy_transform": "privacy",
-        "template_resolution": "classify",
-        "kb_retrieval": "kb_retrieval",
-        "harmonization": "harmonization", 
-        "composition_reasoning": "formatting",
-        "composition": "composition",
-        "validate": "validate"
+        "ingest": "LOADING_TEMPLATE",
+        "parse": "EXTRACTING_FACTS",
+        "validate_resume": "EXTRACTING_FACTS",
+        "normalize": "EXTRACTING_FACTS",
+        "privacy_transform": "EXTRACTING_FACTS",
+        "template_resolution": "LOADING_TEMPLATE",
+        "kb_retrieval": "MAPPING_FIELDS",
+        "harmonization": "MAPPING_FIELDS", 
+        "composition_reasoning": "MAPPING_FIELDS",
+        "composition": "RENDERING_DOCX",
+        "validate": "RENDERING_DOCX"
     }
 
     workflow.add_node("ingest", with_progress("ingest", lambda state: {"status": "ingested"}, stage_map, job_repo))

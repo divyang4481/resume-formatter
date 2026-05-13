@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     bedrock_agent_alias_id: str = ""
     bedrock_kb_id: str = ""
     database_url: str = "sqlite:///./.data/app.db"
+    aws_bearer_token_bedrock: str = ""
 
     # Document Parsing Routing & Guard
     enable_docling: bool = True

@@ -55,6 +55,7 @@ class TemplateAnalysisService:
         
         analysis = self.analyzer.analyze_template(prompt, TemplateAnalysis)
         analysis.template_id = template_id
+        analysis.raw_structure = structure.to_dict()
 
         # 4. Deterministic Reconciliation (Healing Typos/Wrappings)
         self._reconcile_and_enrich(analysis, structure)
@@ -72,8 +73,23 @@ class TemplateAnalysisService:
         if structure.table_label_value_pairs:
             blocks.append("\n[TABLE LABEL-VALUE PAIRS]")
             for slot in structure.table_label_value_pairs:
-                blocks.append(f"  Label: '{slot.label}' | Marker/Value: '{slot.marker}' | IsBlank: {slot.is_blank}")
+                blocks.append(f"  Label: '{slot.label}' | Marker/Value: '{slot.marker_text}' | IsBlank: {slot.is_blank}")
         
+        if hasattr(structure, 'table_loops') and structure.table_loops:
+            blocks.append("\n[DYNAMIC TABLE LOOPS]")
+            for loop in structure.table_loops:
+                blocks.append(f"  LoopName: '{loop.loop_name}' | Fields: {loop.item_fields}")
+
+        if hasattr(structure, 'heading_to_loop') and structure.heading_to_loop:
+            blocks.append("\n[HEADING -> LOOP MAPPINGS]")
+            for h, l in structure.heading_to_loop.items():
+                blocks.append(f"  Heading: '{h}' -> Loop: '{l}'")
+
+        if hasattr(structure, 'heading_to_smart_pattern') and structure.heading_to_smart_pattern:
+            blocks.append("\n[SMART OBJECT BLUEPRINTS (Visual Patterns)]")
+            for h, patterns in structure.heading_to_smart_pattern.items():
+                blocks.append(f"  Heading: '{h}' | Patterns: {patterns}")
+
         if structure.instruction_blocks:
             blocks.append("\n[INSTRUCTION BLOCKS (Red/Italic/Quoted)]")
             for inst in structure.instruction_blocks:
@@ -112,7 +128,7 @@ class TemplateAnalysisService:
                 actual = detected_norm[norm_m]
                 logger.info(f"[Reconcile] Healed marker typo: '{m_text}' -> '{actual}'")
                 field.marker_text = actual
-                field.render_locator.marker = actual
+                field.render_locator.marker_text = actual
                 
             used_markers.add(field.marker_text)
 

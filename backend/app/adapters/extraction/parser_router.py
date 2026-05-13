@@ -22,6 +22,9 @@ class ParserRouter(DocumentExtractionService):
 
         # Build ExtractedDocument
         text = parsed_doc.text
+        
+        logger.info(f"\n{'*'*80}\n[DOCLING EXTRACTION] Raw Text Results\n{'*'*80}\n{text}\n{'*'*80}")
+
         sections = [{"title": s.title, "content": s.content} for s in parsed_doc.sections]
         tables = [{"data": t.data} for t in parsed_doc.tables]
 

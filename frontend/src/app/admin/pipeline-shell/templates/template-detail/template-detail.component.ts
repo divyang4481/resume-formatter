@@ -19,6 +19,7 @@ import { ReactiveFormsModule, FormBuilder, FormGroup } from '@angular/forms';
 import { animate, state, style, transition, trigger } from '@angular/animations';
 import { AdminTemplateApiService } from '../../../../services/admin-template-api.service';
 import { AdminTemplateTestingService } from '../../../../services/admin-template-testing.service';
+import { environment } from '../../../../../environments/environment';
 import { JsonParsePipe } from '../../../../pipes/json-parse.pipe';
 
 @Component({
@@ -54,6 +55,7 @@ import { JsonParsePipe } from '../../../../pipes/json-parse.pipe';
   ]
 })
 export class TemplateDetailComponent implements OnInit, OnDestroy {
+  env = environment;
   templateId: string = '';
   template: any = null;
   publishEligibility: any = null;
@@ -62,13 +64,10 @@ export class TemplateDetailComponent implements OnInit, OnDestroy {
   expandedElement: any | null = null;
 
   pipelineStages = [
-    { id: 'ingest', name: 'Ingestion', icon: 'cloud_upload' },
-    { id: 'parse', name: 'Extraction', icon: 'document_scanner' },
-    { id: 'classify', name: 'Classification', icon: 'category' },
-    { id: 'normalize', name: 'Normalization', icon: 'schema' },
-    { id: 'transform', name: 'AI Transformation', icon: 'auto_awesome' },
-    { id: 'validate', name: 'Quality Check', icon: 'fact_check' },
-    { id: 'render', name: 'Rendering', icon: 'picture_as_pdf' }
+    { id: 'LOADING_TEMPLATE', name: 'Loading Template', icon: 'cloud_download' },
+    { id: 'EXTRACTING_FACTS', name: 'Extracting Resume Facts', icon: 'psychology' },
+    { id: 'MAPPING_FIELDS', name: 'Mapping to Template', icon: 'transform' },
+    { id: 'RENDERING_DOCX', name: 'Generating Document', icon: 'description' }
   ];
 
 
@@ -83,6 +82,12 @@ export class TemplateDetailComponent implements OnInit, OnDestroy {
   jobStatus: any = null;
   jobOutputs: any = null;
   isRunningTest: boolean = false;
+  
+  // Debug JSONs
+  jobFacts: any = null;
+  jobTransformation: any = null;
+  jobTemplateJson: any = null;
+  showDeepReview: boolean = false;
 
   private pollingTimeout: any;
 
@@ -322,21 +327,29 @@ export class TemplateDetailComponent implements OnInit, OnDestroy {
 
   loadJobOutputs() {
     if (!this.currentJobId) return;
+    
+    // Initialize jobOutputs if null
+    if (!this.jobOutputs) this.jobOutputs = {};
+
     this.testApi.getJobOutputs(this.currentJobId).subscribe(res => {
-      this.jobOutputs = res;
+      // Merge into existing object to avoid overwriting summary
+      this.jobOutputs = { ...this.jobOutputs, ...res };
     });
+    
     this.testApi.getJobSummary(this.currentJobId).subscribe({
       next: (res) => {
-        if(this.jobOutputs) {
-          this.jobOutputs.summary = res.summary;
-        } else {
-          this.jobOutputs = { summary: res.summary };
-        }
+        // Merge summary into existing object
+        this.jobOutputs = { ...this.jobOutputs, summary: res.summary };
       },
       error: () => {
-         if(this.jobOutputs) this.jobOutputs.summary = "Internal: Could not load generated summary string.";
+         this.jobOutputs = { ...this.jobOutputs, summary: "Internal: Could not load generated summary string." };
       }
     });
+
+    // Load Debug JSONs
+    this.testApi.getJobFacts(this.currentJobId).subscribe(res => this.jobFacts = res);
+    this.testApi.getJobTransformation(this.currentJobId).subscribe(res => this.jobTransformation = res);
+    this.testApi.getJobTemplate(this.currentJobId).subscribe(res => this.jobTemplateJson = res);
   }
 
   reviewTestRun(testRunId: string, decision: string) {
@@ -393,6 +406,16 @@ export class TemplateDetailComponent implements OnInit, OnDestroy {
     this.dialog.open(dialogRef, {
       width: '600px',
       data: { run }
+    });
+  }
+
+  openDeepReviewDialog(dialogRef: any, run: any) {
+    this.dialog.open(dialogRef, {
+      width: '1200px',
+      data: { 
+        run,
+        template: this.template 
+      }
     });
   }
 

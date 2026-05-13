@@ -46,17 +46,33 @@ class SqlAlchemyJobRepository(JobRepository):
             model.generated_summary = job.generated_summary
         if hasattr(job, 'render_docx_uri'):
             model.render_docx_uri = job.render_docx_uri
-        if hasattr(job, 'transformed_document_json'):
+        if hasattr(job, 'transformed_json'):
+            model.transformed_json = job.transformed_json
+        elif hasattr(job, 'transformed_document_json'):
             import json
             data = job.transformed_document_json
             if isinstance(data, dict):
                 model.transformed_json = json.dumps(data)
             else:
                 model.transformed_json = data
+
+        if hasattr(job, 'candidate_facts_json'):
+            import json
+            data = job.candidate_facts_json
+            if isinstance(data, dict):
+                model.candidate_facts_json = json.dumps(data)
+            else:
+                model.candidate_facts_json = data
+
         if hasattr(job, 'error_message'):
             model.error_message = job.error_message
         if hasattr(job, 'selected_template_id'):
             model.template_asset_id = job.selected_template_id
+        elif hasattr(job, 'template_asset_id'):
+            model.template_asset_id = job.template_asset_id
+
+        if hasattr(job, 'stage'):
+            model.stage = job.stage
 
 
         self.db.commit()

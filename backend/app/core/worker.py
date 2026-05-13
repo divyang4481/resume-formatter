@@ -85,12 +85,20 @@ async def process_job(db, message: dict):
             from app.dependencies import get_template_analysis_service
             analysis_service = get_template_analysis_service()
             
+            # Update Stage
+            job.stage = "ANALYZING_TEMPLATE"
+            job_repo.save_job(job)
+
             # Fetch raw DOCX from storage
             template_bytes = storage.get_bytes(input_uri)
             
             # Run Production Analysis
             analysis = await analysis_service.analyze_template_asset(template_bytes, template_id)
             
+            # Update Stage
+            job.stage = "PERSISTING_ANALYSIS"
+            job_repo.save_job(job)
+
             # Persist to DB
             from app.db.models import TemplateAsset
             template = db.query(TemplateAsset).filter_by(id=template_id).first()
@@ -126,65 +134,24 @@ async def process_job(db, message: dict):
                 template.field_extraction_manifest = json.dumps(legacy_manifest)
                 
                 db.commit()
-                logger.info(f"[Worker] Template {template_id} analyzed and persisted (including legacy manifest).")
-
-            job.status = JobStatus.COMPLETED.value
-            job_repo.save_job(job)
+                logger.info(f"[Worker] Template {template_id} analyzed and persisted.")
 
         elif job_type == "RESUME_FORMATTING":
-            from app.dependencies import (
-                get_resume_fact_extraction_service, 
-                get_template_field_mapper, 
-                get_docx_template_renderer,
-                get_template_analysis_service
+            from app.services.resume_workflow_service import ResumeWorkflowService
+            from app.adapters.repositories.template_repository import SqlAlchemyTemplateRepository
+            
+            # Use centralized workflow service to ensure LangGraph agents are used
+            workflow_service = ResumeWorkflowService(
+                llm=llm_runtime,
+                parser_service=doc_parser,
+                job_repo=job_repo,
+                template_repo=SqlAlchemyTemplateRepository(db),
+                storage=storage
             )
-            from app.schemas.template_analysis import TemplateAnalysis
-            from app.db.models import TemplateAsset
             
-            fact_service = get_resume_fact_extraction_service()
-            mapper_service = get_template_field_mapper()
-            renderer_service = get_docx_template_renderer()
-            
-            # 1. Fetch Template and Analysis
-            template = db.query(TemplateAsset).filter_by(id=template_id).first()
-            if not template:
-                raise ValueError(f"Template {template_id} not found.")
-            
-            template_bytes = storage.get_bytes(template.storage_uri)
-            if template.analysis_json:
-                analysis = TemplateAnalysis.model_validate_json(template.analysis_json)
-            else:
-                logger.info(f"Template {template_id} missing analysis. Running ad-hoc analysis...")
-                analysis_service = get_template_analysis_service()
-                analysis = await analysis_service.analyze_template_asset(template_bytes, template_id)
-
-            # 2. Extract Facts from Resume
-            # Fetch resume bytes first
-            resume_bytes = storage.get_bytes(input_uri)
-            
-            # Use Docling (doc_parser) to get clean text
-            # ParserRouter.extract(file_bytes, filename, content_type)
-            resume_extraction = await doc_parser.extract(resume_bytes, filename, content_type)
-            resume_text = resume_extraction.extracted_text
-            facts = await fact_service.extract_candidate_facts(resume_text, analysis=analysis)
-            
-            # Persist facts for audit
-            job.candidate_facts_json = facts.model_dump_json()
-
-            # 3. Map Facts to Template
-            fill_plan = await mapper_service.generate_fill_plan(facts, analysis)
-            
-            # 4. Render Final DOCX
-            final_docx_bytes = renderer_service.render(template_bytes, fill_plan, analysis)
-            
-            # 5. Save Output
-            output_key = f"output/{job_id}/{filename}"
-            storage.put_bytes(final_docx_bytes, output_key)
-            
-            job.render_docx_uri = output_key
-            job.status = JobStatus.COMPLETED.value
-            job_repo.save_job(job)
-            logger.info(f"[Worker] Resume formatting completed for job {job_id}")
+            logger.info(f"[Worker] Handing off job {job_id} to Agentic Workflow Service...")
+            await workflow_service.execute_job(job_id)
+            logger.info(f"[Worker] Agentic Workflow Service completed for job {job_id}")
 
         else:
             raise ValueError(f"Unsupported job_type: {job_type}")

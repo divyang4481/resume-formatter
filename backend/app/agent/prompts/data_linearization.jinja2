@@ -1,4 +1,4 @@
-TASK: Map Candidate Data to Template-Specific Fields.
+TASK: Map Candidate Data to Template-Specific Fields with Deep Reasoning.
 
 CANDIDATE DATA (Raw Extraction):
 {{ structured_data_json }}
@@ -8,19 +8,15 @@ TEMPLATE CONTRACT (The Required Fields):
 {% for field in field_extraction_manifest %}
 {% if field.field_type != "instruction_block" %}
 - FIELDNAME: "{{ field.fieldname }}"
+  * Marker Text: "{{ field.marker_text }}"
   * Type: {{ field.field_type | default("scalar") }}
   * Meaning: {{ field.meaning }}
   * Source Hints: {{ field.source_hints }}
+{% if field.item_schema %}  * Item Schema: {{ field.item_schema }}{% endif %}
+{% if field.formatting_hints %}  * Formatting Hints: {{ field.formatting_hints }}{% endif %}
 {% if field.field_type == "array_complex" and field.array_item_schema %}
   * Item Schema: {% for sub in field.array_item_schema %}{{ sub.sub_field }} ({{ sub.meaning }}){% if not loop.last %}, {% endif %}{% endfor %}
 
-{% endif %}
-{% if field.field_type == "table_loop" %}
-  * Loop Variable: {{ field.loop_variable }}
-  * Loop Item Fields: {{ field.loop_item_fields | join(', ') }}
-{% endif %}
-{% if field.field_type == "array_simple" %}
-  * Repeat Count (max slots): {{ field.repeat_count | default(5) }}
 {% endif %}
 {% endif %}
 {% endfor %}
@@ -33,69 +29,60 @@ RUNTIME CONTEXT:
 
 MAPPING INTELLIGENCE PROTOCOL (MANDATORY):
 1. **Critical Personal Info Identification**:
-   - The candidate's full name is the MOST CRITICAL field. Look for it at the very beginning of the RAW TEXT.
-   - Even if 'candidate_name' is not explicitly labeled, identify it from the document header.
-   - Do the same for 'employee_email'.
+   - Correctly map the candidate's full name and contact details to the appropriate fieldnames.
 
-2. **Strict Fieldname Compliance**:
-   - Return the EXACT fieldnames from the TEMPLATE CONTRACT.
-   - Do NOT rename fields (e.g. 'employee_email' ≠ 'email').
+2. **STRICT Fieldname Compliance**:
+   - **LOCKED KEYS**: Use ONLY the EXACT fieldnames (keys) defined in the TEMPLATE CONTRACT.
+   - **FORBIDDEN**: Do NOT invent new keys.
 
-3. **Synonym Resolution**:
-   - 'name', 'full_name', 'candidate' → 'candidate_name'
-   - 'email', 'email_address', 'contact_email' → 'employee_email'
+3. **Marker Preservation**:
+   - **PHYSICAL STRING COPY**: For every field, you MUST copy the value of `Marker Text` from the TEMPLATE CONTRACT **verbatim** into the `marker_text` field of your output. Do NOT summarize or change it.
 
-4. **Intelligent Inference**:
-   - If a field represents a summary or assessment (e.g. 'expert_opinion'), synthesize a professional 3-5 sentence narrative.
-   - If a status field (e.g. 'notice_period', 'salary_required') is not found, use "Negotiable" or "On Request".
+4. **Synonym Resolution**:
+   - Map facts to the closest matching fieldname based on 'Meaning', 'Source Hints', and 'Marker Text'.
 
-5. **ARRAY AND NESTED FIELD RULES** — CRITICAL:
-
-   a) **scalar** → plain string value.
-
-   b) **array_simple** (e.g. key_skills, interests) → JSON array of strings.
-      - Extract ALL relevant items from the candidate data.
-      - DO NOT concatenate into one string. Output: ["item1", "item2", "item3"]
-      - Limit to `repeat_count` items if specified; otherwise include all.
-
-   c) **array_complex** (e.g. work_experience, education) → JSON array of objects.
-      - Each object must have EXACTLY the sub-field keys from `array_item_schema`.
-      - Order: most-recent first.
-      - Use CVML tags within string values for formatting.
-      - Example for work_experience with schema (title_date, organisation, responsibilities):
-        [
-          {
-            "title_date": "[:B:]Senior Developer[:/B:] [:PIPE:] Jan 2020 – Present",
-            "organisation": "[:B:]Acme Corp[:/B:]",
-            "responsibilities": "[:L1:]Led team of 8[:L1:]Delivered 3 product launches"
-          }
-        ]
-
-   d) **table_loop** → JSON array of objects with keys = loop_item_fields.
-      - Example for loop_variable="bCheckType", loop_item_fields=["CheckType"]:
-        [{"CheckType": "Prince2 Practitioner"}, {"CheckType": "ITIL Foundation"}]
-
-   e) **paste_zone** → A single string containing the candidate's full formatted CV as
-      clean prose/markdown. Include all sections: summary, work history, education, skills.
-      Format richly using CVML tags. This is the complete CV body for freeform templates.
-
-   f) **instruction_block** → SKIP entirely. Do NOT include instruction_block fields in output.
-
-6. **Layout Awareness**:
-   - If the template uses `table_based` layout, scalar values should be concise (single line where possible).
-   - If the template uses `freeflow` or has `paste_zone` fields, use richer multi-line CVML formatting.
+5. **Deep Reasoning Mapping**:
+   - For EVERY field in the TEMPLATE CONTRACT, you must provide:
+     * `value`: The final string/array/object to be rendered.
+     * `marker_text`: The EXACT `Marker Text` from the contract.
+     * `source`: Where this data was found.
+     * `confidence`: 0.0 to 1.0 score.
+     * `note`: Optional explanation.
 
 ---
+NEGATIVE CONSTRAINTS (STRICT):
+- NO HALLUCINATED KEYS: Only keys from the manifest allowed in `template_fill_result`.
+- NO MARKER ALTERATION: The `marker_text` value must be an identical string copy of the `Marker Text` provided.
+
+---
+OUTPUT JSON STRUCTURE (STRICT):
+{
+  "template_fill_result": {
+    "fieldname_from_manifest": {
+      "value": "Actual Value",
+      "marker_text": "«ExactMarkerFromManifest»",
+      "source": "resume_fact.path",
+      "confidence": 1.0,
+      "note": ""
+    },
+    ...
+  },
+  "additional_resume_facts_available": {
+    "key_not_in_manifest": "Value"
+  },
+  "missing_fields_requiring_recruiter_or_ats_input": [
+    "fieldname_from_manifest"
+  ]
+}
+
 WRITER'S MANDATE (STRICT):
-1. ROLE: You are an Executive Resume Writer.
+1. ROLE: You are an Executive Resume Writer for Hays.
 2. OUTPUT FORMAT: Single valid JSON object.
-3. KEYS: Exact fieldnames from contract (excluding instruction_block fields).
-4. VALIDATION: Include ALL mappable fields. Do not skip inferrable data.
-5. FALLBACK: scalar → ""; array → [].
-6. RICH TEXT: Use CVML — [:B:]bold[:/B:], [:L1:] bullets, [:BR:] line breaks, [:PIPE:] separators.
+3. KEYS: Use ONLY the EXACT fieldnames from the TEMPLATE CONTRACT in `template_fill_result`.
+4. CROSS-VALIDATION: Before outputting, check each key in `template_fill_result`. If it's not in the manifest, DELETE IT.
+5. RICH TEXT: Use CVML tags — [:B:], [:L1:], [:BR:], [:PIPE:].
 
 ---
 OUTPUT PROTOCOL:
 - Return ONLY the JSON object. No conversational text.
 - Escape all quotes inside strings properly for JSON.
-- Arrays must be valid JSON arrays, not comma-separated strings.

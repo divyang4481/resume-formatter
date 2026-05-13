@@ -139,16 +139,26 @@ class ResumeWorkflowService:
                         if candidate:
                             candidate.resume_summary = final_state["summary_text"]
                             # Also store the extracted structured data
+                            raw_facts = final_state.get("raw_parsed_data")
+                            if raw_facts:
+                                candidate.candidate_facts_json = json.dumps(raw_facts) if isinstance(raw_facts, dict) else str(raw_facts)
+
                             extracted_json = final_state.get("transformed_document_json")
                             if extracted_json:
-                                import json
-                                if isinstance(extracted_json, dict):
-                                    candidate.normalized_resume_json = json.dumps(extracted_json)
-                                else:
-                                    candidate.normalized_resume_json = str(extracted_json)
+                                candidate.normalized_resume_json = json.dumps(extracted_json) if isinstance(extracted_json, dict) else str(extracted_json)
                             session.commit()
             if final_state.get("render_docx_uri"):
                 job.render_docx_uri = final_state["render_docx_uri"]
+
+            # Persist intermediate JSONs for "Deep Review" UI
+            if final_state.get("raw_parsed_data"):
+                job.candidate_facts_json = json.dumps(final_state["raw_parsed_data"])
+            if final_state.get("transformed_document_json"):
+                transformed_data = final_state["transformed_document_json"]
+                if isinstance(transformed_data, dict):
+                    job.transformed_json = json.dumps(transformed_data)
+                else:
+                    job.transformed_json = str(transformed_data)
 
             # Determine final status: If it passed quality reasoning node with 'needs_review', use partial success
             if final_state.get("status") == "needs_review" or final_state.get("missing_fields"):
@@ -194,7 +204,7 @@ class ResumeWorkflowService:
             if test_run_id:
                 from app.db.session import SessionLocal
                 from app.adapters.repositories.template_governance_repository import SqlAlchemyTemplateGovernanceRepository
-                import json
+
                 db = SessionLocal()
                 try:
                     repo = SqlAlchemyTemplateGovernanceRepository(db)

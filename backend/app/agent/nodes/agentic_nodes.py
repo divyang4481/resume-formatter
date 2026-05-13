@@ -109,12 +109,17 @@ def create_output_quality_reasoning_node():
             else:
                 logger.info("\n" + "="*60 + "\n=== AI QUALITY GATE: PASSED ===\n" + "="*60 + "\n")
 
+            # Merge missing fields from evaluation with existing ones in state
+            existing_missing = state.get("missing_fields") or []
+            new_missing = evaluation.get("missing_fields", [])
+            merged_missing = list(set(existing_missing + new_missing))
+
             # We log the warning but do NOT block the flow for review
             return {
                 "requires_human_review": False, 
                 "validation_passed": True,
                 "validation_warnings": [evaluation.get("reason")] if needs_review else [],
-                "missing_fields": evaluation.get("missing_fields", []),
+                "missing_fields": merged_missing,
                 "status": "quality_evaluated"
             }
         except Exception as e:
