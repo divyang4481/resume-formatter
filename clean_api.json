@@ -2,7 +2,7 @@
     "containerDefinitions": [
         {
             "name": "api",
-            "image": "114644266543.dkr.ecr.ap-south-1.amazonaws.com/agentic-doc-api-dev:v1.5.1",
+            "image": "114644266543.dkr.ecr.ap-south-1.amazonaws.com/agentic-doc-api-dev:v1.8.7",
             "cpu": 0,
             "links": [],
             "portMappings": [

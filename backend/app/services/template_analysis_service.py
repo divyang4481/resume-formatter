@@ -32,36 +32,53 @@ class TemplateAnalysisService:
 
     async def analyze_template_asset(self, docx_content: bytes, template_id: str) -> TemplateAnalysis:
         """
-        Performs end-to-end template analysis.
-        Input: Raw DOCX bytes.
-        Output: Validated TemplateAnalysis Pydantic model.
+        Performs end-to-end template analysis using the new multi-stage pipeline.
         """
-        logger.info(f"[TemplateAnalysis] Starting analysis for {template_id}")
+        logger.info(f"[TemplateAnalysis] Starting multi-stage analysis for {template_id}")
 
-        # 1. Deterministic Structural Extraction
-        structure = self.extractor.extract(docx_content, template_id + ".docx")
+        from app.template_analysis.service import analyze_template_docx
+        from app.template_analysis.model_router import TemplateAnalysisModelRouter
+        from app.config import settings
         
-        # 2. Build context for LLM reasoning
-        full_context = self._assemble_context(structure)
+        model_router = TemplateAnalysisModelRouter(settings)
         
-        # 3. LLM Reasoning Pass (Claude 3.5 Sonnet)
-        from app.agent.prompt_manager import prompt_manager
-        
-        prompt = prompt_manager.get_prompt(
-            "template_analysis.jinja2",
-            template_text=full_context,
-            detected_placeholders=structure.detected_markers,
-            field_taxonomy=FIELD_ALIAS_MAP # Pass the taxonomy for semantic alignment
+        # 1. Run the new pipeline
+        manifest = await analyze_template_docx(
+            content=docx_content,
+            llm_runtime=self.analyzer.runtime if hasattr(self.analyzer, 'runtime') else self.analyzer,
+            model_router=model_router,
+            template_id=template_id
+        )
+
+        # 2. Map the new TemplateManifest model back to the legacy TemplateAnalysis model for backward compatibility
+        # This allows existing callers to continue working without breaking changes.
+        fields = []
+        for f in manifest.fields:
+            fields.append(TemplateField(
+                fieldname=f.fieldname,
+                marker_text=f.marker_text,
+                field_type=f.field_type,
+                meaning=f.meaning,
+                source_hints=f.source_hints or "",
+                render_locator=RenderLocator(strategy="replace_marker", marker_text=f.marker_text)
+            ))
+
+        analysis = TemplateAnalysis(
+            template_id=template_id,
+            fields=fields,
+            sections=[], # New pipeline handles sections differently
+            instruction_blocks=[InstructionBlock(text="See manifest for details", action="remove", meaning="Instruction")]
         )
         
-        analysis = self.analyzer.analyze_template(prompt, TemplateAnalysis)
-        analysis.template_id = template_id
-        analysis.raw_structure = structure.to_dict()
+        # Store metadata in raw_structure for audit
+        analysis.raw_structure = {
+            "analysis_status": manifest.analysis_status,
+            "validation_errors": manifest.validation_errors,
+            "validation_warnings": manifest.validation_warnings,
+            "complexity_score": manifest.complexity_score,
+            "model_usage": manifest.model_usage_json
+        }
 
-        # 4. Deterministic Reconciliation (Healing Typos/Wrappings)
-        self._reconcile_and_enrich(analysis, structure)
-
-        logger.info(f"[TemplateAnalysis] Successfully analyzed {template_id}. Found {len(analysis.fields)} fields.")
         return analysis
 
     def _assemble_context(self, structure) -> str:

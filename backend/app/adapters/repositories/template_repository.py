@@ -163,3 +163,12 @@ class SqlAlchemyTemplateRepository(TemplateRepository):
         return results
     def list_active_templates(self) -> List[TemplateAsset]:
         return self.list_templates(filters={"status": "active"})
+
+    def get_by_checksum(self, checksum: str) -> Optional[TemplateAsset]:
+        model = self.db.query(TemplateAssetModel).filter(TemplateAssetModel.checksum_sha256 == checksum).first()
+        if not model:
+            return None
+            
+        # For simplicity, we call get_template with the id we just found
+        # This reuse the mapping logic already in get_template
+        return self.get_template(model.id)

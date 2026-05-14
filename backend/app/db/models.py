@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Integer, Boolean, DateTime, ForeignKey, Text
+from sqlalchemy import Column, String, Integer, Boolean, DateTime, ForeignKey, Text, Float
 from sqlalchemy.orm import declarative_base, relationship
 from sqlalchemy.sql import func
 from datetime import datetime
@@ -24,6 +24,8 @@ class TemplateAsset(Base):
     selection_weight = Column(Integer, default=50)
     is_default_for_industry = Column(Boolean, default=False)
     analysis_json = Column(Text, nullable=True) # Full TemplateAnalysis model
+    requires_human_review = Column(Boolean, default=False)
+    review_reasons = Column(Text, nullable=True) # JSON list of reasons
 
     __tablename__ = "template_assets"
 
@@ -95,6 +97,12 @@ class ProcessingJob(Base):
     transformed_json = Column(Text, nullable=True)
     candidate_facts_json = Column(Text, nullable=True)
     error_message = Column(Text, nullable=True)
+
+    # Improved Audit Metadata for Template Analysis / LLM stages
+    model_usage_json = Column(Text, nullable=True) # Audit log of models used
+    complexity_score = Column(Float, nullable=True)
+    llm_attempt_count = Column(Integer, default=0)
+    repair_attempt_count = Column(Integer, default=0)
 
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

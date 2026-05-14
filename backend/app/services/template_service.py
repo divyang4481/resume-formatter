@@ -98,24 +98,49 @@ class TemplateService:
         suggestions = {}
         if metadata.asset_type == "template_docx" and self.template_analysis_service:
             try:
-                print(f"Triggering automatic AI analysis for template: {filename}")
-                suggestions = await self.template_analysis_service.analyze_template(content, filename)
+                # --- CACHE CHECK: SHA-256 ---
+                existing_asset = self.template_repository.get_by_checksum(checksum)
+                if existing_asset and existing_asset.field_extraction_manifest:
+                    logger.info(f"[Cache Hit] Reusing manifest for template with checksum: {checksum}")
+                    # We create a dummy object that mimics the TemplateAnalysis result structure
+                    from types import SimpleNamespace
+                    suggestions = SimpleNamespace(
+                        purpose=existing_asset.purpose,
+                        expected_sections=existing_asset.expected_sections,
+                        expected_fields=existing_asset.expected_fields,
+                        fields=existing_asset.field_extraction_manifest,
+                        summary_guidance=existing_asset.summary_guidance,
+                        formatting_guidance=existing_asset.formatting_guidance,
+                        validation_guidance=existing_asset.validation_guidance,
+                        pii_guidance=existing_asset.pii_guidance,
+                        model_dump_json=lambda: existing_asset.analysis_json if hasattr(existing_asset, 'analysis_json') else "{}"
+                    )
+                else:
+                    logger.info(f"Triggering automatic AI analysis for template: {filename}")
+                    suggestions = await self.template_analysis_service.analyze_template(content, filename)
                 
                 if suggestions:
-                    print(f"--- [AI TEMPLATE INSIGHTS: {filename}] ---")
-                    print(f"EXPECTED SECTIONS: {suggestions.get('expected_sections')}")
-                    manifest = suggestions.get("field_extraction_manifest", [])
+                    logger.info(f"--- [AI TEMPLATE INSIGHTS: {filename}] ---")
+                    # Use getattr as suggestions might be a SimpleNamespace (cache hit) or a Pydantic model (fresh analysis)
+                    purpose = getattr(suggestions, "purpose", "Unknown")
+                    print(f"EXPECTED SECTIONS: {getattr(suggestions, 'expected_sections', 'None')}")
+                    manifest = getattr(suggestions, "fields", [])
                     print(f"IDENTIFIED MANIFEST FIELDS: {len(manifest)}")
                     
                     # BACKWARD COMPATIBILITY: Sync expected_fields from manifest if missing
-                    if manifest and not suggestions.get("expected_fields"):
-                        suggestions["expected_fields"] = ", ".join([f.get("fieldname") for f in manifest if f.get("fieldname")])
+                    if manifest and not getattr(suggestions, "expected_fields", None):
+                        # suggestions might be SimpleNamespace so we might need to set it
+                        if isinstance(suggestions, SimpleNamespace):
+                            suggestions.expected_fields = ", ".join([f.get("fieldname") for f in manifest if f.get("fieldname")])
+                        else:
+                            # If it's a model, it might be immutable or have different setter
+                            pass 
                     
-                    print(f"EXPECTED FIELDS SUMMARY: {suggestions.get('expected_fields')}")
+                    print(f"EXPECTED FIELDS SUMMARY: {getattr(suggestions, 'expected_fields', 'None')}")
                     print(f"-------------------------------------------")
 
             except Exception as analysis_err:
-                print(f"Auto-analysis failed during upload, but continuing with default draft: {analysis_err}")
+                logger.error(f"Auto-analysis failed during upload, but continuing with default draft: {analysis_err}")
 
         def ensure_str(val):
             if val is None:

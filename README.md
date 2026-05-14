@@ -177,6 +177,8 @@ Before creating local containers or deploying to the cloud, you must provision t
      --capabilities CAPABILITY_NAMED_IAM `
      --parameter-overrides DBPassword="HaysDemo_#123" `
      --region ap-south-1
+
+
    ```
 
 3. Once the deployment successfully completes, fetch the necessary outputs to populate your `.env` file:

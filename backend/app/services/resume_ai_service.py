@@ -789,8 +789,12 @@ class ResumeAiService:
             fn_for_marker = None
             f_type = "scalar"
             m_norm = normalize_marker_name(m)
+            # STRIP LOOP PREFIXES for alias matching (e.g. "table start certifications" -> "certifications")
+            m_norm_clean = m_norm.replace("table start ", "").replace("table end ", "").replace("tablestart", "").replace("tableend", "").strip()
+            
             for fn_alias, info in FIELD_ALIAS_MAP.items():
-                if any(normalize_marker_name(a) == m_norm for a in info["aliases"]):
+                alias_list = [normalize_marker_name(a) for a in info.get("aliases", [])]
+                if m_norm_clean in alias_list or normalize_marker_name(fn_alias) == m_norm_clean:
                     fn_for_marker = fn_alias
                     f_type = info.get("type", "scalar")
                     break
@@ -1014,10 +1018,13 @@ class ResumeAiService:
                 else:
                     # Try Alias Match
                     fname_norm = fieldname.lower().replace("_", "")
+                    # Load aliases and normalize them
                     aliases = [a.lower().replace("_", "") for a in FIELD_ALIAS_MAP.get(fieldname, {}).get("aliases", [])]
                     
                     for pool_key in list(pool.keys()):
-                        pool_key_norm = pool_key.lower().replace("_", "")
+                        # Normalize pool key (strip prefixes if AI hallucinated them)
+                        pool_key_norm = pool_key.lower().replace("_", "").replace("tablestart", "").replace("tableend", "")
+                        
                         if pool_key_norm == fname_norm or pool_key_norm in aliases:
                             logger.info(f"[ManifestCompliance] Mapping pool key '{pool_key}' to manifest field '{fieldname}'")
                             entry = pool.pop(pool_key)

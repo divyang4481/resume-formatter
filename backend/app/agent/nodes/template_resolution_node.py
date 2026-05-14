@@ -148,8 +148,8 @@ def create_template_resolve_node(llm_runtime, storage_provider, doc_parser):
                         try:
                             ai_service = ResumeAiService(llm_runtime, doc_parser)
                             analysis = await ai_service.analyze_template(content=content, filename="template.docx")
-                            if analysis and analysis.fields:
-                                field_manifest = [f.dict(by_alias=True) for f in analysis.fields]
+                            if analysis and "field_extraction_manifest" in analysis:
+                                field_manifest = analysis["field_extraction_manifest"]
                                 # Save back to DB to persist this analysis
                                 try:
                                     template_meta.field_extraction_manifest = json.dumps(field_manifest)

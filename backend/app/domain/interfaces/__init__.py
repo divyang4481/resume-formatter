@@ -26,6 +26,11 @@ class TemplateRepository(ABC):
         """Lists templates according to filters."""
         pass
 
+    @abstractmethod
+    def get_by_checksum(self, checksum: str) -> Optional[Any]:
+        """Fetches a template asset by its checksum."""
+        pass
+
 
 class KnowledgeIndex(ABC):
     @abstractmethod

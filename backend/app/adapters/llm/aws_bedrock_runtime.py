@@ -86,6 +86,15 @@ class AwsBedrockLlmRuntime(LlmRuntimeAdapter):
     # Public interface
     # ------------------------------------------------------------------
 
+    async def generate_text(self, prompt: str, **kwargs) -> str:
+        """
+        Async version of generate with explicit support for per-call overrides.
+        Supports: model_id, provider, temperature, max_tokens, system_prompt.
+        """
+        # For now, provider is ignored as this is the Bedrock-specific adapter.
+        # Higher-level orchestration would choose the adapter based on provider.
+        return self.generate(prompt, **kwargs)
+
     def generate(self, prompt: str, **kwargs) -> str:
         """
         Generate a completion from Bedrock.

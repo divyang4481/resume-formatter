@@ -76,6 +76,36 @@ class Settings(BaseSettings):
     bedrock_temperature_default: float = 0.1
     # ---------------------------------------------------------------------------
 
+    # New Model-Routed Pipeline Config
+    template_analysis_model_profile: str = "balanced"
+    template_analysis_models: dict = {
+        "evidence_normalizer": {
+            "provider": "aws_bedrock",
+            "model_id": "amazon.nova-lite-v1:0",
+            "temperature": 0.0,
+            "max_tokens": 4000
+        },
+        "manifest_generator": {
+            "provider": "aws_bedrock",
+            "model_id": "qwen.qwen3-235b-a22b-2507-v1:0",
+            "temperature": 0.0,
+            "max_tokens": 12000
+        },
+        "manifest_repair": {
+            "provider": "aws_bedrock",
+            "model_id": "qwen.qwen3-235b-a22b-2507-v1:0",
+            "temperature": 0.0,
+            "max_tokens": 12000
+        },
+        "manifest_critic": {
+            "provider": "aws_bedrock",
+            "model_id": "apac.anthropic.claude-3-5-sonnet-20241022-v2:0",
+            "temperature": 0.0,
+            "max_tokens": 6000,
+            "enabled": False
+        }
+    }
+
     # Storage Settings
     local_storage_path: str = "./data"
 
