@@ -59,6 +59,15 @@ class TemplateAnalysis(BaseModel):
     repeatable_blocks: List[RepeatableBlock] = Field(default_factory=list)
     static_blocks: List[StaticBlock] = Field(default_factory=list)
     
+    # Multi-stage metadata
+    analysis_status: str = "pending"
+    validation_errors: List[str] = Field(default_factory=list)
+    validation_warnings: List[str] = Field(default_factory=list)
+    complexity_score: float = 0.0
+    model_usage_json: Dict[str, Any] = Field(default_factory=dict)
+    llm_attempt_count: int = 0
+    human_review_required: bool = False
+
     # Deterministic ground truth from extractor
     raw_structure: Optional[Dict[str, Any]] = None
     

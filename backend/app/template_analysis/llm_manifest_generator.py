@@ -32,13 +32,19 @@ Return ONLY a valid TemplateManifest JSON object.
 """
 
 
+from app.agent.prompt_manager import prompt_manager
+
 async def generate_manifest_with_llm(
     evidence: TemplateEvidence,
     normalized_evidence: Dict[str, Any],
     llm_runtime,
     model_config,
 ) -> TemplateManifest:
-    prompt = build_manifest_generation_prompt(evidence, normalized_evidence)
+    prompt = prompt_manager.get_prompt(
+        "manifest_generation.jinja2",
+        evidence_json=json.dumps(evidence.model_dump(mode="json"), ensure_ascii=False, indent=2),
+        normalized_evidence=json.dumps(normalized_evidence, ensure_ascii=False, indent=2)
+    )
 
     response_text = await llm_runtime.generate_text(
         prompt=prompt,

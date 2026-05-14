@@ -41,6 +41,8 @@ Manifest:
 """
 
 
+from app.agent.prompt_manager import prompt_manager
+
 async def review_manifest_with_critic(
     evidence: TemplateEvidence,
     manifest: TemplateManifest,
@@ -50,7 +52,11 @@ async def review_manifest_with_critic(
     if not model_config.enabled:
         return {"approved": True, "issues": []}
 
-    prompt = build_manifest_critic_prompt(evidence, manifest)
+    prompt = prompt_manager.get_prompt(
+        "manifest_critic.jinja2",
+        evidence_json=json.dumps(evidence.model_dump(mode="json"), ensure_ascii=False, indent=2),
+        manifest_json=json.dumps(manifest.model_dump(mode="json"), ensure_ascii=False, indent=2)
+    )
 
     response_text = await llm_runtime.generate_text(
         prompt=prompt,

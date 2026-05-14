@@ -26,6 +26,9 @@ class TemplateAsset(Base):
     analysis_json = Column(Text, nullable=True) # Full TemplateAnalysis model
     requires_human_review = Column(Boolean, default=False)
     review_reasons = Column(Text, nullable=True) # JSON list of reasons
+    model_usage_json = Column(Text, nullable=True)
+    complexity_score = Column(Float, nullable=True)
+    llm_attempt_count = Column(Integer, default=0)
 
     __tablename__ = "template_assets"
 

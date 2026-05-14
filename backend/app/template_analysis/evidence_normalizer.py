@@ -26,12 +26,17 @@ Input evidence:
 """
 
 
+from app.agent.prompt_manager import prompt_manager
+
 async def normalize_evidence_with_model(
     evidence: TemplateEvidence,
     llm_runtime,
     model_config,
 ) -> dict[str, Any]:
-    prompt = build_evidence_normalization_prompt(evidence)
+    prompt = prompt_manager.get_prompt(
+        "evidence_normalization.jinja2",
+        evidence_json=json.dumps(evidence.model_dump(mode="json"), ensure_ascii=False, indent=2)
+    )
 
     # Use the improved llm_runtime which supports model/provider overrides
     response_text = await llm_runtime.generate_text(

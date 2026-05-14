@@ -67,7 +67,14 @@ class TemplateAnalysisService:
             template_id=template_id,
             fields=fields,
             sections=[], # New pipeline handles sections differently
-            instruction_blocks=[InstructionBlock(text="See manifest for details", action="remove", meaning="Instruction")]
+            instruction_blocks=[InstructionBlock(text="See manifest for details", action="remove", meaning="Instruction")],
+            analysis_status=manifest.analysis_status,
+            validation_errors=manifest.validation_errors,
+            validation_warnings=manifest.validation_warnings,
+            complexity_score=manifest.complexity_score,
+            model_usage_json=manifest.model_usage_json,
+            llm_attempt_count=manifest.llm_attempt_count,
+            human_review_required=manifest.human_review_required
         )
         
         # Store metadata in raw_structure for audit
@@ -76,7 +83,9 @@ class TemplateAnalysisService:
             "validation_errors": manifest.validation_errors,
             "validation_warnings": manifest.validation_warnings,
             "complexity_score": manifest.complexity_score,
-            "model_usage": manifest.model_usage_json
+            "model_usage": manifest.model_usage_json,
+            "llm_attempt_count": manifest.llm_attempt_count,
+            "human_review_required": manifest.human_review_required
         }
 
         return analysis

@@ -20,24 +20,34 @@ def validate_manifest_against_evidence(
     missing_markers = evidence_markers - manifest_markers
     for m in missing_markers:
         # Ignore TableEnd as it's usually handled by the TableStart/loop field
-        if "TableEnd:" not in m:
+        # and some technical markers like page breaks
+        if "TableEnd:" not in m and not m.startswith("Section:"):
             errors.append(f"Structural marker '{m}' found in document but missing from manifest.")
 
-    # 2. Validate repeat blocks
+    # 2. Hallucination check: Markers in manifest must exist in evidence
+    hallucinated_markers = manifest_markers - evidence_markers
+    for m in hallucinated_markers:
+        # Sometimes LLMs clean up markers or strip characters, but we want exact match for rendering
+        errors.append(f"Field marker '{m}' in manifest does not exist in document evidence.")
+
+    # 3. Validate repeat blocks
     for field in manifest.fields:
         if field.field_type in ("table_loop", "repeat_block"):
-             if "TableStart:" not in field.marker_text and "TableEnd:" not in field.marker_text:
-                  warnings.append(f"Field '{field.fieldname}' is marked as {field.field_type} but marker '{field.marker_text}' does not follow TableStart pattern.")
+             if "TableStart:" not in field.marker_text:
+                  errors.append(f"Field '{field.fieldname}' is marked as {field.field_type} but marker '{field.marker_text}' is not a TableStart marker.")
 
-    # 3. Instruction blocks should not be resume_fillable
+    # 4. Instruction blocks should not be resume_fillable
     for field in manifest.fields:
         if "instruction" in field.meaning.lower() or "instruction" in field.fieldname.lower():
             if field.resume_fillable:
                 warnings.append(f"Field '{field.fieldname}' looks like an instruction but is marked resume_fillable=True.")
 
-    # 4. Check for duplicate fieldnames
+    # 5. Check for duplicate fieldnames
     fieldnames = [f.fieldname for f in manifest.fields]
-    if len(fieldnames) != len(set(fieldnames)):
-        errors.append("Manifest contains duplicate fieldnames.")
+    seen = set()
+    for name in fieldnames:
+        if name in seen:
+            errors.append(f"Manifest contains duplicate fieldname: '{name}'")
+        seen.add(name)
 
     return errors, warnings

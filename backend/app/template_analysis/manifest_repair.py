@@ -38,6 +38,8 @@ Invalid manifest:
 """
 
 
+from app.agent.prompt_manager import prompt_manager
+
 async def repair_manifest_with_model(
     evidence: TemplateEvidence,
     manifest: TemplateManifest,
@@ -46,11 +48,12 @@ async def repair_manifest_with_model(
     llm_runtime,
     model_config,
 ) -> TemplateManifest:
-    prompt = build_manifest_repair_prompt(
-        evidence=evidence,
-        manifest=manifest,
-        errors=errors,
-        warnings=warnings,
+    prompt = prompt_manager.get_prompt(
+        "manifest_repair.jinja2",
+        errors_json=json.dumps(errors, ensure_ascii=False, indent=2),
+        warnings_json=json.dumps(warnings, ensure_ascii=False, indent=2),
+        evidence_json=json.dumps(evidence.model_dump(mode="json"), ensure_ascii=False, indent=2),
+        manifest_json=json.dumps(manifest.model_dump(mode="json"), ensure_ascii=False, indent=2)
     )
 
     response_text = await llm_runtime.generate_text(
