@@ -8,12 +8,14 @@ The LLM is only used for semantic interpretation AFTER this runs.
 """
 import io
 import logging
+import os
 import re
 import zipfile
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
 import lxml.etree as ET
+import json as json_lib
 
 logger = logging.getLogger(__name__)
 
@@ -21,29 +23,20 @@ W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 W = f"{{{W_NS}}}"
 NS = {"w": W_NS}
 
+def load_field_aliases() -> Dict[str, Dict[str, Any]]:
+    """Loads field aliases from the local JSON config file."""
+    try:
+        alias_path = os.path.join(os.path.dirname(__file__), "field_aliases.json")
+        with open(alias_path, "r", encoding="utf-8") as f:
+            return json_lib.load(f)
+    except Exception as e:
+        logger.warning(f"Failed to load field_aliases.json: {e}. Using empty map.")
+        return {}
+
 # ---------------------------------------------------------------------------
-# Known alias map: fieldname → list of expected marker CamelCase names
-# Used in reconciliation to map LLM-produced fieldnames → detected markers
+# Global alias maps
 # ---------------------------------------------------------------------------
-FIELD_ALIAS_MAP: Dict[str, Dict[str, Any]] = {
-    "candidate_full_name": {"type": "scalar", "aliases": ["CandidateFullName", "FullName", "CandidateName", "Candidate_Full_Name", "Name", "Candidate name"]},
-    "candidate_id": {"type": "scalar", "aliases": ["CandidateID", "CandidateId", "ID", "Candidate_ID"]},
-    "notice_period": {"type": "scalar", "aliases": ["NoticePeriod", "Notice_Period", "Availability", "Notice_period"]},
-    "expected_salary": {"type": "scalar", "aliases": ["ExpectedSalary", "SalaryRequired", "ExpectedSalaryAmount", "Salary_Required", "SalaryRequiredValue", "Salary required", "salary_required"]},
-    "candidate_town": {"type": "scalar", "aliases": ["CandidateTown", "CandidateLocation", "Town", "Current_Location", "living_in", "Living in"]},
-    "cv_comments": {"type": "rich_text", "aliases": ["CVcomments", "ExpertOpinion", "CVComments", "Cvcomments", "ConsultantComments", "Consultant_comments", "Expert_Opinion", "expert_opinion", "Our expert opinion"]},
-    "employee_name": {"type": "scalar", "aliases": ["EmployeeName", "ConsultantName", "PresenterName", "HaysConsultant"]},
-    "employee_job_title": {"type": "scalar", "aliases": ["EmployeeJobTitle", "ConsultantJobTitle", "JobTitle"]},
-    "employee_email": {"type": "scalar", "aliases": ["EmployeeEmail", "ConsultantEmail", "Email"]},
-    "employee_tel_no": {"type": "scalar", "aliases": ["EmployeeTelNo", "EmployeeTelNumber", "ConsultantTelNo", "Phone"]},
-    "employee_specialist_area": {"type": "scalar", "aliases": ["EmployeeSpecialistArea", "SpecialistArea", "ConsultantSpecialism"]},
-    "current_salary_benefits": {"type": "scalar", "aliases": ["CurrentSalary", "Salary", "CurrentSalaryBenefits", "Current_Salary"]},
-    "work_experience": {"type": "rich_text", "aliases": ["WorkExperience", "EmploymentHistory", "Work_Experience", "Experience", "Employment_History"]},
-    "education": {"type": "rich_text", "aliases": ["Education", "AcademicBackground", "Qualifications", "Academic_Background", "Professional qualifications"]},
-    "professional_qualifications": {"type": "array_simple", "aliases": ["ProfessionalQualifications", "CheckType", "Certifications", "Professional qualifications"]},
-    "skills": {"type": "array_simple", "aliases": ["Skills", "KeySkills", "CoreCompetencies", "Key_Skills", "Key skills"]},
-    "interests_and_activities": {"type": "rich_text", "aliases": ["InterestsAndActivities", "Hobbies", "PersonalInterests", "Interests_and_Activities"]},
-}
+FIELD_ALIAS_MAP = load_field_aliases()
 
 # Inverted alias map: CamelCase marker → canonical fieldname
 _ALIAS_INVERTED: Dict[str, str] = {}

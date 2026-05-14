@@ -1,0 +1,167 @@
+{
+    "candidate_full_name": {
+        "type": "scalar",
+        "aliases": [
+            "CandidateFullName",
+            "FullName",
+            "CandidateName",
+            "Candidate_Full_Name",
+            "Name",
+            "Candidate name"
+        ]
+    },
+    "candidate_id": {
+        "type": "scalar",
+        "aliases": [
+            "CandidateID",
+            "CandidateId",
+            "ID",
+            "Candidate_ID"
+        ]
+    },
+    "notice_period": {
+        "type": "scalar",
+        "aliases": [
+            "NoticePeriod",
+            "Notice_Period",
+            "Availability",
+            "Notice_period"
+        ]
+    },
+    "expected_salary": {
+        "type": "scalar",
+        "aliases": [
+            "ExpectedSalary",
+            "SalaryRequired",
+            "ExpectedSalaryAmount",
+            "Salary_Required",
+            "SalaryRequiredValue",
+            "Salary required",
+            "salary_required"
+        ]
+    },
+    "candidate_town": {
+        "type": "scalar",
+        "aliases": [
+            "CandidateTown",
+            "CandidateLocation",
+            "Town",
+            "Current_Location",
+            "living_in",
+            "Living in"
+        ]
+    },
+    "cv_comments": {
+        "type": "rich_text",
+        "aliases": [
+            "CVcomments",
+            "ExpertOpinion",
+            "CVComments",
+            "Cvcomments",
+            "ConsultantComments",
+            "Consultant_comments",
+            "Expert_Opinion",
+            "expert_opinion",
+            "Our expert opinion"
+        ]
+    },
+    "employee_name": {
+        "type": "scalar",
+        "aliases": [
+            "EmployeeName",
+            "ConsultantName",
+            "PresenterName",
+            "HaysConsultant"
+        ]
+    },
+    "employee_job_title": {
+        "type": "scalar",
+        "aliases": [
+            "EmployeeJobTitle",
+            "ConsultantJobTitle",
+            "JobTitle"
+        ]
+    },
+    "employee_email": {
+        "type": "scalar",
+        "aliases": [
+            "EmployeeEmail",
+            "ConsultantEmail",
+            "Email"
+        ]
+    },
+    "employee_tel_no": {
+        "type": "scalar",
+        "aliases": [
+            "EmployeeTelNo",
+            "EmployeeTelNumber",
+            "ConsultantTelNo",
+            "Phone"
+        ]
+    },
+    "employee_specialist_area": {
+        "type": "scalar",
+        "aliases": [
+            "EmployeeSpecialistArea",
+            "SpecialistArea",
+            "ConsultantSpecialism"
+        ]
+    },
+    "current_salary_benefits": {
+        "type": "scalar",
+        "aliases": [
+            "CurrentSalary",
+            "Salary",
+            "CurrentSalaryBenefits",
+            "Current_Salary"
+        ]
+    },
+    "work_experience": {
+        "type": "rich_text",
+        "aliases": [
+            "WorkExperience",
+            "EmploymentHistory",
+            "Work_Experience",
+            "Experience",
+            "Employment_History"
+        ]
+    },
+    "education": {
+        "type": "rich_text",
+        "aliases": [
+            "Education",
+            "AcademicBackground",
+            "Qualifications",
+            "Academic_Background",
+            "Professional qualifications"
+        ]
+    },
+    "professional_qualifications": {
+        "type": "array_simple",
+        "aliases": [
+            "ProfessionalQualifications",
+            "CheckType",
+            "Certifications",
+            "Professional qualifications"
+        ]
+    },
+    "skills": {
+        "type": "array_simple",
+        "aliases": [
+            "Skills",
+            "KeySkills",
+            "CoreCompetencies",
+            "Key_Skills",
+            "Key skills"
+        ]
+    },
+    "interests_and_activities": {
+        "type": "rich_text",
+        "aliases": [
+            "InterestsAndActivities",
+            "Hobbies",
+            "PersonalInterests",
+            "Interests_and_Activities"
+        ]
+    }
+}

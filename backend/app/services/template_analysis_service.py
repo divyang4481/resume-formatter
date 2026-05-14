@@ -51,11 +51,7 @@ class TemplateAnalysisService:
             "template_analysis.jinja2",
             template_text=full_context,
             detected_placeholders=structure.detected_markers,
-            example_merge_markers=[], 
-            example_blank_slots=[],
-            example_table_loops=[],
-            example_paste_zones=[],
-            example_instructions=[]
+            field_taxonomy=FIELD_ALIAS_MAP # Pass the taxonomy for semantic alignment
         )
         
         analysis = self.analyzer.analyze_template(prompt, TemplateAnalysis)

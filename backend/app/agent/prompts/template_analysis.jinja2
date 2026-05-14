@@ -8,6 +8,12 @@ DETECTED MARKERS (the ONLY valid values for marker_text):
 {{ detected_placeholders | join(', ') }}
 
 ---
+STANDARD TAXONOMY (Use these as preferred fieldnames and types if they match semantically):
+{% for field_name, info in field_taxonomy.items() %}
+- {{ field_name }} (Type: {{ info.type }}): Aliases include {{ info.aliases | join(', ') }}
+{% endfor %}
+
+---
 STEP 1 — UNDERSTAND THE TEMPLATE STRUCTURE:
 
 Read the [STRUCTURAL HINTS FROM DOCX ANALYSIS] block embedded above.
