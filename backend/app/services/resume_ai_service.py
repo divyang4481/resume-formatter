@@ -893,6 +893,8 @@ class ResumeAiService:
     ) -> Dict[str, Any]:
         """Restored method to map resume data to the template contract."""
 
+        logger.info(f"Harmonize Request: Manifest has {len(field_manifest) if field_manifest else 'None'} fields.")
+        
         prompt = prompt_manager.get_prompt(
             "data_linearization.jinja2",
             structured_data_json=json.dumps(structured_data, indent=2),
@@ -903,19 +905,11 @@ class ResumeAiService:
             job_id=job_id,
         )
 
-        SYSTEM_PROMPT = (
-            "You are a professional document mapper. Your mission is to map candidate facts to a specific template contract. "
-            "You MUST return a single valid JSON object. No prose, no markdown fences. "
-            "PROTOCOL:\n"
-            "1. For EVERY field in the manifest, find the best answer from the candidate data.\n"
-            "2. Copy the 'marker_text' EXACTLY from the manifest for each field.\n"
-            "3. If data is missing, omit it from 'template_fill_result' and add its fieldname to 'missing_fields_requiring_recruiter_or_ats_input'.\n"
-            "4. Use professional language for values. Use CVML tags ([:B:], [:L1:]) if needed."
-        )
+        system_prompt = prompt_manager.get_prompt("data_mapping_system.jinja2")
 
         response = self.llm.generate(
             prompt,
-            system_prompt=SYSTEM_PROMPT,
+            system_prompt=system_prompt,
             task_name="data_mapping",
             temperature=0.0,  # Deterministic mapping
             max_tokens=4096,
@@ -927,138 +921,13 @@ class ResumeAiService:
             logger.info(cleaned_json)
             data = json.loads(cleaned_json)
 
-            # --- HALLUCINATION GUARD & DATA HEALING ---
-            if "template_fill_result" in data:
-                fill_result = data["template_fill_result"]
+            # --- MANIFEST-FIRST RECONSTRUCTION ---
+            data = self._enforce_manifest_compliance(
+                ai_output=data,
+                field_manifest=field_manifest,
+                detected_placeholders=detected_placeholders,
+            )
 
-                # GROUND TRUTH: If manifest exists, use its fieldnames. Otherwise use detected_placeholders.
-                allowed_keys = (
-                    {f.get("fieldname") for f in field_manifest if f.get("fieldname")}
-                    if field_manifest
-                    else set()
-                )
-                manifest_markers = (
-                    {
-                        f.get("fieldname"): f.get("marker_text")
-                        for f in field_manifest
-                        if f.get("fieldname")
-                    }
-                    if field_manifest
-                    else {}
-                )
-
-                # If we have no manifest, we must trust the AI's mapping but we can still validate markers
-                if not field_manifest and detected_placeholders:
-                    logger.info(
-                        "[HallucinationGuard] No manifest provided. Using detected_placeholders for validation."
-                    )
-                    # Build a map of potential fieldnames from placeholders
-                    for p in detected_placeholders:
-                        p_inner = p.strip("«»[] ")
-                        allowed_keys.add(p_inner)  # Trust direct name match
-                        allowed_keys.add(
-                            normalize_marker_name(p).replace(" ", "_")
-                        )  # Trust normalized match
-                        manifest_markers[p_inner] = p
-                        manifest_markers[normalize_marker_name(p).replace(" ", "_")] = p
-
-                # Use list(keys) to avoid "dictionary changed size during iteration"
-                for key in list(fill_result.keys()):
-                    # ONLY apply Hallucination Guard if we have a defined contract (manifest)
-                    # OR if we have placeholders and the key doesn't match any.
-                    if allowed_keys and key not in allowed_keys:
-                        # Check for fuzzy match before deleting
-                        key_norm = key.lower().replace("_", "")
-                        matched_key = next(
-                            (
-                                ak
-                                for ak in allowed_keys
-                                if ak.lower().replace("_", "") == key_norm
-                            ),
-                            None,
-                        )
-
-                        if matched_key:
-                            logger.info(
-                                f"[HallucinationGuard] Fuzzy matching key '{key}' -> '{matched_key}'"
-                            )
-                            fill_result[matched_key] = fill_result.pop(key)
-                            key = matched_key
-                        else:
-                            logger.warning(
-                                f"[HallucinationGuard] Removing hallucinated key: '{key}'"
-                            )
-                            if "additional_resume_facts_available" not in data:
-                                data["additional_resume_facts_available"] = {}
-                            data["additional_resume_facts_available"][key] = (
-                                fill_result[key]
-                            )
-                            del fill_result[key]
-                            continue
-
-                    # Heal marker_text
-                    entry = fill_result[key]
-                    actual_marker = manifest_markers.get(key)
-                    ai_marker = entry.get("marker_text")
-
-                    if actual_marker and ai_marker != actual_marker:
-                        logger.info(
-                            f"[DataHealing] Healing marker for '{key}': '{ai_marker}' -> '{actual_marker}'"
-                        )
-                        entry["marker_text"] = actual_marker
-                    elif not entry.get("marker_text") and actual_marker:
-                        entry["marker_text"] = actual_marker
-
-                # --- MANIFEST COMPLETION ---
-                # Ensure ALL fields in the manifest are present in fill_result, even if empty.
-                # This ensures the transformation plan has 100% parity with the template manifestation.
-                if field_manifest:
-                    for field in field_manifest:
-                        fieldname = field.get("fieldname")
-                        if (
-                            not fieldname
-                            or field.get("field_type") == "instruction_block"
-                        ):
-                            continue
-
-                        if fieldname not in fill_result:
-                            field_type = field.get("field_type", "scalar")
-                            default_val = ""
-                            if field_type in (
-                                "array_simple",
-                                "array_complex",
-                                "table_loop",
-                            ):
-                                default_val = []
-
-                            fill_result[fieldname] = {
-                                "value": default_val,
-                                "marker_text": field.get("marker_text", ""),
-                                "source": "missing",
-                                "confidence": 0.0,
-                                "note": "Automatically initialized as empty to satisfy template manifest.",
-                            }
-                            logger.info(
-                                f"[ManifestCompletion] Added missing field '{fieldname}' with default empty {field_type}"
-                            )
-
-                            # Also ensure it's in missing_fields if not already
-                            if (
-                                "missing_fields_requiring_recruiter_or_ats_input"
-                                not in data
-                            ):
-                                data[
-                                    "missing_fields_requiring_recruiter_or_ats_input"
-                                ] = []
-                            if (
-                                fieldname
-                                not in data[
-                                    "missing_fields_requiring_recruiter_or_ats_input"
-                                ]
-                            ):
-                                data[
-                                    "missing_fields_requiring_recruiter_or_ats_input"
-                                ].append(fieldname)
             logger.info(
                 "\n"
                 + "=" * 60
@@ -1082,6 +951,132 @@ class ResumeAiService:
                             "" if f.get("field_type") != "array_complex" else []
                         )
             return fallback if fallback else structured_data
+
+    def _enforce_manifest_compliance(
+        self, 
+        ai_output: Dict[str, Any], 
+        field_manifest: List[Dict[str, Any]], 
+        detected_placeholders: List[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Strictly reconstructs the result based on the manifest.
+        Any key NOT in the manifest is moved to additional facts.
+        """
+        # 1. Gather all potential source data (flatten root and nested result)
+        raw_nested = ai_output.get("template_fill_result", {})
+        if not isinstance(raw_nested, dict): raw_nested = {}
+        
+        # Combined pool of candidate answers from the AI
+        pool = {**ai_output, **raw_nested}
+        
+        # Remove metadata/control keys from the pool so they aren't treated as "data"
+        control_keys = {
+            "template_fill_result", "additional_resume_facts_available", 
+            "missing_fields_requiring_recruiter_or_ats_input", "summary", 
+            "job_id", "status", "_manifest"
+        }
+        for ck in control_keys:
+            pool.pop(ck, None)
+
+        final_fill_result = {}
+        missing_fields = []
+        from app.services.template_structure_extractor import FIELD_ALIAS_MAP
+
+        # 2. Determine ground truth manifest
+        effective_manifest = field_manifest
+        if effective_manifest is None and detected_placeholders:
+            logger.info("[ManifestCompliance] No manifest provided. Using detected placeholders.")
+            effective_manifest = [
+                {
+                    "fieldname": p.strip("«»[] ").replace(" ", "_"),
+                    "marker_text": p,
+                    "field_type": "scalar"
+                }
+                for p in detected_placeholders
+            ]
+
+        # 3. Iterate Manifest and pull from Pool
+        if effective_manifest:
+            for field in effective_manifest:
+                fieldname = field.get("fieldname")
+                if not fieldname or field.get("field_type") == "instruction_block":
+                    continue
+                
+                ftype = field.get("field_type", "scalar")
+                marker = field.get("marker_text", f"«{fieldname}»")
+                
+                # Attempt to find the value in the pool
+                entry = None
+                
+                # Try Exact Match
+                if fieldname in pool:
+                    entry = pool.pop(fieldname)
+                else:
+                    # Try Alias Match
+                    fname_norm = fieldname.lower().replace("_", "")
+                    aliases = [a.lower().replace("_", "") for a in FIELD_ALIAS_MAP.get(fieldname, {}).get("aliases", [])]
+                    
+                    for pool_key in list(pool.keys()):
+                        pool_key_norm = pool_key.lower().replace("_", "")
+                        if pool_key_norm == fname_norm or pool_key_norm in aliases:
+                            logger.info(f"[ManifestCompliance] Mapping pool key '{pool_key}' to manifest field '{fieldname}'")
+                            entry = pool.pop(pool_key)
+                            break
+                
+                # Normalize the entry
+                if entry and isinstance(entry, dict):
+                    val = entry.get("value")
+                    if val is None or val == "" or val == []:
+                        missing_fields.append(fieldname)
+                    
+                    # Force manifest properties
+                    entry["marker_text"] = marker
+                    entry["field_type"] = ftype
+                    entry["mapping_category"] = (
+                        "complex smart object" if ftype in ("array_complex", "table_loop") 
+                        else ("array" if ftype == "array_simple" else "simple scalar replacement")
+                    )
+                    final_fill_result[fieldname] = entry
+                else:
+                    # Found raw value (not object), wrap it
+                    default_val = [] if ftype in ("array_simple", "array_complex", "table_loop") else ""
+                    val = entry if entry is not None else default_val
+                    
+                    if val == "" or val == []:
+                        missing_fields.append(fieldname)
+
+                    final_fill_result[fieldname] = {
+                        "value": val,
+                        "marker_text": marker,
+                        "field_type": ftype,
+                        "mapping_category": (
+                            "complex smart object" if ftype in ("array_complex", "table_loop") 
+                            else ("array" if ftype == "array_simple" else "simple scalar replacement")
+                        ),
+                        "source": "pool" if entry is not None else "missing",
+                        "confidence": 1.0 if entry is not None else 0.0,
+                        "note": "Reconstructed from AI pool." if entry is not None else "Auto-initialized."
+                    }
+
+        # 4. Cleanup AI Output
+        # Move everything still in the pool to additional facts
+        if pool:
+            if "additional_resume_facts_available" not in ai_output:
+                ai_output["additional_resume_facts_available"] = {}
+            ai_output["additional_resume_facts_available"].update(pool)
+            
+            # Remove keys from root if they were moved
+            for pk in pool.keys():
+                ai_output.pop(pk, None)
+
+        # 5. Set Final Structure
+        ai_output["template_fill_result"] = final_fill_result
+        ai_output["missing_fields_requiring_recruiter_or_ats_input"] = list(set(missing_fields))
+
+        if field_manifest:
+            ai_output["template_fill_result"]["_manifest"] = field_manifest
+
+        return ai_output
 
     async def apply_composition_logic(
         self,

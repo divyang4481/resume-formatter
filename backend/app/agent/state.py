@@ -36,7 +36,8 @@ class AgentState(TypedDict):
     expected_fields: Optional[str]
 
     # LLM Transformation results
-    transformed_document_json: Optional[str]
+    transformed_document_json: Optional[Any]
+    field_extraction_manifest: Optional[Any]
     
     # Validation
     validation_passed: bool

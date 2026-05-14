@@ -127,3 +127,95 @@ def create_output_quality_reasoning_node():
             return {"status": "quality_evaluation_failed", "validation_passed": False}
 
     return output_quality_reasoning_node
+
+def create_summary_generation_node(ai_service, storage):
+    """
+    Node dedicated to generating a professional CV summary using LLM.
+    """
+    async def summary_generation_node(state: AgentState) -> dict:
+        logger.info("Executing Summary Generation Node...")
+        session_id = state.get("session_id", "unknown-session")
+        extracted_text = state.get("extracted_text", "")
+        
+        if not extracted_text:
+            return {"status": "summary_failed", "summary_text": "No extracted text available for summary."}
+
+        summary_guidance = state.get("summary_guidance") or ""
+        industry = state.get("industry")
+        language = state.get("language", "en")
+
+        try:
+            summary_text = await ai_service.generate_summary(
+                extracted_text=extracted_text,
+                guidance=summary_guidance,
+                industry=industry,
+                language=language,
+            )
+            
+            # Persist summary to storage as an artifact
+            from app.agent.utils.llm_sanitizer import LlmSanitizer
+            clean_summary = LlmSanitizer.strip_cvml(summary_text)
+            
+            summary_key = f"jobs/{session_id}/output/summary.md"
+            final_summary_md = f"### CV Summary\n\n{clean_summary}"
+            summary_uri = storage.put_bytes(
+                final_summary_md.encode("utf-8"), summary_key
+            )
+            
+            return {
+                "summary_text": clean_summary,
+                "summary_uri": summary_uri,
+                "status": "summary_generated"
+            }
+        except Exception as e:
+            logger.error(f"Summary generation node failed: {e}")
+            return {"status": "summary_failed"}
+
+    return summary_generation_node
+
+def create_missing_fields_identification_node():
+    """
+    Node that explicitly identifies missing fields by comparing 
+    harmonized data against the template manifest.
+    """
+    async def missing_fields_identification_node(state: AgentState) -> dict:
+        logger.info("Executing Missing Fields Identification Node...")
+        
+        # 1. Get harmonized data
+        transformed_data = state.get("transformed_document_json")
+        if isinstance(transformed_data, str):
+            import json
+            try:
+                transformed_data = json.loads(transformed_data)
+            except:
+                transformed_data = {}
+        
+        # The actual AI mapping result is often nested in template_fill_result
+        mapping_results = transformed_data.get("template_fill_result", {}) if isinstance(transformed_data, dict) else {}
+        
+        # 2. Get manifest
+        manifest = state.get("field_extraction_manifest") or []
+        if isinstance(manifest, str):
+            import json
+            try:
+                manifest = json.loads(manifest)
+            except:
+                manifest = []
+        
+        # 3. Compare
+        missing_fields = []
+        for field in manifest:
+            fname = field.get("fieldname")
+            if not fname: continue
+            
+            val = mapping_results.get(fname)
+            if val is None or val == "" or val == [] or (isinstance(val, dict) and not val.get("value")):
+                missing_fields.append(fname)
+        
+        logger.info(f"Identified {len(missing_fields)} missing fields.")
+        
+        return {
+            "missing_fields": missing_fields,
+            "status": "missing_fields_identified"
+        }
+    return missing_fields_identification_node

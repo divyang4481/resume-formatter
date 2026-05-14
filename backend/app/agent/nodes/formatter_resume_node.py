@@ -36,37 +36,10 @@ def create_document_composition_node(
         expected_fields_raw = ""
         field_manifest = []
 
-        # 1. Generate Summary if not already present
-        try:
-            extracted_text = state.get("extracted_text", "")
-            if not summary_text or summary_text == "Summary not available.":
-                if extracted_text:
-                    summary_guidance = state.get("summary_guidance") or ""
-                    industry = state.get("industry")
-                    language = state.get("language", "en")
-
-                    # Use AI Service for summary
-                    summary_text = await ai_service.generate_summary(
-                        extracted_text=extracted_text,
-                        guidance=summary_guidance,
-                        industry=industry,
-                        language=language,
-                    )
-                else:
-                    summary_text = (
-                        "Original resume text not found. Summary cannot be generated."
-                    )
-
-            # Save Summary Artifact
-            summary_key = f"jobs/{session_id}/output/summary.md"
-            final_summary_md = f"### CV Summary\n\n{summary_text}"
-            summary_uri = storage.put_bytes(
-                final_summary_md.encode("utf-8"), summary_key
-            )
-
-        except Exception as e:
-            logger.error(f"Summary generation error: {e}")
-            summary_text = summary_text or "Summary generation failed."
+        # 1. Use Summary from state (Assumes upstream generate_cv_summary_node has run)
+        if not summary_text:
+            logger.warning("Summary text not found in state. Upstream summary generation might have failed.")
+            summary_text = "Summary not available."
 
         # 2. Resolve Template & Render
         try:

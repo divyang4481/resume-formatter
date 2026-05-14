@@ -106,6 +106,15 @@ async def process_job(db, message: dict):
                 template.analysis_json = analysis.model_dump_json()
                 template.status = AssetStatus.READY_FOR_TESTING.value
                 
+                # Synchronize URIs with ProcessingJob (User Rule: storage_uri == original_file_ref)
+                if not template.storage_uri:
+                    template.storage_uri = input_uri
+                
+                # extraction_uri can be the same as storage_uri or a specific analysis artifact
+                # For now, we align it to show that analysis has been completed for this storage ref
+                if not template.extraction_uri:
+                    template.extraction_uri = input_uri
+
                 # Enrich TemplateAsset columns from analysis
                 template.purpose = analysis.purpose
                 template.summary_guidance = analysis.summary_guidance

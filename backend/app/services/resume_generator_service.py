@@ -10,6 +10,8 @@ from docx.text.paragraph import Paragraph
 # 3. Apply CVML rendering actions (recursive)
 from docxtpl import DocxTemplate
 
+from app.services.template_structure_extractor import FIELD_ALIAS_MAP
+
 logger = logging.getLogger(__name__)
 
 
@@ -100,22 +102,34 @@ class ResumeGeneratorService:
                 std_key = "".join(filter(str.isalnum, k.lower()))
                 normalized_context[std_key] = v
 
-            # Fallback mappings for common missing fields in Hays templates
-            fallbacks = {
-                "check_type": ["certifications", "education", "skills"],
-                "cv_comments": ["summary", "profile_summary"],
-                "position_required": ["summary", "skills"],
-                "employee_name": ["consultant_name"],
-            }
-            for target, sources in fallbacks.items():
-                if target not in normalized_context or not normalized_context[target]:
-                    for src in sources:
-                        if src in normalized_context and normalized_context[src]:
-                            normalized_context[target] = normalized_context[src]
-                            logger.info(
-                                f"[Context] Using fallback for '{target}': inherited from '{src}'"
-                            )
+            # --- DYNAMIC TAXONOMY MAPPING ---
+            # Use FIELD_ALIAS_MAP to provide aliases and fallbacks dynamically
+            for canonical, info in FIELD_ALIAS_MAP.items():
+                val = normalized_context.get(canonical)
+                if not val:
+                    # Try aliases
+                    for alias in info.get("aliases", []):
+                        val = normalized_context.get(alias) or normalized_context.get(alias.lower()) or normalized_context.get("".join(filter(str.isalnum, alias.lower())))
+                        if val:
+                            normalized_context[canonical] = val
+                            logger.info(f"[Context] Matched alias '{alias}' -> canonical '{canonical}'")
                             break
+                
+                # If still missing, check if it's a critical field with semantic fallbacks
+                # (We can keep some hardcoded semantic fallbacks for logic that isn't just naming)
+                if not normalized_context.get(canonical):
+                    fallbacks = {
+                        "cv_comments": ["summary", "profile_summary"],
+                        "professional_qualifications": ["certifications", "education", "skills"],
+                        "skills": ["key_skills", "core_competencies"],
+                        "employee_name": ["consultant_name"]
+                    }
+                    if canonical in fallbacks:
+                        for fb in fallbacks[canonical]:
+                            if normalized_context.get(fb):
+                                normalized_context[canonical] = normalized_context[fb]
+                                logger.info(f"[Context] Using semantic fallback for '{canonical}' from '{fb}'")
+                                break
 
             class CaseInsensitiveDict(dict):
                 def __getitem__(self, key):
@@ -134,13 +148,13 @@ class ResumeGeneratorService:
                     return ""
 
             smart_context = CaseInsensitiveDict(normalized_context)
-            # Aliases for explicit marker names
-            smart_context["CandidateFullName"] = smart_context.get(
-                "candidate_full_name", ""
-            )
-            smart_context["CVcomments"] = smart_context.get("cv_comments", "")
-            smart_context["CheckType"] = smart_context.get("check_type", "")
-            smart_context["NoticePeriod"] = smart_context.get("notice_period", "")
+            
+            # Inject all aliases from taxonomy into smart_context for explicit marker support
+            for canonical, info in FIELD_ALIAS_MAP.items():
+                if normalized_context.get(canonical):
+                    for alias in info.get("aliases", []):
+                        if alias not in smart_context:
+                            smart_context[alias] = normalized_context[canonical]
 
             render_context_with_scope = {
                 **render_context,

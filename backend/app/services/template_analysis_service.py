@@ -123,13 +123,27 @@ class TemplateAnalysisService:
             if not m_text:
                 continue
                 
-            # Typos/Wrapping Healing
+            # 1. Typos/Wrapping Healing
             norm_m = self._norm(m_text)
             if m_text not in structure.detected_markers and norm_m in detected_norm:
                 actual = detected_norm[norm_m]
                 logger.info(f"[Reconcile] Healed marker typo: '{m_text}' -> '{actual}'")
                 field.marker_text = actual
                 field.render_locator.marker_text = actual
+            
+            # 2. Fieldname Normalization (Consistency)
+            # If the LLM returned a fieldname that matches an alias, force it to canonical
+            current_fn = field.fieldname
+            norm_fn = current_fn.lower().replace("_", "")
+            
+            from app.services.template_structure_extractor import FIELD_ALIAS_MAP
+            for canonical, info in FIELD_ALIAS_MAP.items():
+                aliases = [a.lower().replace("_", "").replace(" ", "") for a in info.get("aliases", [])]
+                if norm_fn in aliases or norm_fn == canonical.lower().replace("_", ""):
+                    if field.fieldname != canonical:
+                        logger.info(f"[Reconcile] Normalizing fieldname: '{field.fieldname}' -> '{canonical}'")
+                        field.fieldname = canonical
+                    break
                 
             used_markers.add(field.marker_text)
 

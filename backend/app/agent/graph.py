@@ -68,15 +68,20 @@ def create_parse_node(doc_parser: DocumentExtractionService, storage):
     return parse_node
 
 
-def with_progress(node_name, node_func, stage_map, job_repo):
+def with_progress(node_name, node_func, stage_map, job_repo, status_map=None):
     async def wrapped_node(state: AgentState):
         job_id = state.get("session_id")
         if job_repo and job_id:
             try:
                 job = job_repo.get_job(job_id)
                 if job:
+                    # Update Stage
                     job.stage = stage_map.get(node_name, node_name)
                     
+                    # Update Status if a mapping exists for this node
+                    if status_map and node_name in status_map:
+                        job.status = status_map[node_name]
+
                     # Persist template ID if resolved
                     if state.get("template_asset_id"):
                         job.template_asset_id = state.get("template_asset_id")
@@ -131,53 +136,77 @@ def build_resume_processing_graph(llm_runtime: LlmRuntimeAdapter, doc_parser: Do
     workflow = StateGraph(AgentState)
     if storage is None: storage = get_storage_provider()
 
+    from app.schemas.enums import JobStatus
+
+    # Stage map for real-time UI tracking (Breadcrumb/Steps)
     stage_map = {
-        "ingest": "LOADING_TEMPLATE",
-        "parse": "EXTRACTING_FACTS",
+        "load_template": "LOADING_TEMPLATE",
+        "extract_resume_facts": "EXTRACTING_FACTS",
         "validate_resume": "EXTRACTING_FACTS",
-        "normalize": "EXTRACTING_FACTS",
-        "privacy_transform": "EXTRACTING_FACTS",
-        "template_resolution": "LOADING_TEMPLATE",
-        "kb_retrieval": "MAPPING_FIELDS",
-        "harmonization": "MAPPING_FIELDS", 
-        "composition_reasoning": "MAPPING_FIELDS",
+        "generate_cv_summary": "GENERATING_SUMMARY",
+        "map_facts_to_manifest": "MAPPING_FIELDS",
+        "identify_missing_fields": "MAPPING_FIELDS",
         "composition": "RENDERING_DOCX",
-        "validate": "RENDERING_DOCX"
+        "validate_output": "RENDERING_DOCX"
     }
 
-    workflow.add_node("ingest", with_progress("ingest", lambda state: {"status": "ingested"}, stage_map, job_repo))
-    workflow.add_node("parse", with_progress("parse", create_parse_node(doc_parser, storage), stage_map, job_repo))
-    workflow.add_node("validate_resume", with_progress("validate_resume", create_validity_check_node(), stage_map, job_repo))
-    workflow.add_node("normalize", with_progress("normalize", lambda state: {"status": "normalized"}, stage_map, job_repo))
-    workflow.add_node("privacy_transform", with_progress("privacy_transform", lambda state: {"status": "privacy_applied"}, stage_map, job_repo))
+    # Status map for real-time UI status label update
+    status_map = {
+        "load_template": JobStatus.PROCESSING,
+        "extract_resume_facts": JobStatus.PROCESSING,
+        "generate_cv_summary": JobStatus.SUMMARIZING,
+        "map_facts_to_manifest": JobStatus.MAPPING,
+        "identify_missing_fields": JobStatus.MAPPING,
+        "composition": JobStatus.PROCESSING,
+        "validate_output": JobStatus.PROCESSING
+    }
 
     from app.services.resume_ai_service import ResumeAiService
     from app.services.resume_generator_service import ResumeGeneratorService
+    from app.agent.nodes.template_resolution_node import create_template_resolve_node
+    from app.agent.nodes.formatter_resume_node import create_document_composition_node
+    from app.agent.nodes.agentic_nodes import (
+        create_summary_generation_node,
+        create_missing_fields_identification_node,
+        create_output_quality_reasoning_node
+    )
+
     ai_service = ResumeAiService(llm_runtime, doc_parser)
     generator_service = ResumeGeneratorService()
 
-    from app.agent.nodes.template_resolution_node import create_template_resolve_node
-    workflow.add_node("template_resolution", with_progress("template_resolution", create_template_resolve_node(llm_runtime, storage, doc_parser), stage_map, job_repo))
+    # 1. Load Template (Identify template, manifest, and guidance)
+    workflow.add_node("load_template", with_progress("load_template", create_template_resolve_node(llm_runtime, storage, doc_parser), stage_map, job_repo, status_map))
     
-    workflow.add_node("kb_retrieval", with_progress("kb_retrieval", create_kb_retrieval_node(), stage_map, job_repo))
-    workflow.add_node("harmonization", with_progress("harmonization", create_field_harmonization_node(ai_service), stage_map, job_repo))
-    workflow.add_node("composition_reasoning", with_progress("composition_reasoning", create_document_composition_reasoning_node(ai_service), stage_map, job_repo))
+    # 2. Extract Resume Facts (Raw text and structured data)
+    workflow.add_node("extract_resume_facts", with_progress("extract_resume_facts", create_parse_node(doc_parser, storage), stage_map, job_repo, status_map))
+    
+    # 2b. Validate Resume Content
+    workflow.add_node("validate_resume", with_progress("validate_resume", create_validity_check_node(), stage_map, job_repo, status_map))
 
-    from app.agent.nodes.formatter_resume_node import create_document_composition_node
-    workflow.add_node("composition", with_progress("composition", create_document_composition_node(ai_service, generator_service, storage), stage_map, job_repo))
-    workflow.add_node("validate", with_progress("validate", create_output_quality_reasoning_node(), stage_map, job_repo))
+    # 3. Generate CV Summary (Dedicated LLM summary phase)
+    workflow.add_node("generate_cv_summary", with_progress("generate_cv_summary", create_summary_generation_node(ai_service, storage), stage_map, job_repo, status_map))
 
-    workflow.set_entry_point("ingest")
-    workflow.add_edge("ingest", "parse")
-    workflow.add_edge("parse", "validate_resume")
-    workflow.add_edge("validate_resume", "normalize")
-    workflow.add_edge("normalize", "privacy_transform")
-    workflow.add_edge("privacy_transform", "template_resolution")
-    workflow.add_edge("template_resolution", "kb_retrieval")
-    workflow.add_edge("kb_retrieval", "harmonization")
-    workflow.add_edge("harmonization", "composition_reasoning")
-    workflow.add_edge("composition_reasoning", "composition")
-    workflow.add_edge("composition", "validate")
-    workflow.add_edge("validate", END)
+    # 4. Map Facts to Manifest (Harmonization using manifest meanings and hints)
+    workflow.add_node("map_facts_to_manifest", with_progress("map_facts_to_manifest", create_field_harmonization_node(ai_service), stage_map, job_repo, status_map))
+
+    # 5. Identify Missing Fields (Explicit check against the contract)
+    workflow.add_node("identify_missing_fields", with_progress("identify_missing_fields", create_missing_fields_identification_node(), stage_map, job_repo, status_map))
+
+    # 6. Composition (Rendering the final DOCX)
+    workflow.add_node("composition", with_progress("composition", create_document_composition_node(ai_service, generator_service, storage), stage_map, job_repo, status_map))
+    
+    # 7. Final Quality Gate
+    workflow.add_node("validate_output", with_progress("validate_output", create_output_quality_reasoning_node(), stage_map, job_repo, status_map))
+
+    # Workflow Definition
+    workflow.set_entry_point("load_template")
+    workflow.add_edge("load_template", "extract_resume_facts")
+    workflow.add_edge("extract_resume_facts", "validate_resume")
+    workflow.add_edge("validate_resume", "generate_cv_summary")
+    workflow.add_edge("generate_cv_summary", "map_facts_to_manifest")
+    workflow.add_edge("map_facts_to_manifest", "identify_missing_fields")
+    workflow.add_edge("identify_missing_fields", "composition")
+    workflow.add_edge("composition", "validate_output")
+    workflow.add_edge("validate_output", END)
 
     return workflow.compile()
