@@ -1,0 +1,50 @@
+[project]
+name = "resume-formatter-api"
+version = "0.1.0"
+description = "FastAPI, A2A, and MCP service for Resume Formatter."
+requires-python = ">=3.11,<4.0"
+dependencies = [
+    "resume-formatter-common==0.1.0",
+    "fastapi>=0.135.2,<0.136.0",
+    "uvicorn>=0.42.0,<0.43.0",
+    "python-multipart>=0.0.22,<0.0.23",
+    "fastapi-mcp>=0.1.0",
+    "mcp>=1.27.0,<2.0.0",
+    "sse-starlette>=3.3.4,<4.0.0",
+    "mangum>=0.21.0,<0.22.0",
+    "jinja2>=3.1.6",
+]
+
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+package-dir = {"" = ".."}
+include-package-data = true
+py-modules = [
+    "app.config",
+    "app.dependencies",
+    "app.main",
+    "app.adapters.knowledge_base_adapter",
+    "app.services.hybrid_template_ranker",
+    "app.services.template_lookup_service",
+    "app.services.template_publish_guard",
+    "app.services.template_service",
+]
+
+[tool.setuptools.packages.find]
+where = [".."]
+namespaces = true
+include = [
+    "api_backend*",
+    "app.api*",
+    "app.adapters.knowledge_base_adapter*",
+    "app.config*",
+    "app.dependencies*",
+    "app.main*",
+    "app.services.hybrid_template_ranker*",
+    "app.services.template_lookup_service*",
+    "app.services.template_publish_guard*",
+    "app.services.template_service*",
+]

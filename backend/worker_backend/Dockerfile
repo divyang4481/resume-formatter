@@ -5,8 +5,7 @@ FROM ${BASE_IMAGE}
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    PIP_DEFAULT_TIMEOUT=1000 \
-    POETRY_REQUESTS_TIMEOUT=1000
+    PIP_DEFAULT_TIMEOUT=1000
 
 WORKDIR /app
 
@@ -23,17 +22,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxcb1 \
     && rm -rf /var/lib/apt/lists/*
 
-RUN pip install --no-cache-dir poetry
-
-COPY pyproject.toml poetry.lock ./
-RUN poetry config virtualenvs.create false \
-    && poetry install --no-interaction --no-ansi --no-root --all-extras \
-    && pip install --no-cache-dir rapidocr-onnxruntime
-
-# Copy the shared application package and this backend's entrypoint.
-COPY ./app ./app
+# Install the shared library and worker project dependencies. The worker owns
+# heavy extraction/runtime dependencies such as docling, torch, and RapidOCR.
+COPY ./common ./common
 COPY ./worker_backend ./worker_backend
+COPY ./app ./app
 COPY ./init_db.py ./init_db.py
+RUN pip install --no-cache-dir -e ./common -e ./worker_backend \
+    && pip install --no-cache-dir rapidocr-onnxruntime
 
 RUN mkdir -p .data \
     && python -c "from rapidocr_onnxruntime import RapidOCR; RapidOCR()"

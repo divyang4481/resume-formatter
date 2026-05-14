@@ -9,9 +9,11 @@ It is responsible for the externally reachable service surface:
 - Capability and health checks at `/api/capabilities` and `/api/health`
 - OpenAPI documentation at `/docs` and `/openapi.json`
 
-The API backend intentionally reuses the shared application package in
-`backend/app/` so route handlers, schemas, services, repositories, adapters, and
-workflow logic remain single-sourced.
+The API backend is now a separate Python project that depends on
+`backend/common/` for shared schemas, database models, repositories, queue, and
+storage code. Its container copies only API-facing modules and intentionally
+leaves worker-only extraction/runtime packages such as Docling and Torch out of
+the image.
 
 ## Local container build
 
@@ -26,5 +28,6 @@ docker build -t agentic-doc-api-local -f backend/api_backend/Dockerfile backend
 From `backend/`:
 
 ```bash
-poetry run uvicorn api_backend.entrypoint:create_app --factory --host 0.0.0.0 --port 8000 --reload
+pip install -e common -e api_backend
+uvicorn api_backend.entrypoint:create_app --factory --host 0.0.0.0 --port 8000 --reload
 ```

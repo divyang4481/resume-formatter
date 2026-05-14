@@ -7,22 +7,15 @@ logger = logging.getLogger(__name__)
 from app.dependencies import (
     get_storage_provider,
     get_job_repository,
-    get_llm_runtime,
-    get_document_extraction_service,
     get_message_queue,
     get_template_repository,
     get_template_lookup_service,
-    resume_workflow_service_dependency
 )
-from app.domain.interfaces import StorageProvider, JobRepository, DocumentExtractionService, MessageQueue, TemplateRepository
+from app.domain.interfaces import StorageProvider, JobRepository, MessageQueue, TemplateRepository
 from app.schemas.job import ProcessingJob
-from app.domain.interfaces import LlmRuntimeAdapter
-from app.agent.graph import AgentState
 from app.config import settings
 from app.schemas.enums import JobStatus
 from app.schemas.runtime import SubmitDocumentResponse, RuntimeJobStatusResponse, ConfirmDocumentRequest
-from app.services.resume_parsing_service import ResumeParsingService
-from app.services.resume_workflow_service import ResumeWorkflowService
 from app.db.session import SessionLocal
 from app.adapters.repositories.template_repository import SqlAlchemyTemplateRepository
 
@@ -56,30 +49,12 @@ async def get_templates(
     templates = template_lookup_service.list_active_templates(industry)
     return {"templates": templates}
 
-import asyncio
-
-def process_document_task(job_id: str, llm: LlmRuntimeAdapter, parser_service: DocumentExtractionService, job_repo: JobRepository):
-    # Wrap in asyncio.run or just call async functions if we're in an async context.
-    # BackgroundTasks runs synchronous functions if def is used.
-    # To use async graph effectively, we should define this as async or use an event loop.
-    # We will let fastapi run the async function.
-    pass
-
-# Workflow migrated to ResumeWorkflowService
-
-# End of migrated workflow
-
-
 from app.schemas.runtime import ExecutionContext
 from app.schemas.enums import ExecutionMode
-from app.services.template_resolution_service import TemplateResolutionService
-from app.domain.interfaces import ExtractionContext
 from app.db.session import SessionLocal
 from app.db.models import TemplateTestRun
 import logging
 from app.config import settings
-from app.dependencies import get_knowledge_index
-from app.services.hybrid_template_ranker import HybridTemplateRanker
 
 logger = logging.getLogger(__name__)
 
@@ -93,8 +68,6 @@ async def submit_document(
     x_actor_role: str = Header("recruiter", alias="X-Actor-Role"),
     storage_provider: StorageProvider = Depends(get_storage_provider),
     job_repository: JobRepository = Depends(get_job_repository),
-    llm_runtime: LlmRuntimeAdapter = Depends(get_llm_runtime),
-    doc_parser_service: DocumentExtractionService = Depends(get_document_extraction_service),
     message_queue: MessageQueue = Depends(get_message_queue),
     template_repository: TemplateRepository = Depends(get_template_repository)
 ):
@@ -176,79 +149,25 @@ async def submit_document(
         if not industry_id:
             industry_id = "it" 
     else:
-        # Suggest if not provided using shared service
+        # Keep the API container lightweight: do not parse documents or call LLMs here.
+        # If the caller did not provide a template, fall back to the first active template
+        # from the shared repository and let the worker perform heavy extraction/analysis.
+        db = SessionLocal()
         try:
-            # Synchronous extraction
-            extracted = await doc_parser_service.extract(
-                file_bytes=file_bytes,
-                filename=filename,
-                content_type=file.content_type,
-                context=ExtractionContext(intent=execution_mode.value, actor_role=x_actor_role)
-            )
+            repo = SqlAlchemyTemplateRepository(db)
+            first_tpl = repo.list_active_templates()
+            if not first_tpl:
+                logger.error("CRITICAL: No active templates found in RDS. Processing cannot continue.")
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="No active resume templates found in the system. Please upload a template in the Admin UI first."
+                )
 
-            # Use TemplateResolutionService
-            resolution_service = TemplateResolutionService(llm_runtime, template_repository)
-            rec_result = await resolution_service.recommend_template(
-                extracted_text=extracted.extracted_text,
-                industry_id=industry_id,
-                mode=execution_mode.value
-            )
-
-            suggested_industry_id = rec_result.suggested_industry_id
-            template_asset_id_val = rec_result.template_asset_id
-            allowed_template_ids = rec_result.allowed_template_ids
-
-            # Phase 3: Shadow mode execution
-            if settings.template_selector_mode in ("shadow", "hybrid"):
-                try:
-                    knowledge_index = get_knowledge_index()
-                    # template_repository is injected correctly into submit_document, we use it directly
-                    ranker = HybridTemplateRanker(knowledge_index, template_repository)
-
-                    # Run hybrid ranking
-                    hybrid_results = ranker.rank_templates(
-                        extracted_text=extracted.extracted_text,
-                        industry_id=industry_id,
-                        mode=execution_mode.value
-                    )
-
-                    hybrid_suggested_id = hybrid_results[0]["template_id"] if hybrid_results else None
-                    highest_score = hybrid_results[0]["score"] if hybrid_results else 0.0
-
-                    logger.info(
-                        "template_selection_comparison",
-                        extra={
-                            "old_template_id": template_asset_id_val,
-                            "new_template_id": hybrid_suggested_id,
-                            "mode": settings.template_selector_mode,
-                            "vector_enabled": settings.vector_search_enabled,
-                            "confidence_score": highest_score,
-                            "job_id": job_id
-                        }
-                    )
-                except Exception as shadow_e:
-                    logger.error(f"Shadow mode hybrid ranking failed: {shadow_e}")
-
-        except Exception as e:
-            print(f"Failed to get LLM template recommendation: {e}")
-            # Fallback
-            # Fallback to first available template in RDS
-            db = SessionLocal()
-            try:
-                repo = SqlAlchemyTemplateRepository(db)
-                first_tpl = repo.list_active_templates()
-                if not first_tpl:
-                    logger.error("CRITICAL: No active templates found in RDS. Processing cannot continue.")
-                    raise HTTPException(
-                        status_code=status.HTTP_404_NOT_FOUND,
-                        detail="No active resume templates found in the system. Please upload a template in the Admin UI first."
-                    )
-                
-                template_asset_id_val = first_tpl[0].id
-                suggested_industry_id = getattr(first_tpl[0], 'industry', "it")
-                allowed_template_ids = [template_asset_id_val]
-            finally:
-                db.close()
+            template_asset_id_val = first_tpl[0].id
+            suggested_industry_id = getattr(first_tpl[0], 'industry', "it")
+            allowed_template_ids = [template_asset_id_val]
+        finally:
+            db.close()
         
         # FORCE AUTO-CONFIRM: Skip human review and move straight to processing
         logger.info(f"Auto-confirming job {job_id} with template {template_asset_id_val}")
