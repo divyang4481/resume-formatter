@@ -25,6 +25,11 @@ class TemplateAnalysisService:
         self.analyzer = analyzer or BedrockTemplateAnalyzer()
         self.extractor = TemplateStructureExtractor()
 
+    async def analyze_template(self, docx_content: bytes, filename: str) -> TemplateAnalysis:
+        """Wrapper for backward compatibility with older service interfaces."""
+        template_id = filename.replace(".docx", "")
+        return await self.analyze_template_asset(docx_content, template_id)
+
     async def analyze_template_asset(self, docx_content: bytes, template_id: str) -> TemplateAnalysis:
         """
         Performs end-to-end template analysis.

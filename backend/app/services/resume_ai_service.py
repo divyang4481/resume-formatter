@@ -27,17 +27,19 @@ class ResumeAiService:
     ) -> str:
         """Restored method for worker nodes to generate professional summaries."""
         prompt = f"Summarize the following professional experience into 3 punchy bullet points. Language: {language}. Industry: {industry}.\nGuidance: {guidance}\n\n{extracted_text[:10000]}"
-        
+
         logger.info("\n" + "=" * 60 + "\n--- GENERATE SUMMARY PROMPT ---\n" + "=" * 60)
         logger.info(prompt)
         logger.info("=" * 60 + "\n")
-        
+
         summary = self.llm.generate(prompt)
-        
-        logger.info("\n" + "=" * 60 + "\n--- GENERATE SUMMARY RESPONSE ---\n" + "=" * 60)
+
+        logger.info(
+            "\n" + "=" * 60 + "\n--- GENERATE SUMMARY RESPONSE ---\n" + "=" * 60
+        )
         logger.info(summary)
         logger.info("=" * 60 + "\n")
-        
+
         return summary.strip()
 
     async def summarize_experience(self, experience_text: str) -> str:
@@ -60,8 +62,12 @@ class ResumeAiService:
         # XML parts to scan (document body + all headers/footers)
         XML_PARTS_TO_SCAN = [
             "word/document.xml",
-            "word/header1.xml", "word/header2.xml", "word/header3.xml",
-            "word/footer1.xml", "word/footer2.xml", "word/footer3.xml",
+            "word/header1.xml",
+            "word/header2.xml",
+            "word/header3.xml",
+            "word/footer1.xml",
+            "word/footer2.xml",
+            "word/footer3.xml",
         ]
 
         try:
@@ -84,7 +90,9 @@ class ResumeAiService:
                         if instr and "MERGEFIELD" in instr:
                             parts = instr.split()
                             if len(parts) >= 2:
-                                placeholders.append(parts[parts.index("MERGEFIELD") + 1])
+                                placeholders.append(
+                                    parts[parts.index("MERGEFIELD") + 1]
+                                )
 
                     # 2. MERGEFIELD complex fields (w:instrText)
                     for instr_text in root.xpath("//w:instrText", namespaces=ns):
@@ -92,15 +100,16 @@ class ResumeAiService:
                         if text and "MERGEFIELD" in text:
                             parts = text.split()
                             if len(parts) >= 2:
-                                placeholders.append(parts[parts.index("MERGEFIELD") + 1])
+                                placeholders.append(
+                                    parts[parts.index("MERGEFIELD") + 1]
+                                )
 
                     # 3. Reconstruct paragraph text across split <w:r> runs to find «...» markers
                     #    Word often splits a single cell value across many runs, breaking naive regex.
                     for para in root.xpath("//w:p", namespaces=ns):
                         # Concatenate all w:t text within this paragraph
                         run_texts = [
-                            t.text or ""
-                            for t in para.xpath(".//w:t", namespaces=ns)
+                            t.text or "" for t in para.xpath(".//w:t", namespaces=ns)
                         ]
                         para_text = "".join(run_texts)
                         # Now scan the reconstructed text for guillemet markers
@@ -109,7 +118,9 @@ class ResumeAiService:
                         # Also scan for bracketed forms
                         for m in re.finditer(r"\[\s*([^\]\s][^\]]*?)\s*\]", para_text):
                             inner = m.group(1).strip()
-                            if inner and len(inner) < 80:  # Avoid matching long sentences
+                            if (
+                                inner and len(inner) < 80
+                            ):  # Avoid matching long sentences
                                 placeholders.append(f"[{inner}]")
 
                     # 4. Raw XML string scan for entities (fallback for encoding edge cases)
@@ -154,7 +165,13 @@ class ResumeAiService:
         ns = {"w": W_NS}
         W = f"{{{W_NS}}}"
 
-        PASTE_ZONE_KEYWORDS = ["own cv", "paste", "insert cv", "candidate cv", "candidate's cv"]
+        PASTE_ZONE_KEYWORDS = [
+            "own cv",
+            "paste",
+            "insert cv",
+            "candidate cv",
+            "candidate's cv",
+        ]
         INSTRUCTION_COLOR_RED = {"ff0000", "ff0000", "c00000", "dc143c"}
 
         try:
@@ -171,13 +188,17 @@ class ResumeAiService:
                 table_count = len(root.xpath("//w:tbl", namespaces=ns))
                 para_count = len(root.xpath("//w:p", namespaces=ns))
                 if table_count > 0 and para_count > 0:
-                    hints["layout_style"] = "mixed" if para_count > table_count * 3 else "table_based"
+                    hints["layout_style"] = (
+                        "mixed" if para_count > table_count * 3 else "table_based"
+                    )
                 elif table_count > 0:
                     hints["layout_style"] = "table_based"
 
                 # 2. Detect instruction blocks (colored / italic paragraphs)
                 for para in root.xpath("//w:p", namespaces=ns):
-                    run_texts = [t.text or "" for t in para.xpath(".//w:t", namespaces=ns)]
+                    run_texts = [
+                        t.text or "" for t in para.xpath(".//w:t", namespaces=ns)
+                    ]
                     para_text = "".join(run_texts).strip()
                     if not para_text or len(para_text) < 10:
                         continue
@@ -187,7 +208,10 @@ class ResumeAiService:
                     # Check for red/colored runs
                     for color_el in para.xpath(".//w:color", namespaces=ns):
                         color_val = (color_el.get(f"{W}val") or "").lower()
-                        if color_val in INSTRUCTION_COLOR_RED or (color_val not in ("auto", "000000", "") and color_val != "auto"):
+                        if color_val in INSTRUCTION_COLOR_RED or (
+                            color_val not in ("auto", "000000", "")
+                            and color_val != "auto"
+                        ):
                             is_instruction = True
                             break
 
@@ -200,11 +224,21 @@ class ResumeAiService:
                             is_instruction = True
 
                     # Check for quoted instruction text
-                    if not is_instruction and para_text.startswith('"') and para_text.endswith('"') and len(para_text) > 20:
+                    if (
+                        not is_instruction
+                        and para_text.startswith('"')
+                        and para_text.endswith('"')
+                        and len(para_text) > 20
+                    ):
                         is_instruction = True
 
-                    if is_instruction and para_text not in hints["instruction_paragraphs"]:
-                        hints["instruction_paragraphs"].append(para_text[:300])  # Truncate long ones
+                    if (
+                        is_instruction
+                        and para_text not in hints["instruction_paragraphs"]
+                    ):
+                        hints["instruction_paragraphs"].append(
+                            para_text[:300]
+                        )  # Truncate long ones
 
                 # 3. Detect paste-zone headings (bold headings containing paste-zone keywords)
                 for para in root.xpath("//w:p", namespaces=ns):
@@ -214,12 +248,16 @@ class ResumeAiService:
                         (s.get(f"{W}val") or "").lower().startswith("heading")
                         for s in style_el
                     )
-                    run_texts = [t.text or "" for t in para.xpath(".//w:t", namespaces=ns)]
+                    run_texts = [
+                        t.text or "" for t in para.xpath(".//w:t", namespaces=ns)
+                    ]
                     para_text = "".join(run_texts).strip().lower()
 
                     # Check bold runs as proxy for headings
                     bold_els = para.xpath(".//w:b", namespaces=ns)
-                    if (is_heading or bold_els) and any(kw in para_text for kw in PASTE_ZONE_KEYWORDS):
+                    if (is_heading or bold_els) and any(
+                        kw in para_text for kw in PASTE_ZONE_KEYWORDS
+                    ):
                         hints["paste_zone_headings"].append("".join(run_texts).strip())
 
                 # 4. Detect table loops from MERGEFIELD instructions
@@ -232,7 +270,7 @@ class ResumeAiService:
                         if len(parts) >= 2:
                             name = parts[parts.index("MERGEFIELD") + 1]
                             if name.startswith("TableStart:"):
-                                loop_name = name[len("TableStart:"):]
+                                loop_name = name[len("TableStart:") :]
                                 loop_names.setdefault(loop_name, [])
                             elif name.startswith("TableEnd:"):
                                 pass  # already tracked
@@ -249,7 +287,7 @@ class ResumeAiService:
                         if len(parts) >= 2:
                             name = parts[parts.index("MERGEFIELD") + 1]
                             if name.startswith("TableStart:"):
-                                loop_name = name[len("TableStart:"):]
+                                loop_name = name[len("TableStart:") :]
                                 loop_names.setdefault(loop_name, [])
                             elif not name.startswith("TableEnd:"):
                                 for ln in loop_names:
@@ -307,7 +345,10 @@ class ResumeAiService:
         3. Deterministic reconciliation + validation
         """
         from app.services.template_structure_extractor import (
-            TemplateStructureExtractor, FIELD_ALIAS_MAP, canonical_marker, normalize_marker_name
+            TemplateStructureExtractor,
+            FIELD_ALIAS_MAP,
+            canonical_marker,
+            normalize_marker_name,
         )
         from app.services.template_manifest_validator import TemplateManifestValidator
 
@@ -319,9 +360,15 @@ class ResumeAiService:
         structure = extractor.extract(content, filename)
 
         detected_markers = structure.detected_markers
-        logger.info(f"[TemplateAnalysis] Detected {len(detected_markers)} markers: {detected_markers}")
-        logger.info(f"[TemplateAnalysis] Blank label slots: {structure.blank_label_slots}")
-        logger.info(f"[TemplateAnalysis] Table loops: {[l.loop_name for l in structure.table_loops]}")
+        logger.info(
+            f"[TemplateAnalysis] Detected {len(detected_markers)} markers: {detected_markers}"
+        )
+        logger.info(
+            f"[TemplateAnalysis] Blank label slots: {structure.blank_label_slots}"
+        )
+        logger.info(
+            f"[TemplateAnalysis] Table loops: {[l.loop_name for l in structure.table_loops]}"
+        )
         logger.info(f"[TemplateAnalysis] Layout: {structure.layout_style}")
 
         # ── Phase 1b: Docling text extraction for semantic context ────────────
@@ -330,11 +377,13 @@ class ResumeAiService:
             filename,
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         )
-        
-        logger.info("\n" + "=" * 60 + "\n--- DOCLING EXTRACTION RESULT ---\n" + "=" * 60)
+
+        logger.info(
+            "\n" + "=" * 60 + "\n--- DOCLING EXTRACTION RESULT ---\n" + "=" * 60
+        )
         logger.info(extracted_doc.extracted_text or "No text extracted")
         logger.info("=" * 60 + "\n")
-        
+
         text_content = extracted_doc.extracted_text or ""
 
         # ── Phase 1c: Build rich context block for the LLM ───────────────────
@@ -344,7 +393,9 @@ class ResumeAiService:
         hints_block = "[STRUCTURAL HINTS FROM DOCX ANALYSIS]\n"
         hints_block += f"Layout Style: {structure.layout_style}\n"
         hints_block += f"Paste Zone Headings: {structure.paste_zones}\n"
-        hints_block += f"Table Loops Detected: {[l.to_dict() for l in structure.table_loops]}\n"
+        hints_block += (
+            f"Table Loops Detected: {[l.to_dict() for l in structure.table_loops]}\n"
+        )
         hints_block += f"ALL_HEADINGS: {structure.all_headings}\n"
         hints_block += f"ALL_TABLE_LABELS: {structure.all_table_labels}\n"
         hints_block += f"REPEATED_MARKERS: {structure.repeated_markers}\n"
@@ -365,7 +416,9 @@ class ResumeAiService:
                 hints_block += f"  - '{inst[:200]}'\n"
 
         if structure.bullet_slots:
-            hints_block += "Bullet Slot Sections (source_kind=bullet_slots, array_simple):\n"
+            hints_block += (
+                "Bullet Slot Sections (source_kind=bullet_slots, array_simple):\n"
+            )
             for bs in structure.bullet_slots:
                 hints_block += f"  - Heading: '{bs}'\n"
 
@@ -384,11 +437,14 @@ class ResumeAiService:
 
         # Hidden markers not visible in extracted text
         hidden = [
-            m for m in detected_markers
+            m
+            for m in detected_markers
             if m not in text_content and m.strip("«»[] ") not in text_content
         ]
         if hidden:
-            hidden_block = "[HIDDEN MARKERS IN DOCUMENT XML — must be assigned to fields]\n"
+            hidden_block = (
+                "[HIDDEN MARKERS IN DOCUMENT XML — must be assigned to fields]\n"
+            )
             for m in hidden:
                 inner = m.strip("«»[] ")
                 hidden_block += f"  Marker: {m} → field alias: '{inner}'\n"
@@ -409,7 +465,9 @@ class ResumeAiService:
         # ── Build dynamic examples from actual detected structure ─────────────
         # These replace hardcoded examples in the prompt — every example shown
         # to the LLM is derived from THIS template's structure.
-        from app.services.template_structure_extractor import FIELD_ALIAS_MAP as _alias_map_for_prompt
+        from app.services.template_structure_extractor import (
+            FIELD_ALIAS_MAP as _alias_map_for_prompt,
+        )
 
         _alias_inverted_prompt = {
             alias.lower(): fn
@@ -430,10 +488,12 @@ class ResumeAiService:
             inner = m.strip("«»[] ")
             if inner.startswith("TableStart:") or inner.startswith("TableEnd:"):
                 continue
-            example_merge_markers.append({
-                "marker": m,
-                "fieldname": _marker_to_fieldname(m),
-            })
+            example_merge_markers.append(
+                {
+                    "marker": m,
+                    "fieldname": _marker_to_fieldname(m),
+                }
+            )
             if len(example_merge_markers) >= 3:
                 break
 
@@ -442,7 +502,9 @@ class ResumeAiService:
         for slot in structure.table_label_value_pairs[:5]:
             if slot.is_blank and not slot.marker_text:
                 fn_derived = re.sub(r"[^a-z0-9]+", "_", slot.label.lower()).strip("_")
-                example_blank_slots.append({"label": slot.label, "fieldname": fn_derived})
+                example_blank_slots.append(
+                    {"label": slot.label, "fieldname": fn_derived}
+                )
                 if len(example_blank_slots) >= 2:
                     break
 
@@ -480,8 +542,10 @@ class ResumeAiService:
             temperature=settings.bedrock_temperature_template_analysis,
             max_tokens=settings.bedrock_max_output_tokens_template_analysis,
         )
-        
-        logger.info("\n" + "=" * 60 + "\n--- TEMPLATE ANALYSIS RESPONSE ---\n" + "=" * 60)
+
+        logger.info(
+            "\n" + "=" * 60 + "\n--- TEMPLATE ANALYSIS RESPONSE ---\n" + "=" * 60
+        )
         logger.info(response)
         logger.info("=" * 60 + "\n")
 
@@ -533,7 +597,9 @@ class ResumeAiService:
                     # Try canonical wrap
                     canonical = canonical_marker(mt.strip("«»[] "))
                     if canonical in detected_markers:
-                        logger.info(f"[Reconcile] Fixed wrapping: '{mt}' → '{canonical}' for '{fn}'")
+                        logger.info(
+                            f"[Reconcile] Fixed wrapping: '{mt}' → '{canonical}' for '{fn}'"
+                        )
                         entry["marker_text"] = canonical
                         mt = canonical
                     else:
@@ -541,19 +607,28 @@ class ResumeAiService:
                         mt_norm = normalize_marker_name(mt)
                         if mt_norm in norm_to_marker:
                             actual = norm_to_marker[mt_norm]
-                            logger.info(f"[Reconcile] Fixed AI marker typo: '{mt}' -> '{actual}' for '{fn}'")
+                            logger.info(
+                                f"[Reconcile] Fixed AI marker typo: '{mt}' -> '{actual}' for '{fn}'"
+                            )
                             entry["marker_text"] = actual
                             mt = actual
                         else:
-                            logger.warning(f"[Reconcile] Hallucinated marker '{mt}' for '{fn}' — clearing.")
+                            logger.warning(
+                                f"[Reconcile] Hallucinated marker '{mt}' for '{fn}' — clearing."
+                            )
                             entry["marker_text"] = ""
                             mt = ""
                 continue  # marker is valid, move on
 
             # marker_text is empty — run alias-based reconciliation
-            if sk in ("bullet_slots", "paste_zone", "instruction_block", "section_body"):
+            if sk in (
+                "bullet_slots",
+                "paste_zone",
+                "instruction_block",
+                "section_body",
+            ):
                 continue  # these legitimately have no marker
-            
+
             # Note: visual_blank_slot IS allowed to proceed here so we can "upgrade" it
             # if we find a detected marker that matches its fieldname/alias.
 
@@ -563,19 +638,35 @@ class ResumeAiService:
                 for alias in info["aliases"]:
                     # Try all common wrappings to find the actual marker in the document
                     potential_matches = [
-                        f"«{alias}»", f"[{alias}]", f"[[{alias}]]", f"<<{alias}>>", f"{{{alias}}}", alias
+                        f"«{alias}»",
+                        f"[{alias}]",
+                        f"[[{alias}]]",
+                        f"<<{alias}>>",
+                        f"{{{alias}}}",
+                        alias,
                     ]
-                    
-                    found_marker = next((m for m in potential_matches if m in detected_markers and m not in used_markers), None)
-                    
+
+                    found_marker = next(
+                        (
+                            m
+                            for m in potential_matches
+                            if m in detected_markers and m not in used_markers
+                        ),
+                        None,
+                    )
+
                     if found_marker:
                         entry["marker_text"] = found_marker
                         entry["source_kind"] = "merge_marker"
                         entry["field_type"] = info.get("type", "scalar")
-                        entry.setdefault("render_locator", {})["strategy"] = "replace_marker"
+                        entry.setdefault("render_locator", {})[
+                            "strategy"
+                        ] = "replace_marker"
                         entry.setdefault("render_locator", {})["marker"] = found_marker
                         used_markers.add(found_marker)
-                        logger.info(f"[Reconcile] Alias matched: '{fn}' → '{found_marker}' (Upgraded from {sk}, type={entry['field_type']})")
+                        logger.info(
+                            f"[Reconcile] Alias matched: '{fn}' → '{found_marker}' (Upgraded from {sk}, type={entry['field_type']})"
+                        )
                         break
 
             # If still empty, try normalized name matching
@@ -587,7 +678,9 @@ class ResumeAiService:
                         entry["marker_text"] = m_candidate
                         entry["source_kind"] = "merge_marker"
                         used_markers.add(m_candidate)
-                        logger.info(f"[Reconcile] Norm matched: '{fn}' → '{m_candidate}'")
+                        logger.info(
+                            f"[Reconcile] Norm matched: '{fn}' → '{m_candidate}'"
+                        )
 
         # ── Phase 3c: Harden against hallucinations ───────────────────────────
         actual_paste_zone_headings = set(structure.paste_zones or [])
@@ -624,34 +717,61 @@ class ResumeAiService:
             # 4. Repeated Marker Context Enforcement & Healing
             if mt in structure.repeated_markers and strategy == "replace_marker":
                 # Try to heal by finding a label that maps to this field
-                found_label = next((s.label for s in structure.table_label_value_pairs if s.marker_text == mt), None)
+                found_label = next(
+                    (
+                        s.label
+                        for s in structure.table_label_value_pairs
+                        if s.marker_text == mt
+                    ),
+                    None,
+                )
                 if found_label:
-                    logger.info(f"[Reconcile] Healing repeated marker '{mt}' for '{fieldname}' using label context '{found_label}'.")
+                    logger.info(
+                        f"[Reconcile] Healing repeated marker '{mt}' for '{fieldname}' using label context '{found_label}'."
+                    )
                     entry["source_kind"] = "visual_blank_slot"
                     entry["render_locator"] = {
                         "strategy": "fill_blank_cell_after_label",
-                        "label": found_label
+                        "label": found_label,
                     }
                     # We keep mt in marker_text for visibility
                 else:
-                    logger.warning(f"[Reconcile] Field '{fieldname}' uses repeated marker '{mt}' without context strategy and no label found.")
+                    logger.warning(
+                        f"[Reconcile] Field '{fieldname}' uses repeated marker '{mt}' without context strategy and no label found."
+                    )
 
             # 5. Populate missing marker_text from structure for visibility
             if not mt:
-                if strategy == "replace_section_body" and heading in structure.heading_to_placeholder:
+                if (
+                    strategy == "replace_section_body"
+                    and heading in structure.heading_to_placeholder
+                ):
                     entry["marker_text"] = structure.heading_to_placeholder[heading]
-                    logger.info(f"[Reconcile] Populated marker_text for section '{heading}': {entry['marker_text'][:40]}...")
+                    logger.info(
+                        f"[Reconcile] Populated marker_text for section '{heading}': {entry['marker_text'][:40]}..."
+                    )
                 elif strategy == "fill_blank_cell_after_label":
                     # Find the marker that belongs to this label
-                    slot = next((s for s in structure.table_label_value_pairs if s.label == label), None)
+                    slot = next(
+                        (
+                            s
+                            for s in structure.table_label_value_pairs
+                            if s.label == label
+                        ),
+                        None,
+                    )
                     if slot and slot.marker_text:
                         entry["marker_text"] = slot.marker_text
-                        logger.info(f"[Reconcile] Populated marker_text for label '{label}': {slot.marker_text}")
+                        logger.info(
+                            f"[Reconcile] Populated marker_text for label '{label}': {slot.marker_text}"
+                        )
 
             if drop_reason:
-                logger.warning(f"[Reconcile] Dropping field '{fieldname}': {drop_reason}")
+                logger.warning(
+                    f"[Reconcile] Dropping field '{fieldname}': {drop_reason}"
+                )
                 continue
-                
+
             reconciled_manifest.append(entry)
 
         manifest = reconciled_manifest
@@ -679,51 +799,63 @@ class ResumeAiService:
                 # Derive from the inner name
                 fn_for_marker = normalize_marker_name(m).replace(" ", "_")
 
-            manifest.append({
-                "fieldname": fn_for_marker,
-                "field_type": f_type,
-                "source_kind": "merge_marker",
-                "marker_text": m,
-                "render_locator": {"strategy": "replace_marker", "marker_text": m},
-                "meaning": f"Auto-recovered marker: {m}",
-                "confidence": 0.8
-            })
+            manifest.append(
+                {
+                    "fieldname": fn_for_marker,
+                    "field_type": f_type,
+                    "source_kind": "merge_marker",
+                    "marker_text": m,
+                    "render_locator": {"strategy": "replace_marker", "marker_text": m},
+                    "meaning": f"Auto-recovered marker: {m}",
+                    "confidence": 0.8,
+                }
+            )
             used_markers.add(m)
-            logger.info(f"[Reconcile] Auto-added missed marker: {m} → '{fn_for_marker}'")
-
+            logger.info(
+                f"[Reconcile] Auto-added missed marker: {m} → '{fn_for_marker}'"
+            )
 
         # ── Phase 3c: Ensure visual_blank_slots from structure are in manifest ─
         manifest_labels = {
-            (e.get("render_locator") or {}).get("label", "").lower()
-            for e in manifest
+            (e.get("render_locator") or {}).get("label", "").lower() for e in manifest
         }
         for slot in structure.table_label_value_pairs:
-            if slot.is_blank and not slot.marker_text and slot.label.lower() not in manifest_labels:
+            if (
+                slot.is_blank
+                and not slot.marker_text
+                and slot.label.lower() not in manifest_labels
+            ):
                 fn_derived = re.sub(r"[^a-z0-9]+", "_", slot.label.lower()).strip("_")
-                manifest.append({
-                    "fieldname": fn_derived,
-                    "field_type": "scalar",
-                    "source_kind": "visual_blank_slot",
-                    "marker_text": slot.marker_text,
-                    "render_locator": {
-                        "strategy": "fill_blank_cell_after_label",
+                manifest.append(
+                    {
+                        "fieldname": fn_derived,
+                        "field_type": "scalar",
+                        "source_kind": "visual_blank_slot",
                         "marker_text": slot.marker_text,
-                        "label": slot.label,
-                        "heading": "",
-                    },
-                    "meaning": f"Value for '{slot.label}' label in template table",
-                    "source_hints": f"Table row labelled '{slot.label}' (contains {slot.marker_text if slot.marker_text else 'blank'})",
-                    "required": False,
-                    "confidence": 0.7,
-                })
-                logger.info(f"[Reconcile] Added visual_blank_slot for label '{slot.label}' with marker '{slot.marker_text}'")
+                        "render_locator": {
+                            "strategy": "fill_blank_cell_after_label",
+                            "marker_text": slot.marker_text,
+                            "label": slot.label,
+                            "heading": "",
+                        },
+                        "meaning": f"Value for '{slot.label}' label in template table",
+                        "source_hints": f"Table row labelled '{slot.label}' (contains {slot.marker_text if slot.marker_text else 'blank'})",
+                        "required": False,
+                        "confidence": 0.7,
+                    }
+                )
+                logger.info(
+                    f"[Reconcile] Added visual_blank_slot for label '{slot.label}' with marker '{slot.marker_text}'"
+                )
 
         # ── Phase 4: Manifest validation ─────────────────────────────────────
         validator = TemplateManifestValidator()
         validation_result = validator.validate(manifest, structure)
         logger.info(f"[TemplateAnalysis] Validation: {validation_result.to_dict()}")
         if validation_result.status == "FAIL":
-            logger.error(f"[TemplateAnalysis] Manifest FAILED validation: {validation_result.errors}")
+            logger.error(
+                f"[TemplateAnalysis] Manifest FAILED validation: {validation_result.errors}"
+            )
 
         # ── Assemble final result ─────────────────────────────────────────────
         expected_sections = data.get("expected_sections") or []
@@ -743,12 +875,12 @@ class ResumeAiService:
             "formatting_guidance": data.get("formatting_guidance", ""),
             "validation_guidance": data.get("validation_guidance", ""),
             "pii_guidance": data.get("pii_guidance", ""),
-            "layout_analysis": data.get("layout_analysis", {"layout_style": structure.layout_style}),
+            "layout_analysis": data.get(
+                "layout_analysis", {"layout_style": structure.layout_style}
+            ),
             "field_extraction_manifest": manifest,
             "_validation": validation_result.to_dict(),
         }
-
-
 
     async def harmonize_data_to_template_style(
         self,
@@ -771,19 +903,23 @@ class ResumeAiService:
             job_id=job_id,
         )
 
-        logger.info(
-            "\n" + "=" * 60 + "\n--- DATA LINEARIZATION PROMPT ---\n" + "=" * 60
+        SYSTEM_PROMPT = (
+            "You are a professional document mapper. Your mission is to map candidate facts to a specific template contract. "
+            "You MUST return a single valid JSON object. No prose, no markdown fences. "
+            "PROTOCOL:\n"
+            "1. For EVERY field in the manifest, find the best answer from the candidate data.\n"
+            "2. Copy the 'marker_text' EXACTLY from the manifest for each field.\n"
+            "3. If data is missing, omit it from 'template_fill_result' and add its fieldname to 'missing_fields_requiring_recruiter_or_ats_input'.\n"
+            "4. Use professional language for values. Use CVML tags ([:B:], [:L1:]) if needed."
         )
-        logger.info(prompt)
-        logger.info("=" * 60 + "\n")
 
-        response = self.llm.generate(prompt)
-
-        logger.info(
-            "\n" + "=" * 60 + "\n--- DATA LINEARIZATION LLM RESPONSE ---\n" + "=" * 60
+        response = self.llm.generate(
+            prompt,
+            system_prompt=SYSTEM_PROMPT,
+            task_name="data_mapping",
+            temperature=0.0,  # Deterministic mapping
+            max_tokens=4096,
         )
-        logger.info(response)
-        logger.info("=" * 60 + "\n")
 
         try:
             cleaned_json = LlmSanitizer.clean_json(response)
@@ -794,33 +930,140 @@ class ResumeAiService:
             # --- HALLUCINATION GUARD & DATA HEALING ---
             if "template_fill_result" in data:
                 fill_result = data["template_fill_result"]
-                allowed_keys = {f.get("fieldname") for f in field_manifest if f.get("fieldname")}
-                manifest_markers = {f.get("fieldname"): f.get("marker_text") for f in field_manifest if f.get("fieldname")}
-                
+
+                # GROUND TRUTH: If manifest exists, use its fieldnames. Otherwise use detected_placeholders.
+                allowed_keys = (
+                    {f.get("fieldname") for f in field_manifest if f.get("fieldname")}
+                    if field_manifest
+                    else set()
+                )
+                manifest_markers = (
+                    {
+                        f.get("fieldname"): f.get("marker_text")
+                        for f in field_manifest
+                        if f.get("fieldname")
+                    }
+                    if field_manifest
+                    else {}
+                )
+
+                # If we have no manifest, we must trust the AI's mapping but we can still validate markers
+                if not field_manifest and detected_placeholders:
+                    logger.info(
+                        "[HallucinationGuard] No manifest provided. Using detected_placeholders for validation."
+                    )
+                    # Build a map of potential fieldnames from placeholders
+                    for p in detected_placeholders:
+                        p_inner = p.strip("«»[] ")
+                        allowed_keys.add(p_inner)  # Trust direct name match
+                        allowed_keys.add(
+                            normalize_marker_name(p).replace(" ", "_")
+                        )  # Trust normalized match
+                        manifest_markers[p_inner] = p
+                        manifest_markers[normalize_marker_name(p).replace(" ", "_")] = p
+
                 # Use list(keys) to avoid "dictionary changed size during iteration"
                 for key in list(fill_result.keys()):
-                    if key not in allowed_keys:
-                        logger.warning(f"[HallucinationGuard] Removing hallucinated key: '{key}'")
-                        # Move to additional facts for visibility
-                        if "additional_resume_facts_available" not in data:
-                            data["additional_resume_facts_available"] = {}
-                        data["additional_resume_facts_available"][key] = fill_result[key]
-                        del fill_result[key]
-                    else:
-                        # Heal marker_text if AI hallucinated or used old "marker" key
-                        entry = fill_result[key]
-                        actual_marker = manifest_markers.get(key)
-                        
-                        # AI might have used "marker" instead of "marker_text"
-                        ai_marker = entry.get("marker_text") or entry.get("marker")
-                        
-                        if actual_marker and ai_marker != actual_marker:
-                            logger.info(f"[DataHealing] Healing marker for '{key}': '{ai_marker}' -> '{actual_marker}'")
-                            entry["marker_text"] = actual_marker
-                        elif not entry.get("marker_text") and actual_marker:
-                            entry["marker_text"] = actual_marker
+                    # ONLY apply Hallucination Guard if we have a defined contract (manifest)
+                    # OR if we have placeholders and the key doesn't match any.
+                    if allowed_keys and key not in allowed_keys:
+                        # Check for fuzzy match before deleting
+                        key_norm = key.lower().replace("_", "")
+                        matched_key = next(
+                            (
+                                ak
+                                for ak in allowed_keys
+                                if ak.lower().replace("_", "") == key_norm
+                            ),
+                            None,
+                        )
+
+                        if matched_key:
+                            logger.info(
+                                f"[HallucinationGuard] Fuzzy matching key '{key}' -> '{matched_key}'"
+                            )
+                            fill_result[matched_key] = fill_result.pop(key)
+                            key = matched_key
+                        else:
+                            logger.warning(
+                                f"[HallucinationGuard] Removing hallucinated key: '{key}'"
+                            )
+                            if "additional_resume_facts_available" not in data:
+                                data["additional_resume_facts_available"] = {}
+                            data["additional_resume_facts_available"][key] = (
+                                fill_result[key]
+                            )
+                            del fill_result[key]
+                            continue
+
+                    # Heal marker_text
+                    entry = fill_result[key]
+                    actual_marker = manifest_markers.get(key)
+                    ai_marker = entry.get("marker_text")
+
+                    if actual_marker and ai_marker != actual_marker:
+                        logger.info(
+                            f"[DataHealing] Healing marker for '{key}': '{ai_marker}' -> '{actual_marker}'"
+                        )
+                        entry["marker_text"] = actual_marker
+                    elif not entry.get("marker_text") and actual_marker:
+                        entry["marker_text"] = actual_marker
+
+                # --- MANIFEST COMPLETION ---
+                # Ensure ALL fields in the manifest are present in fill_result, even if empty.
+                # This ensures the transformation plan has 100% parity with the template manifestation.
+                if field_manifest:
+                    for field in field_manifest:
+                        fieldname = field.get("fieldname")
+                        if (
+                            not fieldname
+                            or field.get("field_type") == "instruction_block"
+                        ):
+                            continue
+
+                        if fieldname not in fill_result:
+                            field_type = field.get("field_type", "scalar")
+                            default_val = ""
+                            if field_type in (
+                                "array_simple",
+                                "array_complex",
+                                "table_loop",
+                            ):
+                                default_val = []
+
+                            fill_result[fieldname] = {
+                                "value": default_val,
+                                "marker_text": field.get("marker_text", ""),
+                                "source": "missing",
+                                "confidence": 0.0,
+                                "note": "Automatically initialized as empty to satisfy template manifest.",
+                            }
+                            logger.info(
+                                f"[ManifestCompletion] Added missing field '{fieldname}' with default empty {field_type}"
+                            )
+
+                            # Also ensure it's in missing_fields if not already
+                            if (
+                                "missing_fields_requiring_recruiter_or_ats_input"
+                                not in data
+                            ):
+                                data[
+                                    "missing_fields_requiring_recruiter_or_ats_input"
+                                ] = []
+                            if (
+                                fieldname
+                                not in data[
+                                    "missing_fields_requiring_recruiter_or_ats_input"
+                                ]
+                            ):
+                                data[
+                                    "missing_fields_requiring_recruiter_or_ats_input"
+                                ].append(fieldname)
             logger.info(
-                "\n" + "=" * 60 + "\n--- FINAL HARMONIZED DATA (HEALED) ---\n" + "=" * 60
+                "\n"
+                + "=" * 60
+                + "\n--- FINAL HARMONIZED DATA (HEALED) ---\n"
+                + "=" * 60
             )
             logger.info(json.dumps(data, indent=2))
             logger.info("=" * 60 + "\n")
@@ -835,38 +1078,50 @@ class ResumeAiService:
                 for f in field_manifest:
                     fn = f.get("fieldname")
                     if fn:
-                        fallback[fn] = "" if f.get("field_type") != "array_complex" else []
+                        fallback[fn] = (
+                            "" if f.get("field_type") != "array_complex" else []
+                        )
             return fallback if fallback else structured_data
 
-    async def apply_composition_logic(self, harmonized_data: Dict[str, Any], template_text: str, manifest: List[Dict[str, Any]] = None, formatting_guidance: str = "") -> Dict[str, Any]:
+    async def apply_composition_logic(
+        self,
+        harmonized_data: Dict[str, Any],
+        template_text: str,
+        manifest: List[Dict[str, Any]] = None,
+        formatting_guidance: str = "",
+    ) -> Dict[str, Any]:
         """Performs a secondary formatting and professional phrasing pass."""
-        
+
         prompt = prompt_manager.get_prompt(
             "composition_logic.jinja2",
             harmonized_json=json.dumps(harmonized_data, indent=2),
             manifest_json=json.dumps(manifest, indent=2) if manifest else "None",
             formatting_guidance=formatting_guidance,
-            template_text=template_text[:3000]
+            template_text=template_text[:3000],
         )
-        
-        logger.info("\n" + "="*60 + "\n--- COMPOSITION LOGIC PROMPT ---\n" + "="*60)
+
+        logger.info("\n" + "=" * 60 + "\n--- COMPOSITION LOGIC PROMPT ---\n" + "=" * 60)
         logger.info(prompt)
-        logger.info("="*60 + "\n")
-        
+        logger.info("=" * 60 + "\n")
+
         response = self.llm.generate(prompt)
-        
-        logger.info("\n" + "="*60 + "\n--- COMPOSITION LOGIC LLM RESPONSE ---\n" + "="*60)
+
+        logger.info(
+            "\n" + "=" * 60 + "\n--- COMPOSITION LOGIC LLM RESPONSE ---\n" + "=" * 60
+        )
         logger.info(response)
-        logger.info("="*60 + "\n")
-        
+        logger.info("=" * 60 + "\n")
+
         try:
             cleaned_json = LlmSanitizer.clean_json(response)
             data = json.loads(cleaned_json)
-            
-            logger.info("\n" + "=" * 60 + "\n--- FINAL COMPOSITION DATA ---\n" + "=" * 60)
+
+            logger.info(
+                "\n" + "=" * 60 + "\n--- FINAL COMPOSITION DATA ---\n" + "=" * 60
+            )
             logger.info(data)
             logger.info("=" * 60 + "\n")
-            
+
             return data
         except Exception as e:
             logger.error(f"Failed to parse composition logic JSON: {e}")

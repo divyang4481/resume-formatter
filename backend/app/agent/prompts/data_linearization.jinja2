@@ -28,26 +28,34 @@ RUNTIME CONTEXT:
 - JOB ID: {{ job_id }}
 
 MAPPING INTELLIGENCE PROTOCOL (MANDATORY):
-1. **Critical Personal Info Identification**:
-   - Correctly map the candidate's full name and contact details to the appropriate fieldnames.
+1. **100% Manifest Coverage**: 
+   - Every field in the TEMPLATE CONTRACT MUST have a corresponding entry in `template_fill_result`.
+   - Do NOT skip any fields. If you cannot find data, provide an empty string "" for scalars or an empty list [] for arrays.
 
 2. **STRICT Fieldname Compliance**:
    - **LOCKED KEYS**: Use ONLY the EXACT fieldnames (keys) defined in the TEMPLATE CONTRACT.
-   - **FORBIDDEN**: Do NOT invent new keys.
+   - **FORBIDDEN**: Do NOT invent new keys or use aliases like 'candidate_name' if the manifest says 'candidate_full_name'.
 
-3. **Marker Preservation**:
-   - **PHYSICAL STRING COPY**: For every field, you MUST copy the value of `Marker Text` from the TEMPLATE CONTRACT **verbatim** into the `marker_text` field of your output. Do NOT summarize or change it.
+3. **Marker Preservation (CRITICAL)**:
+   - **PHYSICAL STRING COPY**: For every field, you MUST copy the value of `Marker Text` from the TEMPLATE CONTRACT **verbatim** into the `marker_text` field of your output. 
+   - Do NOT omit the « » or [ ] brackets.
 
-4. **Synonym Resolution**:
-   - Map facts to the closest matching fieldname based on 'Meaning', 'Source Hints', and 'Marker Text'.
+4. **Field Type Schema Adherence**:
+   - **scalar**: Provide a single string or number.
+   - **array_simple**: Provide a flat list of strings (e.g., for Skills).
+   - **array_complex**: Provide a list of structured objects (e.g., for Work Experience or Education). Look at 'Item Schema' in the manifest for required sub-fields.
 
-5. **Deep Reasoning Mapping**:
-   - For EVERY field in the TEMPLATE CONTRACT, you must provide:
-     * `value`: The final string/array/object to be rendered.
+5. **Contextual Mapping**:
+   - Map facts based on 'Meaning' and 'Source Hints'. 
+   - Example: If a field says "How soon can the candidate start", look for "Notice Period" or "Availability" in the resume.
+
+5. **Deep Reasoning Output**:
+   - For EVERY field you can answer, provide:
+     * `value`: The final string/array/object.
      * `marker_text`: The EXACT `Marker Text` from the contract.
-     * `source`: Where this data was found.
-     * `confidence`: 0.0 to 1.0 score.
-     * `note`: Optional explanation.
+     * `source`: The specific section or field in the raw data used.
+     * `confidence`: 0.0 to 1.0.
+     * `note`: Why you chose this mapping.
 
 ---
 NEGATIVE CONSTRAINTS (STRICT):
@@ -58,20 +66,46 @@ NEGATIVE CONSTRAINTS (STRICT):
 OUTPUT JSON STRUCTURE (STRICT):
 {
   "template_fill_result": {
-    "fieldname_from_manifest": {
-      "value": "Actual Value",
-      "marker_text": "«ExactMarkerFromManifest»",
-      "source": "resume_fact.path",
+    "candidate_full_name": {
+      "value": "John Doe",
+      "marker_text": "«CandidateFullName»",
+      "source": "sections.Details.content",
       "confidence": 1.0,
-      "note": ""
+      "note": "Extracted directly from details section."
     },
-    ...
+    "notice_period": {
+      "value": "1 Month",
+      "marker_text": "«NoticePeriod»",
+      "source": "sections.Profile.content",
+      "confidence": 0.9,
+      "note": "Found in profile summary text."
+    },
+    "skills": {
+      "value": ["Python", "AWS", "GenAI"],
+      "marker_text": "«Skills»",
+      "source": "sections.Skills.content",
+      "confidence": 1.0
+    },
+    "work_experience": {
+      "value": [
+        {
+          "job_title": "Solution Architect",
+          "company": "Cognizant",
+          "start_date": "MAY 2020",
+          "end_date": "PRESENT",
+          "responsibilities": ["Led GenAI adoption", "Architected API platforms"]
+        }
+      ],
+      "marker_text": "«TableStart:WorkExperience»",
+      "source": "sections.Employment History.content",
+      "confidence": 0.95
+    }
   },
   "additional_resume_facts_available": {
-    "key_not_in_manifest": "Value"
+    "github_url": "https://github.com/johndoe"
   },
   "missing_fields_requiring_recruiter_or_ats_input": [
-    "fieldname_from_manifest"
+    "candidate_id"
   ]
 }
 

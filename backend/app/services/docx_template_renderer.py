@@ -102,7 +102,7 @@ class DocxTemplateRenderer:
             if not isinstance(info, dict):
                 continue
             
-            marker = info.get("marker")
+            marker = info.get("marker_text") or info.get("marker")
             value = info.get("value")
             
             if marker and value:
@@ -222,17 +222,30 @@ class DocxTemplateRenderer:
                 logger.info(f"[Renderer] Replaced regex marker for '{clean_target}' in paragraph.")
                 return
 
-    def _fill_cell_after_label(self, doc, label, replacement):
+    def _fill_cell_after_label(self, doc, label, replacement, marker: str = None):
         """Finds a table cell with the label and fills the next cell."""
         for tbl in doc.tables:
             for row in tbl.rows:
-                for i, cell in enumerate(row.cells):
+                # Iterate through cells to find label
+                cells = row.cells
+                for i in range(len(cells)):
+                    cell = cells[i]
                     if label.lower() in cell.text.lower():
-                        if i + 1 < len(row.cells):
+                        if i + 1 < len(cells):
                             # Clear and replace next cell
-                            target_cell = row.cells[i+1]
-                            for p in target_cell.paragraphs: p.text = ""
-                            target_cell.paragraphs[0].text = replacement
+                            target_cell = cells[i+1]
+                            
+                            # If we have a specific marker to target in that cell, use it
+                            if marker and marker in target_cell.text:
+                                for p in target_cell.paragraphs:
+                                    self._replace_in_paragraph(p, marker, replacement)
+                            else:
+                                # Default: clear whole cell and inject tag
+                                for p in target_cell.paragraphs: p.text = ""
+                                if not target_cell.paragraphs:
+                                    target_cell.add_paragraph(replacement)
+                                else:
+                                    target_cell.paragraphs[0].text = replacement
                             return
 
     def _replace_section_content(self, doc, heading, replacement):

@@ -4,6 +4,11 @@ import logging
 from typing import Any, Dict, List, Optional
 from docxtpl import DocxTemplate, RichText
 from docx import Document
+from docx.table import Table, _Cell
+from docx.text.paragraph import Paragraph
+
+# 3. Apply CVML rendering actions (recursive)
+from docxtpl import DocxTemplate
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +24,7 @@ class ResumeGeneratorService:
         template_bytes: bytes,
         resume_data: Dict[str, Any],
         expected_fields: Optional[str] = "",
-        field_manifest: Optional[List[Dict[str, Any]]] = None
+        field_manifest: Optional[List[Dict[str, Any]]] = None,
     ) -> tuple[bytes, List[str]]:
         """
         Takes raw template bytes and AI-harmonized data, prepares the document markers,
@@ -35,51 +40,80 @@ class ResumeGeneratorService:
             ]
 
             processed_template_stream = self.prepare_document_markers(
-                template_stream, expected_fields_list, field_manifest
+                template_stream, expected_fields_list, field_manifest, resume_data
             )
+
+            # 1.5. Un-nest the AI mapping results - this is our main guide, it must overwrite raw data
+            if "template_fill_result" in resume_data:
+                mapping_results = resume_data["template_fill_result"]
+                if isinstance(mapping_results, dict):
+                    for k, v in mapping_results.items():
+                        # Always prioritize AI-mapped results (they are healed/validated)
+                        resume_data[k] = v
 
             # 2. Expand array/complex fields into rendering-ready form
             expanded_data = self._expand_array_fields(resume_data, field_manifest or [])
 
-            # 3. Apply CVML rendering actions
-            processed_resume_data = self._apply_rendering_actions(expanded_data)
+            dummy_doc = DocxTemplate(io.BytesIO())
+            processed_resume_data = self._apply_rendering_actions(
+                expanded_data, dummy_doc
+            )
 
             # 4. Render final content using docxtpl
             doc = DocxTemplate(processed_template_stream)
 
             # Flatten the context for universal access
-            def flatten_dict(d, parent_key='', sep='_'):
+            def flatten_dict(d, parent_key="", sep="_"):
                 items = []
                 for k, v in d.items():
                     new_key = f"{parent_key}{sep}{k}" if parent_key else k
                     if isinstance(v, dict):
-                        items.extend(flatten_dict(v, new_key, sep=sep).items())
+                        # It's a field info object from ResumeAiService: { "value": "...", "marker_text": "..." }
+                        if "value" in v:
+                            val = v["value"]
+                            items.append((k, val))
+                            if parent_key:
+                                items.append((new_key, val))
+                        else:
+                            items.extend(flatten_dict(v, new_key, sep=sep).items())
                     else:
-                        items.append((k, v))  # leaf key
+                        items.append((k, v))
                         if parent_key:
-                            items.append((new_key, v))  # path-based key
+                            items.append((new_key, v))
                 return dict(items)
 
             flattened_context = flatten_dict(processed_resume_data)
 
             # Prepare render context
             render_context = {**processed_resume_data, **flattened_context}
-            
+
             import json
+
             logger.info("\n" + "=" * 60 + "\n--- FINAL RENDER CONTEXT ---\n" + "=" * 60)
             logger.info(json.dumps(render_context, indent=2, default=str))
             logger.info("=" * 60 + "\n")
 
-            # Universal Scoped Context: supports original, lowercase snake_case, and clean alphanumeric keys
+            # 0. Prep Scoped Context: supports original, lowercase snake_case, and clean alphanumeric keys
             normalized_context = {}
             for k, v in render_context.items():
                 normalized_context[k] = v
+                std_key = "".join(filter(str.isalnum, k.lower()))
+                normalized_context[std_key] = v
 
-                def standardize(key):
-                    return "".join(filter(str.isalnum, key.lower()))
-
-                norm_k = standardize(k)
-                normalized_context[norm_k] = v
+            # Fallback mappings for common missing fields in Hays templates
+            fallbacks = {
+                "check_type": ["certifications", "education", "skills"],
+                "cv_comments": ["summary", "profile_summary"],
+                "position_required": ["summary", "skills"],
+                "employee_name": ["consultant_name"],
+            }
+            for target, sources in fallbacks.items():
+                if target not in normalized_context or not normalized_context[target]:
+                    for src in sources:
+                        if src in normalized_context and normalized_context[src]:
+                            normalized_context[target] = normalized_context[src]
+                            logger.info(f"[Context] Using fallback for '{target}': inherited from '{src}'")
+                            break
 
             class CaseInsensitiveDict(dict):
                 def __getitem__(self, key):
@@ -87,40 +121,68 @@ class ResumeGeneratorService:
                         val = super().__getitem__(key)
                         return val if val is not None else ""
 
-                    std_key = "".join(filter(str.isalnum, key.lower()))
+                    std_key = "".join(filter(str.isalnum, str(key).lower()))
                     if std_key in self:
-                        val = super().__getitem__(std_key)
-                        return val if val is not None else ""
+                        return super().__getitem__(std_key)
 
-                    snake_key = re.sub(r'(?<!^)(?=[A-Z])', '_', key).lower()
+                    snake_key = re.sub(r"(?<!^)(?=[A-Z])", "_", str(key)).lower()
                     if snake_key in self:
-                        val = super().__getitem__(snake_key)
-                        return val if val is not None else ""
+                        return super().__getitem__(snake_key)
 
-                    return ""  # Never return None
+                    return ""
 
             smart_context = CaseInsensitiveDict(normalized_context)
+            # Aliases for explicit marker names
+            smart_context["CandidateFullName"] = smart_context.get("candidate_full_name", "")
+            smart_context["CVcomments"] = smart_context.get("cv_comments", "")
+            smart_context["CheckType"] = smart_context.get("check_type", "")
+            smart_context["NoticePeriod"] = smart_context.get("notice_period", "")
+            
             render_context_with_scope = {**render_context, **smart_context, "_": smart_context}
+            logger.info(f"[Context] Smart context initialized with {len(smart_context)} keys")
 
             # --- MISSING FIELD VALIDATION (skip instruction_block fields) ---
             skip_types = {"instruction_block"}
             missing_fields = []
             all_target_keys = set()
             if field_manifest:
-                all_target_keys.update([
-                    item["fieldname"] for item in field_manifest
-                    if item.get("field_type") not in skip_types
-                ])
+                all_target_keys.update(
+                    [
+                        item["fieldname"]
+                        for item in field_manifest
+                        if item.get("field_type") not in skip_types
+                    ]
+                )
             if expected_fields_list:
                 all_target_keys.update(expected_fields_list)
 
             for key in all_target_keys:
                 val = render_context_with_scope.get("_", {}).get(key)
-                if val is None or val == "" or val == [] or (isinstance(val, str) and "not found" in val.lower()):
+                if (
+                    val is None
+                    or val == ""
+                    or val == []
+                    or (isinstance(val, str) and "not found" in val.lower())
+                ):
                     missing_fields.append(key)
 
+            # Merge missing fields discovered during rendering
             if missing_fields:
-                logger.warning(f"RENDERING WARNING: The following template fields remained empty: {missing_fields}")
+                logger.warning(
+                    f"RENDERING WARNING: The following template fields remained empty: {missing_fields}"
+                )
+
+            logger.info(
+                "\n"
+                + "#" * 60
+                + "\n--- FINAL INJECTED CONTEXT (SMART SCOPE) ---\n"
+                + "#" * 60
+            )
+            for k, v in render_context_with_scope.get("_", {}).items():
+                if isinstance(v, (str, list)):
+                    val_preview = str(v)[:200] + "..." if len(str(v)) > 200 else str(v)
+                    logger.info(f"Field: '{k}' -> Value: {val_preview}")
+            logger.info("#" * 60 + "\n")
 
             doc.render(render_context_with_scope)
 
@@ -133,22 +195,77 @@ class ResumeGeneratorService:
             logger.error(f"Document rendering failed: {e}")
             raise RuntimeError(f"Failed to render document: {str(e)}")
 
+    def _apply_rendering_actions(self, data: Any, tpl: DocxTemplate) -> Any:
+        """
+        Recursively pass through the data to convert CVML tags into docxtpl objects.
+        """
+        if isinstance(data, dict):
+            # Process each value in the dictionary
+            return {
+                k: self._apply_rendering_actions(v, tpl)
+                for k, v in data.items()
+                if k != "_"
+            }
+
+        elif isinstance(data, list):
+            # Process each item in the list
+            return [self._apply_rendering_actions(item, tpl) for item in data]
+
+        elif isinstance(data, str):
+            # Check for CVML tags or line breaks that need conversion
+            if "[:" in data or "\n" in data:
+                return self._parse_rich_text(data, tpl)
+            return data
+
+        return data
+
+    def _parse_rich_text(self, text: str, tpl: DocxTemplate) -> Any:
+        """Converts CVML tags like [:B:], [:L1:], etc. into docxtpl RichText."""
+        if not text:
+            return ""
+
+        rt = RichText()
+        text = text.replace("\r\n", "\n")
+
+        # Tokenize by tags
+        parts = re.split(r"(\[:/?(?:B|I|U|L|C|H\d|PIPE|BR|L1|L2):?\])", text)
+
+        active_bold = False
+        active_italic = False
+
+        for part in parts:
+            if not part:
+                continue
+
+            if part == "[:B:]":
+                active_bold = True
+            elif part == "[:/B:]":
+                active_bold = False
+            elif part == "[:I:]":
+                active_italic = True
+            elif part == "[:/I:]":
+                active_italic = False
+            elif part == "[:PIPE:]":
+                rt.add("  |  ")
+            elif part == "[:BR:]":
+                rt.add("\n")
+            elif part == "[:L1:]":
+                rt.add("\n• ")
+            elif part == "[:L2:]":
+                rt.add("\n    - ")
+            elif part.startswith("[:"):
+                continue  # Ignore unknown tags
+            else:
+                # Actual content
+                rt.add(part, bold=active_bold, italic=active_italic)
+
+        return rt
+
     def _expand_array_fields(
-        self,
-        resume_data: Dict[str, Any],
-        field_manifest: List[Dict[str, Any]]
+        self, resume_data: Dict[str, Any], field_manifest: List[Dict[str, Any]]
     ) -> Dict[str, Any]:
         """
-        Expands array/complex/loop fields in resume_data into render-ready form:
-
-        - array_simple: keep as list (docxtpl can iterate) AND join as bullet string
-          under fieldname + '_str' key for legacy flat templates.
-        - array_complex: keep as list of dicts (for docxtpl {% for %} loops) AND
-          expand into numbered flat keys: fieldname_1_subfield, fieldname_2_subfield...
-        - table_loop: keep list of dicts as-is (docxtpl {% tr for %} uses it directly).
-        - paste_zone: keep as-is (single string).
-        - instruction_block: remove from render context entirely.
-        - scalar: keep as-is.
+        Expands array/complex/loop fields in resume_data into render-ready form.
         """
         expanded = dict(resume_data)
 
@@ -164,44 +281,28 @@ class ResumeGeneratorService:
             field_type = entry.get("field_type", "scalar")
 
             # --- instruction_block: clear from render context ---
-            if field_type == "instruction_block" or fieldname.startswith("_instruction_"):
+            if field_type == "instruction_block" or fieldname.startswith(
+                "_instruction_"
+            ):
                 expanded.pop(fieldname, None)
-                logger.info(f"Removed instruction_block '{fieldname}' from render context")
                 continue
 
             # --- array_simple: list of strings ---
             if field_type == "array_simple" and isinstance(value, list):
-                # Keep the list for any docxtpl iteration
                 expanded[fieldname] = [str(v) for v in value if v]
-                # Also provide a bullet-joined string for legacy flat templates
                 bullet_str = "\n".join(f"• {v}" for v in expanded[fieldname])
                 expanded[f"{fieldname}_str"] = bullet_str
-                logger.info(f"Expanded array_simple '{fieldname}': {len(expanded[fieldname])} items")
 
             # --- array_complex: list of sub-field dicts ---
             elif field_type == "array_complex" and isinstance(value, list):
-                schema = entry.get("array_item_schema", [])
-                sub_field_names = [s["sub_field"] for s in schema] if schema else []
-
-                # Keep the list for docxtpl loop templates
                 expanded[fieldname] = value
-
-                # Expand to numbered flat keys for legacy templates
                 for i, item in enumerate(value, start=1):
                     if isinstance(item, dict):
                         for sub_key, sub_val in item.items():
                             expanded[f"{fieldname}_{i}_{sub_key}"] = sub_val
-                        # Also map positional keys if schema defined order
-                        for j, sf in enumerate(sub_field_names):
-                            if sf in item:
-                                expanded[f"{fieldname}_{i}_{sf}"] = item[sf]
-
-                logger.info(f"Expanded array_complex '{fieldname}': {len(value)} items with {len(sub_field_names)} sub-fields each")
 
             # --- table_loop: list of dicts for docxtpl tr loops ---
             elif field_type == "table_loop" and isinstance(value, list):
-                # docxtpl uses the variable directly: {% tr for item in fieldname %}
-                # Ensure all items are dicts
                 loop_variable = entry.get("loop_variable", fieldname)
                 loop_items = [
                     item if isinstance(item, dict) else {"value": str(item)}
@@ -210,224 +311,313 @@ class ResumeGeneratorService:
                 expanded[loop_variable] = loop_items
                 if loop_variable != fieldname:
                     expanded[fieldname] = loop_items
-                logger.info(f"Expanded table_loop '{fieldname}' (loop_variable='{loop_variable}'): {len(loop_items)} rows")
 
         return expanded
 
-
     def prepare_document_markers(
-        self, 
-        template_stream: io.BytesIO, 
+        self,
+        template_stream: io.BytesIO,
         field_list: List[str],
-        field_manifest: Optional[List[Dict[str, Any]]] = None
+        field_manifest: Optional[List[Dict[str, Any]]] = None,
+        resume_data: Optional[Dict[str, Any]] = None,
     ) -> io.BytesIO:
         """
         Scans the document for various marker patterns and normalizes them.
-        Uses manifest 'marker_text' as primary anchors for high-precision replacement.
         """
         doc = Document(template_stream)
         counter = 0
 
+        # Build a lookup for direct replacement if we have data
+        data_lookup = {}
+        if resume_data:
+            # Flatten/standardize for easier lookup
+            for k, v in resume_data.items():
+                if isinstance(v, (str, int, float)) and v != "N/A":
+                    data_lookup["".join(filter(str.isalnum, k.lower()))] = v
+                if isinstance(v, dict) and "value" in v:
+                    val = v["value"]
+                    if isinstance(val, (str, int, float)) and val != "N/A":
+                        data_lookup["".join(filter(str.isalnum, k.lower()))] = val
+            logger.info(f"[Lookup] Created data_lookup with {len(data_lookup)} keys: {list(data_lookup.keys())[:20]}...")
+
         # --- Phase 0: Clear instruction blocks ---
         if field_manifest:
             for item in field_manifest:
-                if item.get("render_locator", {}).get("strategy") == "clear_instruction_block":
+                if (
+                    item.get("render_locator", {}).get("strategy")
+                    == "clear_instruction_block"
+                ):
                     target_text = item.get("marker_text", "").strip()
                     if target_text:
-                        # Limit match to first 100 chars if it's very long, to avoid minor whitespace issues
                         match_prefix = target_text[:100]
-                        # Clear matching paragraphs
                         for para in doc.paragraphs:
                             if match_prefix in para.text:
                                 para.text = ""
-                        # Check tables (common in Hays footers)
                         for tbl in doc.tables:
                             for row in tbl.rows:
                                 for cell in row.cells:
                                     if match_prefix in cell.text:
                                         for p in cell.paragraphs:
                                             p.text = ""
-                        logger.info(f"Cleared instruction block starting with: '{match_prefix[:50]}...'")
 
-        # Regex for common placeholder patterns
-        MARKER_PATTERN = r"(?:<<|\{\{|\[\[|«|\[)\s*(.*?)\s*(?:>>|\}\}|\]\]|»|\])"
+        # Regex for common placeholder patterns - handle guillemets and brackets with wide whitespace support
+        # Supports: «Field», <<Field>>, [[Field]], [Field], {Field}
+        MARKER_PATTERN = r"(?:<<|\[\[|«|\[|<|\{)\s*([^\xab\xbb\(\)\[\]\{\}><]+?)\s*(?:>>|\]\]|»|\]|>|\})"
+
+        def normalize_key(k: str) -> str:
+            return re.sub(r"[^a-z0-9]", "", k.lower())
 
         def transform_text(text, fields, current_counter, manifest):
+            # Find all matches in the original text (including guillemets)
             matches = list(re.finditer(MARKER_PATTERN, text))
+
+            if not matches:
+                # Try raw brackets
+                matches = list(re.finditer(r"\[([^\]]+)\]", text))
+
             new_text = text
-            offset = 0
-            
-            for match in matches:
+
+            # Sort matches in reverse order to replace without messing up indices
+            for match in sorted(matches, key=lambda x: x.start(), reverse=True):
                 original = match.group(0)
                 raw_marker_text = match.group(1).strip()
                 target_key = None
-                
-                # 1. Try to find in manifest by literal marker_text match
-                if manifest:
-                    for item in manifest:
-                        m_text = item.get("marker_text", "")
-                        # Try exact match, or match without the brackets if LLM missed them in the manifest
-                        if m_text == original or m_text == raw_marker_text or f"«{m_text}»" == original:
-                            target_key = item.get("fieldname")
-                            logger.info(f"Manifest Match: Found '{original}', mapping to '{target_key}'")
-                            break
-                
-                # 2. Sequential mapping for generic markers
-                if not target_key:
-                    generic_keywords = ["type text", "fill", "placeholder", "organisation", "organization", "job description", "institution", "degree", "bullet point"]
-                    is_generic = any(x in raw_marker_text.lower() for x in generic_keywords)
-                    if is_generic and current_counter < len(fields):
-                        target_key = fields[current_counter]
-                        current_counter += 1
-                        logger.info(f"Generic Match: Mapping '{original}' to '{target_key}' (sequential)")
+                # --- HAYS SPECIAL: TableStart / TableEnd (Must be checked first) ---
+                if "tablestart:" in raw_marker_text.lower():
+                    loop_key = raw_marker_text.split(":", 1)[1].strip()
+                    # Clean the loop key from guillemets if any
+                    loop_key = loop_key.strip("«»[]<>{} ")
+                    # Use standard for loop with fallback to global context
+                    replacement = f"{{% for item in _['{loop_key}'] %}}"
+                    target_key = "LOOP_START"  # Mark as handled
+                elif "tableend:" in raw_marker_text.lower():
+                    replacement = "{% endfor %}"
+                    target_key = "LOOP_END"  # Mark as handled
 
-                # 3. Smart Fuzzy Mapping for common resume fields
                 if not target_key:
-                    # Normalize raw_marker_text
-                    clean_marker = re.sub(r'[^a-z0-9]', '', raw_marker_text.lower())
-                    for field in fields:
-                        clean_field = re.sub(r'[^a-z0-9]', '', field.lower())
-                        if clean_marker == clean_field or clean_marker in clean_field or clean_field in clean_marker:
-                            if "name" in clean_marker and "name" in clean_field:
-                                target_key = field
-                                logger.info(f"Smart Match (Name): Mapping '{original}' to '{target_key}'")
+                    # 1. Try to find in manifest
+                    if manifest:
+                        norm_raw = normalize_key(raw_marker_text)
+                        for item in manifest:
+                            m_text = item.get("marker_text", "")
+                            norm_m = normalize_key(m_text)
+
+                            if (
+                                m_text == original
+                                or m_text == raw_marker_text
+                                or norm_m == norm_raw
+                            ):
+                                target_key = item.get("fieldname")
                                 break
-                            if "email" in clean_marker and "email" in clean_field:
-                                target_key = field
-                                logger.info(f"Smart Match (Email): Mapping '{original}' to '{target_key}'")
+
+                            clean_m = m_text.strip("«»[]<>{}")
+                            if normalize_key(clean_m) == norm_raw:
+                                target_key = item.get("fieldname")
                                 break
-                            if "summary" in clean_marker and "summary" in clean_field:
+
+                    # 2. Smart Fuzzy Mapping
+                    if not target_key:
+                        norm_marker = normalize_key(raw_marker_text)
+                        for field in fields:
+                            norm_field = normalize_key(field)
+                            if (
+                                norm_marker
+                                and norm_field
+                                and (
+                                    norm_marker == norm_field
+                                    or norm_marker in norm_field
+                                    or norm_field in norm_marker
+                                )
+                            ):
                                 target_key = field
-                                logger.info(f"Smart Match (Summary): Mapping '{original}' to '{target_key}'")
                                 break
-                
-                # 4. Fallback to raw marker text
-                if not target_key:
-                    target_key = raw_marker_text
-                    logger.info(f"Fallback Match: Using raw marker text '{target_key}' for '{original}'")
-                
-                replacement = f"{{{{ _['{target_key}'] }}}}"
+
+                    # 3. Fallback
+                    if not target_key:
+                        target_key = raw_marker_text
+
+                    # INJECT JINJA2 TAG (instead of direct replacement)
+                    # This allows docxtpl to handle formatting tags like [:B:] and [:L1:] correctly
+                    # while our smart context provides the values.
+                    norm_target = normalize_key(target_key)
+                    
+                    # If we are inside a loop, we might need 'item.'
+                    subfields = {"jobtitle", "company", "startdate", "enddate", "description", "degree", "institution", "year", "grade"}
+                    if normalize_key(target_key) in subfields:
+                        replacement = f"{{{{ item['{target_key}'] if item is defined else _['{target_key}'] }}}}"
+                    else:
+                        # Use a very safe check using our scoped context '_'
+                        # We use _['key'] which our CaseInsensitiveDict handles gracefully
+                        replacement = f"{{{{ _['{target_key}'] }}}}"
+
+                    logger.info(f"Mapped marker '{original}' to Jinja2 tag: '{replacement}'")
+
                 start, end = match.span()
-                new_text = (
-                    new_text[: start + offset] + replacement + new_text[end + offset :]
-                )
-                offset += len(replacement) - len(original)
-            
+                new_text = new_text[:start] + replacement + new_text[end:]
+                logger.debug(f"Marker Replaced: '{original}' -> '{replacement}'")
+
             return new_text, current_counter
 
         def process_paragraph(paragraph, fields, current_counter, manifest):
             full_text = paragraph.text
+            if not full_text or len(full_text.strip()) < 2:
+                return current_counter
 
+            # logger.info(f"SCANNING: '{full_text[:100]}'") # Too verbose for 500 paragraphs
+
+            # 1. First, check manifest for VERBATIM matches (Instruction blocks, etc.)
             if manifest:
                 for item in manifest:
                     field_type = item.get("field_type", "scalar")
                     anchor = item.get("marker_text", "")
                     fieldname = item.get("fieldname", "")
 
-                    # --- instruction_block: clear the paragraph entirely ---
-                    if field_type == "instruction_block":
-                        if anchor and anchor in full_text:
-                            for run in paragraph.runs:
-                                run.text = ""
-                            logger.info(f"Cleared instruction_block paragraph: '{anchor[:60]}...'")
-                            return current_counter
+                    if not anchor:
+                        continue
 
-                    # --- paste_zone: replace the paragraph with the zone field template var ---
-                    elif field_type == "paste_zone":
-                        if anchor and anchor in full_text:
-                            paragraph.text = f"{{{{ _['{fieldname}'] }}}}"
-                            logger.info(f"Replaced paste_zone paragraph with field '{fieldname}'")
-                            return current_counter
-                        # Also match on paste-zone keywords in the text even without a marker
-                        paste_keywords = ["paste the candidate", "paste cv", "insert cv", "own cv"]
-                        if any(kw in full_text.lower() for kw in paste_keywords):
-                            for run in paragraph.runs:
-                                run.text = ""
-                            logger.info(f"Cleared paste_zone instruction text: '{full_text[:60]}'")
-                            return current_counter
-
-                    # --- non-marker instructional anchors (verbatim text anchors) ---
-                    elif anchor and anchor in full_text and not any(
-                        m in anchor for m in ["<<", "«", "{{", "[[", "["]
-                    ):
-                        replacement_field = item.get("replacement_field") or fieldname
-                        if replacement_field and not replacement_field.startswith("_instruction_"):
-                            paragraph.text = f"{{{{ _['{replacement_field}'] }}}}"
-                            logger.info(f"Anchor matched and replaced: {anchor}")
-                        else:
-                            # No replacement field — just clear it
-                            for run in paragraph.runs:
-                                run.text = ""
-                            logger.info(f"Cleared anchor text (no replacement): {anchor[:60]}")
+                    if field_type == "instruction_block" and anchor in full_text:
+                        logger.info(f"Instruction Block Clear: '{anchor}'")
+                        paragraph.text = ""
                         return current_counter
 
-            # Then check for formal markers (guillemets, brackets, etc.)
-            has_marker = any(m in full_text for m in ["<<", "{{", "[[", "«", "["])
+                    if field_type == "paste_zone" and anchor in full_text:
+                        logger.info(f"Paste Zone Replace: '{anchor}' -> '{fieldname}'")
+                        paragraph.text = f"{{{{ _['{fieldname}'] }}}}"
+                        return current_counter
+
+            # 2. Check for patterns (guillemets, brackets, etc.)
+            has_marker = any(
+                m in full_text
+                for m in ["«", "»", "<<", ">>", "[[", "]]", "{{", "}}", "[", "<", "{"]
+            )
             if has_marker:
-                new_text, next_counter = transform_text(full_text, fields, current_counter, manifest)
+                logger.info(f"Potential marker detected in paragraph: '{full_text[:100]}'")
+                new_text, next_counter = transform_text(
+                    full_text, fields, current_counter, manifest
+                )
                 if new_text != full_text:
-                    if len(paragraph.runs) == 1:
-                        paragraph.runs[0].text = new_text
-                    else:
-                        # Fallback: preserve the formatting of the first run if it exists
-                        first_run_style = None
-                        if paragraph.runs:
-                            try:
-                                first_run_style = paragraph.runs[0].style
-                            except:
-                                pass
-                        
-                        paragraph.text = ""
-                        run = paragraph.add_run(new_text)
-                        # Only apply if it's a CHARACTER style (type 2) to avoid docx error
-                        if first_run_style and hasattr(first_run_style, 'type') and first_run_style.type == 2:
-                            run.style = first_run_style
+                    logger.info(f"PARAGRAPH UPDATE: '{full_text}' -> '{new_text}'")
+                    # Direct update is safer than clearing runs if we don't care about run-level bold/italic
+                    paragraph.text = new_text
                 return next_counter
-            
+
             return current_counter
 
-        # Process all structural elements
-        for section in doc.sections:
-            for header in [section.header, section.first_page_header, section.even_page_header]:
-                if header:
-                    for p in header.paragraphs:
-                        counter = process_paragraph(p, field_list, counter, field_manifest)
-                    for table in header.tables:
-                        for row in table.rows:
-                            for cell in row.cells:
-                                for p in cell.paragraphs:
-                                    counter = process_paragraph(p, field_list, counter, field_manifest)
+        def iter_all_paragraphs(parent):
+            """Recursively finds all paragraphs in the document (including text boxes and nested tables)."""
+            # Handle the fact that Document is a factory function, the class is _Document
+            from docx.document import Document as _Document
+
+            if isinstance(parent, _Document):
+                parent_elm = parent.element.body
+            elif hasattr(parent, "_element"):
+                parent_elm = parent._element
+            elif isinstance(parent, _Cell):
+                parent_elm = parent._tc
+            else:
+                parent_elm = parent
+
+            if parent_elm is not None:
+                # Use XPath to find ALL paragraphs regardless of nesting
+                # This catches text boxes, tables, etc.
+                for p_elm in parent_elm.xpath(".//w:p"):
+                    yield Paragraph(p_elm, parent)
+
+        def flatten_merge_fields(doc):
+            """
+            NORMALIZATION PHASE:
+            Converts Word MERGEFIELD structures into plain text markers like «FieldName».
+            We replace the specific XML nodes so we don't lose surrounding text.
+            """
+            from lxml import etree
+            W_NS = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
             
-            for footer in [section.footer, section.first_page_footer, section.even_page_footer]:
-                if footer:
-                    for p in footer.paragraphs:
-                        counter = process_paragraph(p, field_list, counter, field_manifest)
-                    for table in footer.tables:
-                        for row in table.rows:
-                            for cell in row.cells:
-                                for p in cell.paragraphs:
-                                    counter = process_paragraph(p, field_list, counter, field_manifest)
+            parts = [doc]
+            for s in doc.sections:
+                parts.extend([s.header, s.first_page_header, s.even_page_header, s.footer, s.first_page_footer, s.even_page_footer])
+            
+            for part in parts:
+                if not part or not hasattr(part, '_element'): continue
+                
+                # 1. Handle Simple Fields (w:fldSimple)
+                # These are single nodes, easy to replace.
+                simple_fields = part._element.xpath('.//w:fldSimple[contains(@w:instr, "MERGEFIELD")]')
+                for fld in simple_fields:
+                    instr = fld.get(W_NS + 'instr')
+                    match = re.search(r'MERGEFIELD\s+"?([^"\s>]+)"?', instr)
+                    if match:
+                        field_name = match.group(1)
+                        # Create a new run node with the marker text
+                        new_r = etree.Element(W_NS + "r")
+                        new_t = etree.SubElement(new_r, W_NS + "t")
+                        new_t.text = f"«{field_name}»"
+                        # Replace fldSimple with the new run
+                        parent = fld.getparent()
+                        parent.replace(fld, new_r)
+                        logger.info(f"Flattened SimpleField: {field_name}")
 
-        for p in doc.paragraphs:
-            counter = process_paragraph(p, field_list, counter, field_manifest)
+                # 2. Handle Complex Fields (split across multiple runs)
+                # We find the instrText and replace the whole begin...end sequence if possible
+                # But for now, just replacing the instrText's containing run with a marker is often enough
+                # if we also clear the separate/end characters.
+                # A simpler but robust way: replace the instrText with the marker and let the rest be.
+                instr_texts = part._element.xpath('.//w:instrText[contains(text(), "MERGEFIELD")]')
+                for instr in instr_texts:
+                    match = re.search(r'MERGEFIELD\s+"?([^"\s>]+)"?', instr.text)
+                    if match:
+                        field_name = match.group(1)
+                        # We turn the instrText into a normal text node and clear the instruction
+                        instr.text = f"«{field_name}»"
+                        # Change tag from w:instrText to w:t
+                        instr.tag = W_NS + "t"
+                        logger.info(f"Flattened ComplexField: {field_name}")
 
-        for table in doc.tables:
-            for row in table.rows:
-                for cell in row.cells:
-                    for p in cell.paragraphs:
-                        counter = process_paragraph(p, field_list, counter, field_manifest)
+                # 3. Handle Macro Buttons (MACROBUTTON nomacro [Type text])
+                macros = part._element.xpath('.//w:instrText[contains(text(), "MACROBUTTON")]')
+                for macro in macros:
+                    match = re.search(r'MACROBUTTON\s+nomacro\s+\[(.*?)\]', macro.text)
+                    if match:
+                        placeholder = match.group(1)
+                        macro.text = f"«{placeholder}»"
+                        macro.tag = W_NS + "t"
+                        logger.info(f"Flattened MacroButton: {placeholder}")
+
+        # 0. Flatten MergeFields into plain text markers
+        logger.info("Starting document normalization (flattening complex fields)...")
+        flatten_merge_fields(doc)
+
+        # 1. Process all parts of the document in a single pass
+        parts = [doc]
+        for section in doc.sections:
+            parts.extend([section.header, section.first_page_header, section.even_page_header])
+            parts.extend([section.footer, section.first_page_footer, section.even_page_footer])
+
+        logger.info(f"Scanning {len(parts)} document parts for markers...")
+        for part in parts:
+            if not part: continue
+            for p in iter_all_paragraphs(part):
+                # 1.1 Heuristic Run Healing (consolidate split markers)
+                t = p.text
+                if any(m in t for m in ["«", "»", "<<", ">>", "[[", "]]", "[", "<"]):
+                    if len(p.runs) > 1:
+                        full_text = p.text
+                        for run in p.runs: run.text = ""
+                        p.runs[0].text = full_text
+                
+                # 1.2 Replace markers with tags or direct values
+                counter = process_paragraph(p, field_list, counter, field_manifest)
 
         processed_stream = io.BytesIO()
         doc.save(processed_stream)
         processed_stream.seek(0)
+        logger.info("Document normalization and marker injection complete.")
         return processed_stream
 
     def generate_error_docx(self, template_id: str, error_message: str) -> bytes:
         """
-        Generates a valid (but minimal) DOCX file containing failure details,
-        ensuring the user doesn't get a corrupted file error from Word.
+        Generates a valid (but minimal) DOCX file containing failure details.
         """
-        from docx import Document
+        # docx is imported at the top level
         error_doc = Document()
         error_doc.add_heading("TEMPLATE RENDERING ERROR", level=1)
         error_doc.add_paragraph(f"Template Identification: {template_id}")
@@ -438,48 +628,3 @@ class ResumeGeneratorService:
         error_stream = io.BytesIO()
         error_doc.save(error_stream)
         return error_stream.getvalue()
-
-    def _apply_rendering_actions(self, content: Any) -> Any:
-        """
-        Hyper-Fidelity Composition Node: Recursively translatesproprietary
-        CVML ([:B:], [:L1:], etc.) into native DOCX RichText runs.
-        """
-        # 1. Recursive handling for nested structures (Jobs, Projects, etc)
-        if isinstance(content, dict):
-            return {k: self._apply_rendering_actions(v) for k, v in content.items()}
-        elif isinstance(content, list):
-            return [self._apply_rendering_actions(v) for v in content]
-        elif not isinstance(content, str):
-            return content
-
-        # 2. String Composition (The CVML Engine)
-        if not any(tag in content for tag in ["[:B:]", "[:PIPE:]", "[:BR:]", "[:L1:]", "[:L2:]"]):
-            return content
-
-        rt = RichText()
-        content = content.replace("\r\n", "\n")
-        
-        # Split into tokens: keep tags for processing
-        parts = re.split(r'(\[:B:\].*?\[:/B:\]|\[:PIPE:\]|\[:BR:\]|\[:L1:\]|\[:L2:\])', content, flags=re.DOTALL)
-        
-        for part in parts:
-            if not part:
-                continue
-                
-            if part.startswith("[:B:]"):
-                # [:B:]Bold Text[:/B:]
-                inner = part[5:-6]
-                rt.add(inner, bold=True)
-            elif part == "[:PIPE:]":
-                rt.add("  |  ")
-            elif part == "[:BR:]":
-                rt.add("\n")
-            elif part == "[:L1:]":
-                rt.add("\n• ")
-            elif part == "[:L2:]":
-                rt.add("\n    - ")
-            else:
-                # Standard text run
-                rt.add(part)
-                
-        return rt

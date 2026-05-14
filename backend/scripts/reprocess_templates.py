@@ -43,7 +43,7 @@ async def reprocess_templates():
         template_repository=repo,
         event_bus=queue,
         extraction_service=extractor,
-        template_analysis_service=ai_service 
+        template_analysis_service=analysis_service 
     )
 
     if not os.path.exists(TEMPLATE_DIR):

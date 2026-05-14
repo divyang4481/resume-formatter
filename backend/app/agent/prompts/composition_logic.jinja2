@@ -22,10 +22,20 @@ COMPOSITION RULES (MANDATORY):
 2. **Professional Narrative**: 
    - Rewrite summaries and experience highlights to be punchy, results-oriented, and tailored to the target role.
    - Use action verbs (e.g., "Architected", "Spearheaded", "Transformed").
-3. **Data Integrity**: DO NOT change the keys. ONLY rewrite the values.
+3. **Manifest Coverage (CRITICAL)**:
+   - The TEMPLATE FIELD MANIFEST is the strict contract.
+   - Every fieldname in the manifest MUST exist in the output JSON.
+   - If a manifest field is missing from HARMONIZED DATA, add it with "" for scalar/rich_text fields or [] for array fields.
+   - Do NOT remove or drop any fields, especially 'professional_qualifications', 'certifications', 'education', 'skills', or 'work_experience'.
 4. **Summary Preservation**: If a 'summary' field is present, ensure it is high-impact and professionally composed.
-5. **Fallbacks**: Keep empty fields as empty strings "".
+5. **Fallbacks**: 
+   - scalar/rich_text fields: ""
+   - array_simple/array_complex/table_loop fields: []
+   - do not convert arrays to empty strings.
 
 OUTPUT:
-- Return ONLY a valid JSON object with the same keys as the input, but with professionally composed and formatted values.
+- Return ONLY a valid JSON object containing:
+  * all original input keys, and
+  * all fieldnames required by the TEMPLATE FIELD MANIFEST.
+- Do not drop, rename, or alias any keys.
 - DO NOT add conversational text.
