@@ -1,8 +1,8 @@
 from typing import Any, Dict, Optional
 import json
-import boto3
 from app.domain.interfaces import MessageQueue
 from app.config import settings
+from app.adapters.aws_client import aws_service_client
 import logging
 
 logger = logging.getLogger("sqs_queue")
@@ -12,9 +12,9 @@ class SqsMessageQueue(MessageQueue):
         """
         Initializes the SQS Message Queue adapter.
         """
-        self.queue_url = queue_url or settings.sqs_queue_url
+        self.queue_url = queue_url or settings.sqs_processing_queue_url
         self.region_name = region_name or settings.aws_region
-        self.sqs = boto3.client('sqs', region_name=self.region_name)
+        self.sqs = aws_service_client('sqs', region_name=self.region_name)
 
     def enqueue(self, queue_name: str, payload: Dict[str, Any]) -> None:
         """

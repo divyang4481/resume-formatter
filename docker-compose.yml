@@ -1,73 +1,139 @@
 services:
   api:
-    build: 
+    build:
       context: ./backend
       dockerfile: api_backend/Dockerfile
     image: agentic-doc-api-local:v1.5.0
+    container_name: resume-api
     ports:
       - "8000:8000"
+    env_file:
+      - path: ./.env.local
+        required: false
     environment:
-      - CLOUD_PROVIDER=aws
-      - RUNTIME_MODE=aws
-      - PROCESSING_MODE=async
-      - QUEUE_PROVIDER=sqs
-      - STORAGE_PROVIDER=s3
-      - AGENT_PROVIDER=python_orchestrated
-      - KNOWLEDGE_PROVIDER=bedrock_kb
-      - LLM_BACKEND=aws_bedrock
-      - AWS_REGION=${AWS_REGION:-ap-south-1}
-      - AWS_PROFILE=default
-      - S3_BUCKET_INPUT=${S3_BUCKET_INPUT}
-      - S3_BUCKET_OUTPUT=${S3_BUCKET_OUTPUT}
-      - SQS_PROCESSING_QUEUE_URL=${SQS_PROCESSING_QUEUE_URL}
-      - DATABASE_URL=${DATABASE_URL}
-      - BEDROCK_AGENT_ID=${BEDROCK_AGENT_ID}
-      - BEDROCK_AGENT_ALIAS_ID=${BEDROCK_AGENT_ALIAS_ID}
-      - BEDROCK_KB_ID=${BEDROCK_KB_ID}
-      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
-      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
-      - AWS_SESSION_TOKEN=${AWS_SESSION_TOKEN}
-#      - AWS_BEARER_TOKEN_BEDROCK=${AWS_BEARER_TOKEN_BEDROCK}
+      CLOUD_PROVIDER: local
+      RUNTIME_MODE: local
+      PROCESSING_MODE: async
+      QUEUE_PROVIDER: sqs
+      STORAGE_PROVIDER: s3
+      AGENT_PROVIDER: python_orchestrated
+      KNOWLEDGE_PROVIDER: local
+      LLM_BACKEND: aws_bedrock
+      AWS_REGION: ${AWS_REGION:-ap-south-1}
+      AWS_ENDPOINT_URL: http://localstack:4566
+      LOCALSTACK_AWS_ACCESS_KEY_ID: test
+      LOCALSTACK_AWS_SECRET_ACCESS_KEY: test
+      S3_BUCKET_INPUT: ${S3_BUCKET_INPUT:-local-resume-input-bucket}
+      S3_BUCKET_OUTPUT: ${S3_BUCKET_OUTPUT:-local-resume-output-bucket}
+      SQS_PROCESSING_QUEUE_URL: ${SQS_PROCESSING_QUEUE_URL:-http://localstack:4566/000000000000/resume-processing-queue}
+      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg2://app_user:app_password@postgres:5432/app_db}
     volumes:
-      - ~/.aws:/root/.aws
+      - ~/.aws:/root/.aws:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      localstack:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
 
   worker:
-    build: 
+    build:
       context: ./backend
       dockerfile: worker_backend/Dockerfile
     image: agentic-doc-worker-local:v1.5.0
+    container_name: resume-worker
+    env_file:
+      - path: ./.env.local
+        required: false
     environment:
-      - CLOUD_PROVIDER=aws
-      - RUNTIME_MODE=aws
-      - PROCESSING_MODE=async
-      - QUEUE_PROVIDER=sqs
-      - STORAGE_PROVIDER=s3
-      - AGENT_PROVIDER=python_orchestrated
-      - KNOWLEDGE_PROVIDER=bedrock_kb
-      - LLM_BACKEND=aws_bedrock
-      - AWS_REGION=${AWS_REGION:-ap-south-1}
-      - AWS_PROFILE=default
-      - S3_BUCKET_INPUT=${S3_BUCKET_INPUT}
-      - S3_BUCKET_OUTPUT=${S3_BUCKET_OUTPUT}
-      - SQS_PROCESSING_QUEUE_URL=${SQS_PROCESSING_QUEUE_URL}
-      - DATABASE_URL=${DATABASE_URL}
-      - BEDROCK_AGENT_ID=${BEDROCK_AGENT_ID}
-      - BEDROCK_AGENT_ALIAS_ID=${BEDROCK_AGENT_ALIAS_ID}
-      - BEDROCK_KB_ID=${BEDROCK_KB_ID}
-      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
-      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
-      - AWS_SESSION_TOKEN=${AWS_SESSION_TOKEN}
-#      - AWS_BEARER_TOKEN_BEDROCK=${AWS_BEARER_TOKEN_BEDROCK}
+      CLOUD_PROVIDER: local
+      RUNTIME_MODE: local
+      PROCESSING_MODE: async
+      QUEUE_PROVIDER: sqs
+      STORAGE_PROVIDER: s3
+      AGENT_PROVIDER: python_orchestrated
+      KNOWLEDGE_PROVIDER: local
+      LLM_BACKEND: aws_bedrock
+      AWS_REGION: ${AWS_REGION:-ap-south-1}
+      AWS_ENDPOINT_URL: http://localstack:4566
+      LOCALSTACK_AWS_ACCESS_KEY_ID: test
+      LOCALSTACK_AWS_SECRET_ACCESS_KEY: test
+      S3_BUCKET_INPUT: ${S3_BUCKET_INPUT:-local-resume-input-bucket}
+      S3_BUCKET_OUTPUT: ${S3_BUCKET_OUTPUT:-local-resume-output-bucket}
+      SQS_PROCESSING_QUEUE_URL: ${SQS_PROCESSING_QUEUE_URL:-http://localstack:4566/000000000000/resume-processing-queue}
+      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg2://app_user:app_password@postgres:5432/app_db}
     volumes:
-      - ~/.aws:/root/.aws
+      - ~/.aws:/root/.aws:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      localstack:
+        condition: service_healthy
+    command: >
+      sh -c "python init_db.py && python -m worker_backend.entrypoint"
 
   frontend:
-    build: 
+    build:
       context: ./frontend
       args:
         - ENVIRONMENT=development
     image: agentic-doc-frontend-local:v1.2.4
+    container_name: resume-frontend
     ports:
       - "4200:80"
     depends_on:
-      - api
+      api:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:16
+    container_name: local-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: app_db
+      POSTGRES_USER: app_user
+      POSTGRES_PASSWORD: app_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app_user -d app_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  localstack:
+    image: localstack/localstack:latest
+    container_name: localstack
+    ports:
+      - "4566:4566"
+    environment:
+      AWS_DEFAULT_REGION: ${AWS_REGION:-ap-south-1}
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      SERVICES: s3,sqs
+      DEBUG: "1"
+      PERSISTENCE: "1"
+      S3_BUCKET_INPUT: ${S3_BUCKET_INPUT:-local-resume-input-bucket}
+      S3_BUCKET_OUTPUT: ${S3_BUCKET_OUTPUT:-local-resume-output-bucket}
+      SQS_PROCESSING_QUEUE_NAME: ${SQS_PROCESSING_QUEUE_NAME:-resume-processing-queue}
+    volumes:
+      - localstack_data:/var/lib/localstack
+      - ./localstack/init:/etc/localstack/init/ready.d:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4566/_localstack/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+volumes:
+  postgres_data:
+  localstack_data:
