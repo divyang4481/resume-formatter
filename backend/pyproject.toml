@@ -20,8 +20,6 @@ dependencies = [
     "chromadb (>=1.5.5,<2.0.0)",
     "google-generativeai (>=0.8.6,<0.9.0)",
     "docxtpl (>=0.20.2,<0.21.0)",
-    "sentence-transformers (>=3.0.0,<4.0.0)",
-    "torch (>=2.0.0,<3.0.0)",
     "fastapi-mcp (>=0.1.0)",
     "mcp (>=1.27.0,<2.0.0)",
     "sse-starlette (>=3.3.4,<4.0.0)",
@@ -29,7 +27,6 @@ dependencies = [
     "boto3 (>=1.43.0,<2.0.0)",
     "moto (>=5.1.22,<6.0.0)",
     "psycopg2-binary (>=2.9.10)",
-    "docling (>=2.0.0,<3.0.0)",
     "lxml (>=5.3.0)",
     "jinja2 (>=3.1.6)"
 ]
@@ -45,28 +42,33 @@ requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"
 
 [project.optional-dependencies]
-# 2. Cloud Providers (Native Integrations)
-cloud-aws-native = [
+aws = [
     "boto3 (>=1.36.0,<2.0.0)"
 ]
-
-# 3. Local Runtime Variants
-runtime-local-aws = [
-    "boto3 (>=1.36.0,<2.0.0)",
+gcp = [
+    "google-cloud-storage (>=2.18.0,<3.0.0)",
+    "google-cloud-pubsub (>=2.27.0,<3.0.0)",
+    "google-cloud-aiplatform (>=1.75.0,<2.0.0)"
+]
+azure = [
+    "azure-storage-blob (>=12.24.0,<13.0.0)",
+    "azure-servicebus (>=7.14.0,<8.0.0)",
+    "openai (>=1.59.0,<2.0.0)"
+]
+docling = [
+    "docling (>=2.0.0,<3.0.0)",
+    "torch (>=2.0.0,<3.0.0)"
+]
+ocr = [
+    "pytesseract (>=0.3.13,<0.4.0)",
+    "rapidocr-onnxruntime (>=1.4.4,<2.0.0)"
+]
+local = [
     "localstack-client (>=2.0.0)"
 ]
-
-# 4. Agnostic Layer
 agnostic = [
     "httpx (>=0.27.0,<1.0.0)"
 ]
-
-# 5. Parser / Extraction Engines
-parser-unstructured = [
-    "unstructured (>=0.14.0,<1.0.0)"
-]
-
-# 6. Dev / Testing Layer
 dev-local = [
     "pytest (>=8.0.0,<9.0.0)",
     "pytest-asyncio (>=0.23.0,<1.0.0)"

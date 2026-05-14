@@ -19,6 +19,8 @@ services:
       AGENT_PROVIDER: python_orchestrated
       KNOWLEDGE_PROVIDER: local
       LLM_BACKEND: aws_bedrock
+      DOCUMENT_PARSER_PROVIDER: docling_service
+      PARSER_SERVICE_URL: http://parser-docling:8080
       AWS_REGION: ${AWS_REGION:-ap-south-1}
       AWS_ENDPOINT_URL: http://localstack:4566
       LOCALSTACK_AWS_ACCESS_KEY_ID: test
@@ -59,6 +61,8 @@ services:
       AGENT_PROVIDER: python_orchestrated
       KNOWLEDGE_PROVIDER: local
       LLM_BACKEND: aws_bedrock
+      DOCUMENT_PARSER_PROVIDER: docling_service
+      PARSER_SERVICE_URL: http://parser-docling:8080
       AWS_REGION: ${AWS_REGION:-ap-south-1}
       AWS_ENDPOINT_URL: http://localstack:4566
       LOCALSTACK_AWS_ACCESS_KEY_ID: test
@@ -74,8 +78,43 @@ services:
         condition: service_healthy
       localstack:
         condition: service_healthy
+      parser-docling:
+        condition: service_healthy
     command: >
       sh -c "python init_db.py && python -m worker_backend.entrypoint"
+
+  parser-docling:
+    build:
+      context: ./backend
+      dockerfile: parser_service/Dockerfile
+    image: agentic-doc-parser-docling-local:v1.5.0
+    container_name: resume-parser-docling
+    env_file:
+      - path: ./.env.local
+        required: false
+    environment:
+      CLOUD_PROVIDER: local
+      RUNTIME_MODE: local
+      STORAGE_PROVIDER: s3
+      DOCUMENT_PARSER_PROVIDER: local_docling
+      AWS_REGION: ${AWS_REGION:-ap-south-1}
+      AWS_ENDPOINT_URL: http://localstack:4566
+      LOCALSTACK_AWS_ACCESS_KEY_ID: test
+      LOCALSTACK_AWS_SECRET_ACCESS_KEY: test
+      S3_BUCKET_INPUT: ${S3_BUCKET_INPUT:-local-resume-input-bucket}
+      S3_BUCKET_OUTPUT: ${S3_BUCKET_OUTPUT:-local-resume-output-bucket}
+      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg2://app_user:app_password@postgres:5432/app_db}
+    volumes:
+      - ~/.aws:/root/.aws:ro
+    depends_on:
+      localstack:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
 
   frontend:
     build:

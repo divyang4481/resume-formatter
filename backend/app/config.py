@@ -16,6 +16,8 @@ class Settings(BaseSettings):
     storage_provider: str = "local"  # "local", "s3"
     knowledge_provider: str = "local"  # "local", "bedrock_kb"
     agent_provider: str = "python_orchestrated"  # "python_orchestrated", "bedrock_agent"
+    document_parser_provider: str = "docling_service"  # "docling_service", "local_docling", "cloud_ai"
+    parser_service_url: str = "http://parser-docling:8080"
 
     # AWS Specific Config
     aws_region: str = "ap-south-1"

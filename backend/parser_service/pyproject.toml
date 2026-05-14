@@ -1,0 +1,38 @@
+[project]
+name = "resume-formatter-parser-service"
+version = "0.1.0"
+description = "Dedicated document parser service for heavy Docling/OCR workloads."
+requires-python = ">=3.11,<4.0"
+dependencies = [
+    "resume-formatter-common==0.1.0",
+    "fastapi>=0.135.2,<0.136.0",
+    "uvicorn>=0.42.0,<0.43.0",
+    "docling>=2.0.0,<3.0.0",
+    "torch>=2.0.0,<3.0.0",
+    "rapidocr-onnxruntime>=1.4.4,<2.0.0",
+]
+
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+package-dir = {"" = ".."}
+include-package-data = true
+py-modules = [
+    "app.config",
+    "app.adapters.aws_client",
+    "app.adapters.parsers.docling_parser",
+]
+
+[tool.setuptools.packages.find]
+where = [".."]
+namespaces = true
+include = [
+    "parser_service*",
+    "app.adapters.parsers*",
+    "app.adapters.storage*",
+    "app.config*",
+    "app.domain*",
+    "app.schemas*",
+]

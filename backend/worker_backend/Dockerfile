@@ -10,28 +10,18 @@ ENV PYTHONUNBUFFERED=1 \
 WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
     curl \
     gcc \
-    g++ \
-    libgl1 \
-    libglib2.0-0 \
-    libsm6 \
-    libxext6 \
-    libxrender1 \
-    libxcb1 \
     && rm -rf /var/lib/apt/lists/*
 
-# Install the shared library and worker project dependencies. The worker owns
-# heavy extraction/runtime dependencies such as docling, torch, and RapidOCR.
+# Install the shared library and worker project dependencies. Heavy extraction
+# runtimes such as Docling, Torch, and OCR live in parser_service/Dockerfile.
 COPY ./common ./common
 COPY ./worker_backend ./worker_backend
 COPY ./app ./app
 COPY ./init_db.py ./init_db.py
-RUN pip install --no-cache-dir -e ./common -e ./worker_backend \
-    && pip install --no-cache-dir rapidocr-onnxruntime
+RUN pip install --no-cache-dir -e ./common -e ./worker_backend
 
-RUN mkdir -p .data \
-    && python -c "from rapidocr_onnxruntime import RapidOCR; RapidOCR()"
+RUN mkdir -p .data
 
 CMD ["python", "-m", "worker_backend.entrypoint"]

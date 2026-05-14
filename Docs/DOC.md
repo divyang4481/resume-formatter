@@ -1,10 +1,10 @@
-# Architecture Code Analysis (LangGraph, State, Patterns, Docling/Tika)
+# Architecture Code Analysis (LangGraph, State, Patterns, Docling)
 
 This document provides a code-level analysis of how architecture is implemented in the current repository, with special focus on:
 
 - LangGraph workflow design and state handling
 - Architectural patterns in use (ports/adapters, orchestration, fallback, policy boundaries)
-- How Docling and Apache Tika are integrated and routed
+- How Docling parsing is integrated and routed
 - Gaps and refactor opportunities
 
 ---
@@ -15,7 +15,7 @@ The backend follows a layered approach with a clear **domain interface boundary*
 
 - **Domain interfaces / protocols** define contracts (`DocumentExtractionService`, `DocumentParser`, `StorageProvider`, etc.).
 - **Service layer** orchestrates domain-level behavior (`ResumeIngestionService`, `ParserRouter`, template resolution/validation services).
-- **Adapter layer** encapsulates implementation details (Docling, Tika, Azure Document Intelligence, cloud storage providers).
+- **Adapter layer** encapsulates implementation details (Docling, Azure Document Intelligence, cloud storage providers).
 - **LangGraph workflow** composes request execution as a bounded, stage-based graph from ingest → parse → normalize → privacy → template resolution → transform → validate → render.
 
 The design intent is strong: keep cloud/parser/provider specifics out of business workflow code.
@@ -196,68 +196,59 @@ sequenceDiagram
 
 ---
 
-## 5) Apache Tika Integration — Detailed Analysis
+## 5) Docling Parser Service Integration — Detailed Analysis
 
-`backend/app/adapters/parsers/tika_parser.py`
+`backend/parser_service` now owns the heavy Docling runtime and exposes a lightweight HTTP contract to the worker.
 
 ### What it does now
 
-- Uses `tika.parser.from_buffer(file_bytes)` for extraction.
-- Returns normalized `ParsedDocument` with:
-  - plain `text`
-  - `metadata`
-  - `parser_used="tika"`
-  - warning that structure may be lost.
+- Accepts parse requests through `POST /parse-document`.
+- Reads the source document from configured object storage.
+- Runs Docling in the parser container.
+- Writes normalized `ParsedDocument` JSON to object storage.
+- Returns only lightweight metadata to the caller.
 
 ### Strengths
 
-- Broad format support (`supports(...) -> True`).
-- Effective generic fallback when structured parser fails or unsupported file arrives.
-- Simple health check included.
+- Keeps Docling, Torch, and OCR dependencies out of the default worker image.
+- Allows independent scaling for the parser container.
+- Preserves the existing normalized parser output contract for downstream workflows.
 
 ### Constraints / caveats
 
-- No native section/table structure in current mapping.
-- Depends on Tika runtime/JVM ecosystem behavior; operational setup can vary by environment.
-- Confidence is naturally lower in router logic because structure is limited.
+- Parser-service availability is now required when `DOCUMENT_PARSER_PROVIDER=docling_service`.
+- Parsing remains CPU-bound inside the parser container unless additional worker-pool or GPU scheduling is introduced.
 
 ---
 
-## 6) How Docling and Tika Are Used Together (Actual Routing Behavior)
+## 6) Parser Routing Behavior
 
-The effective behavior is defined by `ParserRouter` + config thresholds.
+The effective behavior is defined by `ParserRouter` and `DOCUMENT_PARSER_PROVIDER`.
 
-1. Determine extension (`.pdf`, `.docx`, etc.).
-2. Choose configured primary and fallback parser names.
-3. Run primary parse and compute confidence.
-4. If confidence is below `parser_min_confidence` (or parse fails), run fallback parser.
-5. Emit parse trace with attempts, timings, confidence, warnings, review flags.
+1. The worker receives a document processing job.
+2. The configured parser provider is selected.
+3. With `docling_service`, the worker writes input bytes to object storage and calls the parser service.
+4. The parser service writes normalized parsed JSON back to object storage.
+5. The worker loads the parsed JSON and continues the workflow.
 
 ```mermaid
 flowchart TD
     A[Incoming file + metadata] --> B[ParserRouter]
-    B --> C{File extension}
-    C -->|.pdf/.docx| D[Pick configured primary + fallback]
-    C -->|other| E[Default to tika/tika]
-    D --> F[Run primary parse]
-    E --> F
-    F --> G[Calculate confidence]
-    G --> H{confidence >= threshold?}
-    H -->|yes| I[Use primary result]
-    H -->|no| J{Fallback parser available and different?}
-    J -->|yes| K[Run fallback parse]
-    J -->|no| L[Flag review]
-    K --> M[Set final parser = fallback]
-    I --> N[Emit ParseResultTrace]
-    M --> N
-    L --> N
+    B --> C{DOCUMENT_PARSER_PROVIDER}
+    C -->|docling_service| D[Call parser service]
+    C -->|local_docling| E[Run Docling locally]
+    D --> F[Parser writes ParsedDocument JSON]
+    E --> G[Return ParsedDocument]
+    F --> H[Worker loads parsed artifact]
+    G --> H
+    H --> I[Continue agent workflow]
 ```
 
 Practical consequence:
 
-- **Docling-first, Tika-fallback** is the likely robust default for resumes when structure matters.
-- If Docling returns sparse text/structure, router can downgrade and fallback to Tika for extraction resilience.
-- Downstream services can consume both normalized `ParsedDocument` and `trace` for governance/QA.
+- Docling is the supported local/heavy document parser.
+- The default worker stays lightweight by routing heavy parsing to `parser-docling`.
+- Additional cloud parser providers should use the same adapter boundary rather than embedding heavy runtimes in the worker.
 
 ---
 

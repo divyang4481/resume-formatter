@@ -1,15 +1,6 @@
 import pytest
-from app.adapters.parsers.tika_parser import TikaParser
 from app.adapters.parsers.docling_parser import DoclingParser
 from app.schemas.parsed_document import ParsedDocument
-
-@pytest.mark.asyncio
-async def test_tika_parser_contract():
-    parser = TikaParser()
-    doc = await parser.parse(b"Hello world from a dummy file.", "test.txt", "text/plain")
-    assert isinstance(doc, ParsedDocument)
-    assert doc.parser_used == "tika"
-    assert "Hello world" in doc.text
 
 # We will skip docling contract test in CI if docling isn't fully installed or requires real PDFs
 # But it ensures the contract is maintained if we mock the converter.

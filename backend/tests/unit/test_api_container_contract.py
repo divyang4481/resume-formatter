@@ -34,7 +34,8 @@ def test_backend_projects_split_heavy_worker_dependencies_from_api():
     assert '"docling' not in api_pyproject
     assert '"torch' not in api_pyproject
     assert '"sentence-transformers' not in api_pyproject
-    assert '"docling' in worker_pyproject
-    assert '"torch' in worker_pyproject
+    assert '"docling' not in worker_pyproject
+    assert '"torch' not in worker_pyproject
+    assert '"httpx' in worker_pyproject
     assert 'COPY ./app ./app' not in api_dockerfile
     assert 'COPY ./app/api ./app/api' in api_dockerfile

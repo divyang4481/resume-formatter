@@ -2,6 +2,6 @@ cloud: "hybrid"
 document_parser_backend: "ibm_docling"
 document_parser_fallback: "azure_document_intelligence"
 ocr_backend: "ibm_docling"
-docx_parser_backend: "tika"
+docx_parser_backend: "docling_service"
 enable_multi_backend_routing: true
 log_level: "WARN"
