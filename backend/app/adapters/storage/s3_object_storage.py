@@ -1,16 +1,16 @@
-import boto3
 import os
 import uuid
 import logging
 from app.domain.interfaces.storage import ObjectStorage
 from app.config import settings
+from app.adapters.aws_client import aws_service_client
 
 logger = logging.getLogger(__name__)
 
 class S3ObjectStorage(ObjectStorage):
     def __init__(self, bucket_name: str = None):
         self.bucket = bucket_name or settings.s3_bucket_output
-        self.s3 = boto3.client('s3', region_name=settings.aws_region)
+        self.s3 = aws_service_client('s3', region_name=settings.aws_region)
 
     def put_file(self, local_path: str, key: str, content_type: str = "application/octet-stream") -> str:
         try:

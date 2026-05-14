@@ -27,6 +27,9 @@ class Settings(BaseSettings):
     bedrock_kb_id: str = ""
     database_url: str = "sqlite:///./.data/app.db"
     aws_bearer_token_bedrock: str = ""
+    aws_endpoint_url: str = ""
+    localstack_aws_access_key_id: str = "test"
+    localstack_aws_secret_access_key: str = "test"
 
     # Document Parsing Routing & Guard
     enable_docling: bool = True

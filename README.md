@@ -67,6 +67,35 @@ Because it runs with the `--reload` flag, the server will automatically hot-relo
 
 ---
 
+### Option 3: Docker Compose local integration stack
+
+Use Docker Compose when you want the API, worker, frontend, local S3/SQS, and a local RDS-compatible PostgreSQL database running together. The local stack intentionally keeps only the LLM on real AWS Bedrock; S3 and SQS use LocalStack through `AWS_ENDPOINT_URL=http://localstack:4566`, and the database uses the official `postgres` container.
+
+1. Copy the local environment template and add your real Bedrock AWS authentication method:
+   ```bash
+   cp .env.local.example .env.local
+   # then set AWS_PROFILE or AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY/AWS_SESSION_TOKEN
+   ```
+2. Start the full integration stack:
+   ```bash
+   docker compose up --build
+   ```
+3. Verify local infrastructure from the host machine:
+   ```bash
+   curl http://localhost:4566/_localstack/health
+   aws --endpoint-url=http://localhost:4566 s3 ls
+   aws --endpoint-url=http://localhost:4566 sqs list-queues
+   ```
+
+Two environment templates are provided:
+
+| File | Purpose | Endpoint behavior |
+| --- | --- | --- |
+| `.env.local.example` | Local integration with API + worker + LocalStack + Postgres | Sets `AWS_ENDPOINT_URL` for local S3/SQS while Bedrock uses real AWS credentials |
+| `.env.aws.example` | AWS-backed runtime/deployment values | Leaves `AWS_ENDPOINT_URL` unset so S3, SQS, RDS, and Bedrock use AWS endpoints |
+
+Inside Docker Compose, services should use `http://localstack:4566` and `postgres:5432`. From the host machine, use `http://localhost:4566` and `localhost:5432`.
+
 
 ### Backend Container Split
 
@@ -95,7 +124,7 @@ After you start the servers, check out these local URLs:
 - **The API Root:** [http://localhost:8000/](http://localhost:8000/) _(Returns a friendly JSON response — no more 404!)_
 - **Swagger UI Docs:** [http://localhost:8000/docs](http://localhost:8000/docs) _(FastAPI automatically generates this—you can interactively see and test all your endpoints here)_
 - **ReDoc Docs:** [http://localhost:8000/redoc](http://localhost:8000/redoc) _(Alternative API documentation viewer)_
-- **Health Check:** [http://localhost:8000/health](http://localhost:8000/health)
+- **Health Check:** [http://localhost:8000/api/health](http://localhost:8000/api/health)
 
 Refresh your browser, and you should now seamlessly access the UI as well as the API!
 

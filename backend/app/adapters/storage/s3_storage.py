@@ -1,5 +1,5 @@
 from app.domain.interfaces import StorageProvider
-import boto3
+from app.adapters.aws_client import aws_service_client
 import logging
 
 logger = logging.getLogger("s3_storage")
@@ -11,7 +11,7 @@ class S3StorageProvider(StorageProvider):
         """
         self.bucket = bucket
         self.region = region
-        self.s3_client = boto3.client('s3', region_name=region)
+        self.s3_client = aws_service_client('s3', region_name=region)
 
     def put_bytes(self, key: str, data: bytes) -> str:
         try:

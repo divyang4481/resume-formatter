@@ -1,16 +1,16 @@
-import boto3
 import json
 import logging
 from typing import Dict, Any, Iterable, Optional
 from app.domain.interfaces.queue import JobQueue
 from app.config import settings
+from app.adapters.aws_client import aws_service_client
 
 logger = logging.getLogger(__name__)
 
 class SqsJobQueueAdapter(JobQueue):
     def __init__(self, queue_url: str = None):
         self.queue_url = queue_url or settings.sqs_processing_queue_url
-        self.sqs = boto3.client('sqs', region_name=settings.aws_region)
+        self.sqs = aws_service_client('sqs', region_name=settings.aws_region)
 
     def publish(self, message: Dict[str, Any]) -> str:
         try:
