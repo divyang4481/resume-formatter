@@ -2,7 +2,7 @@ services:
   api:
     build: 
       context: ./backend
-      dockerfile: Dockerfile.api
+      dockerfile: api_backend/Dockerfile
     image: agentic-doc-api-local:v1.5.0
     ports:
       - "8000:8000"
@@ -34,7 +34,7 @@ services:
   worker:
     build: 
       context: ./backend
-      dockerfile: Dockerfile.worker
+      dockerfile: worker_backend/Dockerfile
     image: agentic-doc-worker-local:v1.5.0
     environment:
       - CLOUD_PROVIDER=aws

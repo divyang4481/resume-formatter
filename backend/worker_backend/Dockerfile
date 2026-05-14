@@ -1,23 +1,24 @@
-# Use the pre-built base image containing all dependencies
+# Worker backend image: consumes queue messages and executes document workflows.
+# Build context must be the backend/ directory.
 ARG BASE_IMAGE=114644266543.dkr.ecr.ap-south-1.amazonaws.com/agentic-doc-base-dev:v1.2.0
 FROM ${BASE_IMAGE}
 
 WORKDIR /app
 
-# Install dependencies not present in base image
+# Install dependencies not present in base image.
 RUN pip install --no-cache-dir "boto3[crt]" lxml docxtpl
 
-# Copy shared application code and worker backend entrypoint
+# Copy the shared application package and this backend's entrypoint.
 COPY ./app ./app
 COPY ./worker_backend ./worker_backend
 COPY ./init_db.py ./init_db.py
 
 RUN mkdir -p .data
 
-# Install RapidOCR explicitly to enable model pre-downloading
+# Install RapidOCR explicitly to enable model pre-downloading.
 RUN pip install --no-cache-dir rapidocr-onnxruntime
 
-# Pre-download RapidOCR models so they are ready at runtime
+# Pre-download RapidOCR models so they are ready at runtime.
 RUN python -c "from rapidocr_onnxruntime import RapidOCR; RapidOCR()"
 
 CMD ["python", "-m", "worker_backend.entrypoint"]
