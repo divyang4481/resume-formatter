@@ -5,7 +5,8 @@ It is responsible for the externally reachable service surface:
 
 - REST API endpoints under `/api/*`
 - A2A discovery endpoints, including `/.well-known/agent-card.json`
-- MCP tool exposure mounted by the FastAPI application
+- MCP tool exposure mounted by the FastAPI application at `/mcp`
+- Capability and health checks at `/api/capabilities` and `/api/health`
 - OpenAPI documentation at `/docs` and `/openapi.json`
 
 The API backend intentionally reuses the shared application package in
