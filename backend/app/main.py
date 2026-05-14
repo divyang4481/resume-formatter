@@ -1,5 +1,7 @@
 import uvicorn
 from fastapi import FastAPI
+from fastapi.routing import APIRoute
+from starlette.routing import BaseRoute
 from fastapi_mcp import FastApiMCP
 from app.api.runtime import router as runtime_router
 from app.api.admin_endpoints import router as admin_endpoints_router
@@ -9,10 +11,29 @@ from app.api.a2a import router as a2a_router
 from app.config import settings
 
 
+def _route_paths(app: FastAPI) -> list[str]:
+    return sorted({getattr(route, "path", "") for route in app.routes if isinstance(route, BaseRoute)})
+
+
+def _set_stable_operation_ids(app: FastAPI) -> None:
+    """
+    Give FastAPI-MCP stable, readable tool names after all routers are registered.
+    Route function names are easier for agents to use than generated names that include paths.
+    """
+    seen: dict[str, int] = {}
+    for route in app.routes:
+        if not isinstance(route, APIRoute):
+            continue
+        base_id = route.name
+        count = seen.get(base_id, 0)
+        seen[base_id] = count + 1
+        route.operation_id = base_id if count == 0 else f"{base_id}_{count + 1}"
+
+
 def create_app() -> FastAPI:
     """
-    Bootstraps the FastAPI application.
-    Integrates all API routes and core configurations.
+    Bootstraps the API container application.
+    Integrates REST API routes, A2A discovery, MCP tool exposure, and core configuration.
     """
     from contextlib import asynccontextmanager
 
@@ -43,10 +64,6 @@ def create_app() -> FastAPI:
     from app.db.models import Base
     Base.metadata.create_all(bind=engine)
 
-    # Initialize Model Context Protocol (MCP) support
-    # This automatically turns FastAPI endpoints into discoverable AI tools
-    mcp = FastApiMCP(app)
-
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["http://localhost:4200"],
@@ -62,22 +79,62 @@ def create_app() -> FastAPI:
     )
     app.include_router(admin_endpoints_router, prefix="/api/admin", tags=["Admin"])
     app.include_router(admin_folder_router, prefix="/api/admin", tags=["Admin"])
-    app.include_router(processing_router, prefix="/api/v1/processing", tags=["Processing"])
-    # Expose at root to match `.well-known` discovery path correctly
+    app.include_router(processing_router, prefix="/api/v1/processing", tags=["Processing", "MCP Tool"])
+    # Expose at root to match `.well-known` discovery paths correctly.
     app.include_router(a2a_router, tags=["A2A Discoverability"])
 
-    # This automatically turns FastAPI endpoints into discoverable AI tools
+    # Initialize Model Context Protocol (MCP) support after all routers are registered.
+    # FastApiMCP introspects the app's OpenAPI route table, so mounting after route
+    # registration ensures REST processing endpoints are exposed as MCP tools.
+    _set_stable_operation_ids(app)
+    mcp = FastApiMCP(app)
     mcp.mount_http()
 
     @app.get("/api/health")
     async def health_check():
-        return {"status": "healthy", "runtime_mode": settings.runtime_mode}
+        route_paths = _route_paths(app)
+        return {
+            "status": "healthy",
+            "runtime_mode": settings.runtime_mode,
+            "api": "ready",
+            "a2a": {
+                "status": "ready",
+                "agent_card_url": "/.well-known/agent-card.json",
+                "legacy_agent_card_url": "/.well-known/agent.json",
+            },
+            "mcp": {
+                "status": "ready" if any(path.startswith("/mcp") for path in route_paths) else "not_mounted",
+                "url": "/mcp",
+                "discovery_url": "/.well-known/mcp.json",
+            },
+        }
+
+    @app.get("/api/capabilities")
+    async def capabilities():
+        return {
+            "api": {
+                "status": "ready",
+                "docs_url": "/docs",
+                "openapi_url": "/openapi.json",
+                "processing_prefix": "/api/v1/processing",
+            },
+            "a2a": {
+                "status": "ready",
+                "agent_card_urls": ["/.well-known/agent-card.json", "/.well-known/agent.json"],
+            },
+            "mcp": {
+                "status": "ready",
+                "endpoint": "/mcp",
+                "discovery_url": "/.well-known/mcp.json",
+            },
+        }
 
     @app.get("/api")
     async def root():
         return {
             "message": "Welcome to Resume Formatter API. Visit /docs for the API documentation.",
             "status": "active",
+            "capabilities_url": "/api/capabilities",
         }
 
     return app
