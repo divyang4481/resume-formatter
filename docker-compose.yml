@@ -30,6 +30,8 @@ services:
 #      - AWS_BEARER_TOKEN_BEDROCK=${AWS_BEARER_TOKEN_BEDROCK}
     volumes:
       - ~/.aws:/root/.aws
+      - ./backend/app:/app/app
+      - ./backend/scripts:/app/scripts
 
   worker:
     build: 

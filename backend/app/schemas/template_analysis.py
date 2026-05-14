@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 from pydantic import BaseModel, Field
 
 class RenderLocator(BaseModel):
@@ -14,9 +14,10 @@ class TemplateField(BaseModel):
     source_kind: str = "resume_fact"  # resume_fact, recruiter_input, generated, static, instruction
     render_locator: RenderLocator
     meaning: str = ""
-    source_hints: str = ""
+    source_hints: Union[str, List[str]] = ""
     required: bool = False
     confidence: float = 0.0
+    sub_fields: List["TemplateField"] = Field(default_factory=list)
 
     model_config = {
         "populate_by_name": True

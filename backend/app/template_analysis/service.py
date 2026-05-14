@@ -2,7 +2,7 @@ import logging
 import time
 import json
 import hashlib
-from typing import Optional
+from typing import Optional, Any
 
 from .complexity import compute_template_complexity
 from .docx_decomposer import decompose_docx
@@ -34,6 +34,8 @@ async def analyze_template_docx(
     logger.info(f"[TemplateAnalysis] Complexity score: {complexity_score:.2f}")
 
     model_usage = []
+    llm_attempts = 0
+    repair_attempts = 0
 
     # 2. Evidence Normalization (Stage 1)
     normalizer_config = model_router.get_model_config(
@@ -53,6 +55,7 @@ async def analyze_template_docx(
         "model_id": normalizer_config.model_id,
         "latency_ms": int((time.time() - norm_start) * 1000)
     })
+    llm_attempts += 1
 
     # 3. Manifest Generation (Stage 2)
     generator_config = model_router.get_model_config(
@@ -76,6 +79,7 @@ async def analyze_template_docx(
         "model_id": generator_config.model_id,
         "latency_ms": int((time.time() - gen_start) * 1000)
     })
+    llm_attempts += 1
 
     # 4. Validation & Repair (Stage 3 & 4)
     errors, warnings = validate_manifest_against_evidence(manifest, evidence)
@@ -102,6 +106,8 @@ async def analyze_template_docx(
             "model_id": repair_config.model_id,
             "latency_ms": int((time.time() - rep_start) * 1000)
         })
+        llm_attempts += 1
+        repair_attempts += 1
 
         repair_errors, repair_warnings = validate_manifest_against_evidence(
             repaired_manifest,
@@ -133,6 +139,7 @@ async def analyze_template_docx(
             "model_id": critic_config.model_id,
             "latency_ms": int((time.time() - critic_start) * 1000)
         })
+        llm_attempts += 1
         
         if not critic_result.get("approved", True):
             manifest.requires_human_review = True
@@ -142,7 +149,9 @@ async def analyze_template_docx(
     manifest.validation_errors = errors
     manifest.validation_warnings = warnings
     manifest.analysis_status = "completed" if not errors else "partial"
-    manifest.model_usage_json = json.dumps({"complexity_score": complexity_score, "models": model_usage})
+    manifest.model_usage = {"complexity_score": complexity_score, "models": model_usage}
+    manifest.llm_attempt_count = llm_attempts
+    manifest.repair_attempt_count = repair_attempts
     
     # Calculate average confidence
     confidences = [f.confidence for f in manifest.fields if f.confidence > 0]

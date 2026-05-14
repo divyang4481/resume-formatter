@@ -643,3 +643,109 @@ tr.example-element-row:not(.example-expanded-row):active {
   padding-top: 16px;
   border-top: 1px solid #eef2f6;
 }
+// New Centered Manifest Layout Styles
+.manifest-section-container {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.manifest-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #1e293b;
+  margin-bottom: 8px;
+}
+
+.central-layout {
+  max-width: 1000px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.manifest-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(450px, 1fr));
+  gap: 20px;
+  padding-bottom: 20px;
+}
+
+.section-divider {
+  border: 0;
+  border-top: 1px solid #e2e8f0;
+  margin: 40px 0;
+}
+
+.lg-action-btn {
+  padding: 12px 32px !important;
+  font-size: 1rem !important;
+  font-weight: 600 !important;
+  border-radius: 8px !important;
+}
+
+.sub-fields-container {
+  background: #f1f5f9;
+  border-radius: 6px;
+  padding: 8px 12px;
+  border-left: 3px solid #64748b;
+  
+  .sub-field-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 0;
+    font-size: 12px;
+    
+    &:not(:last-child) {
+      border-bottom: 1px solid #e2e8f0;
+    }
+
+    .sub-icon {
+      font-size: 16px;
+      width: 16px;
+      height: 16px;
+      color: #94a3b8;
+    }
+
+    .sub-name {
+      font-weight: 600;
+      color: #334155;
+    }
+
+    .sub-marker {
+      color: #0369a1;
+      font-family: 'Roboto Mono', monospace;
+      font-size: 10px;
+      margin-left: auto;
+    }
+  }
+}
+
+.empty-manifest {
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.justify-content-center {
+  justify-content: center;
+}
+
+.h-100 {
+  height: 100%;
+}
+
+.inspect-btn {
+  border-radius: 20px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.3px;
+  
+  mat-icon {
+    font-size: 18px;
+    width: 18px;
+    height: 18px;
+  }
+  
+  &:hover {
+    background-color: #f0f9ff;
+    border-color: #0284c7;
+  }
+}

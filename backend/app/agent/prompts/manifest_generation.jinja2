@@ -3,18 +3,59 @@ Your task is to generate a comprehensive TemplateManifest JSON for a resume temp
 
 INPUTS:
 1. RAW STRUCTURAL EVIDENCE (Ground Truth):
-{{ raw_evidence_json }}
+{{ evidence_json }}
 
 2. NORMALIZED EVIDENCE (Helper Summary):
-{{ normalized_evidence_json }}
+{{ normalized_evidence }}
 
 INSTRUCTIONS:
 - Use RAW EVIDENCE as the primary source of truth.
 - Identify all placeholders and map them to canonical field names.
-- Determine the field type (scalar, array_simple, array_complex, table_loop).
+- IMPORTANT: Markers starting with "Employee" (e.g. «EmployeeName», «EmployeeEmail», «EmployeeJobTitle») ALWAYS refer to the Hays Recruiter/Consultant who is presenting the profile. Do NOT map these to candidate fields.
+- "Consultant comments" or "CVcomments" markers ALWAYS map to 'cv_comments'.
+- Markers labeled as `context_placeholder` (like "[Type text]" or "[Consultant comments]") are HIGH-PRIORITY targets. Map them to fields based on their surrounding section headings (e.g. if under "Skills", map to 'skills').
+- If the same marker (e.g., "[Type text]") appears multiple times in different contexts, create a unique field for each instance.
+- Sections in `bullet_slots` (like "Key Skills" or "Professional qualifications") contain bulleted placeholders; ensure each bullet is captured as a UNIQUE field in the manifest.
+- Identify "Paste Zones" or instruction blocks (often in red text) that indicate where the candidate's own CV content should be placed; map these to a field (e.g. 'candidate_cv') with field_type='rich_text'.
+- Determine the field type (scalar, array_simple, array_complex, table_loop, rich_text).
 - Infer the semantic meaning and provide source hints for resume data extraction.
 - Preserve original labels and detect the document language.
 - Identify repeat blocks and instruction blocks.
 - If a marker is TableStart:X or TableEnd:X, it MUST be a table_loop.
 
-Return ONLY a valid TemplateManifest JSON object.
+CRITICAL: You MUST return a JSON object matching this schema exactly:
+{
+  "template_id": "string",
+  "purpose": "string describing the template's target role or use case",
+  "language": "string (e.g. 'en')",
+  "fields": [
+    {
+      "fieldname": "string",
+      "field_type": "scalar | array_simple | array_complex | table_loop | rich_text",
+      "meaning": "string describing the data expected here",
+      "source_hints": "structural clues for extraction",
+      "marker_text": "string (the exact placeholder text like '«Name»' or '[Type text]')",
+      "sub_fields": [
+        {
+           "fieldname": "string",
+           "marker_text": "string (e.g. '[Organisation]' or '[Job description]')",
+           "meaning": "string",
+           "field_type": "scalar"
+        }
+      ],
+      "resume_fillable": boolean,
+      "confidence": float (0.0 to 1.0)
+    }
+  ]
+}
+
+REINFORCEMENT:
+- For `array_complex` sections like "WORK EXPERIENCE" or "EDUCATION":
+  - Use `marker_text` for the primary repeat block marker if it exists.
+  - Use `sub_fields` to list EVERY internal placeholder (e.g. "[Organisation]", "[Job description, Date]", "[Bullet point responsibilities]").
+- Ensure "Current position" and "INTERESTS AND ACTIVITIES" are NOT missed. They contain important candidate data.
+- "Current position" often has a marker like "[Use bullets if required]" or "«EmployeeName»" (if incorrectly used by template designers - double check context).
+- If a section has NO explicit markers but contains clear instruction text or empty lines, create a field for it anyway with field_type='rich_text' and empty marker_text.
+- For "WORK EXPERIENCE", if multiple blocks of placeholders exist, map them as one `array_complex` with the repeating pattern identified in `sub_fields`.
+
+Return ONLY the JSON object.

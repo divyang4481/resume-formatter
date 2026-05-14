@@ -425,6 +425,12 @@ export class TemplateDetailComponent implements OnInit, OnDestroy {
       data: { title, json }
     });
   }
+
+  openManifestInspector(dialogRef: any) {
+    const pipe = new JsonParsePipe();
+    const manifest = pipe.transform(this.template?.field_extraction_manifest);
+    this.openJsonInspector(dialogRef, 'Raw Intelligence Manifest', manifest);
+  }
 }
 
 

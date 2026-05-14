@@ -1,4 +1,4 @@
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Union
 from pydantic import BaseModel, Field
 
 
@@ -26,6 +26,10 @@ class TemplateEvidence(BaseModel):
     placeholder_candidates: List[PlaceholderCandidate] = []
     section_candidates: List[SectionCandidate] = []
     tables: List[TableCandidate] = []
+    instruction_blocks: List[str] = []
+    object_patterns: Dict[str, List[str]] = {}
+    repeated_markers: List[str] = []
+    bullet_slots: List[str] = []
     raw_text_summary: Optional[str] = None
 
 
@@ -36,11 +40,15 @@ class TemplateField(BaseModel):
     marker_text: str
     field_type: str
     meaning: str
-    source_hints: Optional[str] = None
+    source_hints: Optional[Union[str, List[str]]] = None
     resume_fillable: bool = True
     language: str = "en"
     semantic_inference: Optional[str] = None
     confidence: float = 0.0
+    sub_fields: List["TemplateField"] = []
+
+
+TemplateField.model_rebuild()
 
 
 class TemplateManifest(BaseModel):
@@ -54,5 +62,7 @@ class TemplateManifest(BaseModel):
     requires_human_review: bool = False
     review_reasons: List[str] = []
     average_confidence: Optional[float] = None
-    model_usage_json: Optional[str] = None
+    model_usage: Dict[str, Any] = Field(default_factory=dict)
     complexity_score: Optional[float] = None
+    llm_attempt_count: int = 1
+    repair_attempt_count: int = 0

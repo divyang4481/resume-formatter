@@ -41,15 +41,11 @@ FIELD_ALIAS_MAP = load_field_aliases()
 # Inverted alias map: CamelCase marker → canonical fieldname
 _ALIAS_INVERTED: Dict[str, str] = {}
 for _fn, _info in FIELD_ALIAS_MAP.items():
-    for _alias in _info["aliases"]:
-        _ALIAS_INVERTED[_alias.lower()] = _fn
+    if isinstance(_info, dict) and "aliases" in _info:
+        for _alias in _info["aliases"]:
+            _ALIAS_INVERTED[_alias.lower()] = _fn
 
-PASTE_ZONE_KEYWORDS = [
-    "own cv", "paste", "insert cv", "candidate cv", "candidate's cv",
-    "work experience", "employment history", "professional experience",
-    "education", "academic background", "key skills",
-    "interests and activities", "hobbies", "personal interests"
-]
+PASTE_ZONE_KEYWORDS = FIELD_ALIAS_MAP.get("paste_zone_keywords", [])
 INSTRUCTION_COLORS_RED = {"ff0000", "c00000", "dc143c", "b22222"}
 TABLE_LOOP_PREFIX = "TableStart:"
 TABLE_LOOP_SUFFIX = "TableEnd:"
@@ -383,13 +379,10 @@ class TemplateStructureExtractor:
             is_bold_short = _is_bold(para) and len(para_text) < 60 and not para_text.startswith("[")
 
             if is_heading_style or is_bold_short:
-                # Save previous heading's bullet status
-                if current_heading and heading_has_bullets:
-                    struct.bullet_slots.append(current_heading)
-                
                 # Register all headings
                 if para_text not in struct.all_headings:
                     struct.all_headings.append(para_text)
+                    logger.info(f"Detected heading: '{para_text}'")
                     
                 current_heading = para_text
                 heading_has_bullets = False
@@ -400,14 +393,9 @@ class TemplateStructureExtractor:
                         struct.paste_zones.append(para_text)
                 continue
 
-            # If we just saw a heading, the next non-empty paragraph might be its placeholder
-            if current_heading and not para_text.startswith("["): # skip if already a bracket marker
-                 if current_heading not in struct.heading_to_placeholder:
-                     # Only take short-to-medium snippets as placeholders
-                     if 5 < len(para_text) < 300:
-                         struct.heading_to_placeholder[current_heading] = para_text
-                         logger.info(f"Placeholder for '{current_heading}': {para_text[:50]}...")
-
+            # Identify structural placeholders vs static text
+            clean_para = para_text.strip(' "•\t“”‘’')
+            
             # Detect guillemet markers by reconstructing para text
             found_guillemets = re.findall(r"[\xab\u00ab]\s*(.*?)\s*[\xbb\u00bb]", para_text_raw)
             for g in found_guillemets:
@@ -428,10 +416,32 @@ class TemplateStructureExtractor:
             for bm in found_brackets:
                 inner = bm.group(1).strip()
                 if inner:
-                    part_markers.append(f"[{inner}]")
+                    m = f"[{inner}]"
+                    part_markers.append(m)
                     # Flag as bullet slot if under a heading
                     if current_heading:
                         heading_has_bullets = True
+
+            # Associate with heading patterns
+            if current_heading and clean_para:
+                is_placeholder = (clean_para.startswith("[") and clean_para.endswith("]")) or \
+                               (clean_para.startswith("«") and clean_para.endswith("»"))
+                
+                if is_placeholder:
+                    if current_heading not in struct.heading_to_smart_pattern:
+                        struct.heading_to_smart_pattern[current_heading] = []
+                    
+                    struct.heading_to_smart_pattern[current_heading].append(clean_para)
+                    logger.info(f"Captured structural placeholder for '{current_heading}': {clean_para}")
+                    
+                    if "•" in para_text or para.xpath(".//w:numPr", namespaces=NS):
+                        if current_heading not in struct.bullet_slots:
+                            struct.bullet_slots.append(current_heading)
+                else:
+                    # Only take short-to-medium snippets as static placeholders if not already a placeholder
+                    if 5 < len(para_text) < 300 and current_heading not in struct.heading_to_placeholder:
+                        struct.heading_to_placeholder[current_heading] = para_text
+                        logger.info(f"Static placeholder for '{current_heading}': {para_text[:50]}...")
 
             # Detect instruction blocks (red/italic/quoted paragraphs)
             # EXCLUDE common placeholders like [Organisation] or [Job description] or [Bullet point list]
@@ -440,31 +450,11 @@ class TemplateStructureExtractor:
             if (_is_red_or_colored(para) or _is_all_italic(para)) and not is_content_placeholder:
                 if para_text not in struct.instruction_blocks:
                     struct.instruction_blocks.append(para_text[:400])
+                    logger.info(f"Captured instruction block: {para_text[:100]}...")
             elif para_text.startswith('"') and para_text.endswith('"') and len(para_text) > 20 and not is_content_placeholder:
                 if para_text not in struct.instruction_blocks:
                     struct.instruction_blocks.append(para_text[:400])
-
-            # Detect object template patterns (multi-line placeholder sequences)
-            # Handle quoted or bulleted placeholders like "[Job title]", "“Job title”", or • [Organisation]
-            # Strip standard and smart quotes, bullets, and whitespace
-            clean_para = para_text.strip(' "•\t“”‘’')
-            
-            if current_heading and clean_para:
-                if clean_para.startswith("[") and clean_para.endswith("]"):
-                    if current_heading not in struct.heading_to_smart_pattern:
-                        struct.heading_to_smart_pattern[current_heading] = []
-                    
-                    # Capture ALL structural placeholders; the LLM will decide if they form an object
-                    struct.heading_to_smart_pattern[current_heading].append(clean_para)
-                    logger.info(f"Captured structural placeholder for '{current_heading}': {clean_para}")
-                else:
-                    # If we see non-placeholder text after a heading, it might break the pattern
-                    # logger.debug(f"Non-placeholder text after '{current_heading}': {clean_para[:30]}")
-                    pass
-
-        # Save last heading's bullet status
-        if current_heading and heading_has_bullets:
-            struct.bullet_slots.append(current_heading)
+                    logger.info(f"Captured quoted instruction: {para_text[:100]}...")
 
         # ---- 5. Table label → value pair extraction (document.xml only) ----
         if part_name == "word/document.xml":

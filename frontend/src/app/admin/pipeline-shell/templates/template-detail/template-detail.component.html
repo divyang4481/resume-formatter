@@ -172,67 +172,32 @@
             <mat-card-title>Data Extraction & Rendering Logic</mat-card-title>
           </mat-card-header>
           <mat-card-content>
-            <div class="row mb-4">
-              <div class="col-md-5">
-                <form [formGroup]="requirementsForm" class="flex-column gap-16">
-                  <div class="structured-list-view">
-                    <label class="list-label">Logical Sections Expected</label>
-                    <div class="chip-container mb-3">
-                      <mat-chip-set>
-                        <mat-chip *ngFor="let section of template?.expected_sections?.split(',')" class="section-chip">
-                          {{ section.trim() }}
-                        </mat-chip>
-                      </mat-chip-set>
-                    </div>
-                    
-                    <mat-form-field appearance="outline" class="w-100 mb-3 tiny-textarea">
-                      <mat-label>Edit Sections (Comma Separated)</mat-label>
-                      <textarea matInput formControlName="expected_sections" rows="2"></textarea>
-                    </mat-form-field>
-                  </div>
-
-                  <div class="structured-list-view">
-                    <label class="list-label">Mandatory Data Fields</label>
-                    <div class="chip-container mb-3">
-                      <mat-chip-set>
-                        <mat-chip *ngFor="let field of template?.expected_fields?.split(',')" class="field-chip">
-                          {{ field.trim() }}
-                        </mat-chip>
-                      </mat-chip-set>
-                    </div>
-
-                    <mat-form-field appearance="outline" class="w-100 mb-n1 tiny-textarea">
-                      <mat-label>Edit Fields (Comma Separated)</mat-label>
-                      <textarea matInput formControlName="expected_fields" rows="2"></textarea>
-                    </mat-form-field>
-                  </div>
-    
-                  <div class="actions mt-3">
-                    <button mat-raised-button color="primary" type="button" (click)="saveRequirements()">
-                      <mat-icon>save</mat-icon> Update Logic
-                    </button>
-                  </div>
-                </form>
-              </div>
-
-              <div class="col-md-7 border-start ps-4">
-                <h4 class="mb-3 d-flex align-items-center justify-content-between">
-                  <div class="d-flex align-items-center gap-8">
-                    <mat-icon color="accent">psychology</mat-icon>
-                    AI Extraction Manifest
-                  </div>
+            <!-- 1. AI Extraction Manifest Section (Centered Top) -->
+            <div class="manifest-section-container mb-5">
+              <div class="section-header text-center mb-4">
+                <h3 class="d-flex align-items-center justify-content-center gap-12 manifest-title">
+                  <mat-icon color="accent">psychology</mat-icon>
+                  AI Extraction Manifest
                   <span class="badge bg-soft-primary" *ngIf="template?.field_extraction_manifest">
                     {{ (template?.field_extraction_manifest | jsonParse)?.length }} Fields Mapped
                   </span>
-                </h4>
-                
-                <div *ngIf="!template?.field_extraction_manifest" class="p-5 bg-light rounded text-center border dashed">
-                  <mat-icon class="large-icon mb-2" color="disabled">find_in_page</mat-icon>
-                  <p class="text-muted mb-0">No smart manifest detected yet. Run <strong>Analyze Template</strong> to generate one.</p>
+                </h3>
+                <p class="text-muted">High-fidelity structural mapping detected by AI reasoning</p>
+                <div class="mt-2" *ngIf="template?.field_extraction_manifest">
+                  <button mat-stroked-button color="accent" class="inspect-btn" (click)="openManifestInspector(jsonInspectorDialog)">
+                    <mat-icon>code</mat-icon> View Raw Manifest JSON
+                  </button>
                 </div>
+              </div>
 
-                <div *ngIf="template?.field_extraction_manifest" class="manifest-scroll-area">
-                   <div class="manifest-card mb-3" *ngFor="let field of (template?.field_extraction_manifest | jsonParse)">
+              <div *ngIf="!template?.field_extraction_manifest" class="p-5 bg-light rounded text-center border dashed empty-manifest">
+                <mat-icon class="large-icon mb-2" color="disabled">find_in_page</mat-icon>
+                <p class="text-muted mb-0">No smart manifest detected yet. Run <strong>Analyze Template</strong> to generate one.</p>
+              </div>
+
+              <div *ngIf="template?.field_extraction_manifest" class="manifest-scroll-area central-layout">
+                 <div class="manifest-grid">
+                   <div class="manifest-card" *ngFor="let field of (template?.field_extraction_manifest | jsonParse)">
                       <div class="manifest-card-header">
                         <div class="field-info">
                           <strong class="field-name">{{ field.fieldname }}</strong>
@@ -248,6 +213,16 @@
                       </div>
                       <div class="manifest-card-body">
                         <div class="meaning-text">{{ field.meaning }}</div>
+                        
+                        <!-- Nested Sub-Fields View -->
+                        <div class="sub-fields-container mb-3" *ngIf="field.sub_fields?.length > 0">
+                           <div class="sub-field-item" *ngFor="let sub of field.sub_fields">
+                              <mat-icon class="sub-icon">subdirectory_arrow_right</mat-icon>
+                              <span class="sub-name">{{ sub.fieldname }}</span>
+                              <code class="sub-marker">{{ sub.marker_text }}</code>
+                           </div>
+                        </div>
+
                         <div class="locator-details" *ngIf="field.render_locator?.marker || field.render_locator?.label || field.render_locator?.heading">
                            <span *ngIf="field.render_locator?.marker" class="locator-tag marker">Marker: <code>{{ field.render_locator.marker }}</code></span>
                            <span *ngIf="field.render_locator?.label" class="locator-tag label">Label: <code>{{ field.render_locator.label }}</code></span>
@@ -259,23 +234,62 @@
                         </div>
                       </div>
                    </div>
-                </div>
+                 </div>
+              </div>
+            </div>
 
-                <!-- Raw JSON Debug View -->
-                <mat-expansion-panel class="mt-4 developer-view">
-                  <mat-expansion-panel-header>
-                    <mat-panel-title>
-                      <mat-icon class="me-2">code</mat-icon>
-                      Raw Intelligence Manifest (JSON)
-                    </mat-panel-title>
-                    <mat-panel-description>
-                      Inspect dynamic field logic
-                    </mat-panel-description>
-                  </mat-expansion-panel-header>
-                  <div class="json-debug-container">
-                    <pre>{{ template?.field_extraction_manifest | jsonParse | json }}</pre>
-                  </div>
-                </mat-expansion-panel>
+            <hr class="section-divider mb-5" />
+
+            <!-- 2. Configuration Forms Section (Below) -->
+            <div class="config-section-container">
+              <div class="row">
+                <div class="col-md-12">
+                  <form [formGroup]="requirementsForm">
+                    <div class="row">
+                      <div class="col-md-6">
+                        <div class="structured-list-view h-100">
+                          <label class="list-label">Logical Sections Expected</label>
+                          <div class="chip-container mb-3">
+                            <mat-chip-set>
+                              <mat-chip *ngFor="let section of template?.expected_sections?.split(',')" class="section-chip">
+                                {{ section.trim() }}
+                              </mat-chip>
+                            </mat-chip-set>
+                          </div>
+                          
+                          <mat-form-field appearance="outline" class="w-100 mb-3 tiny-textarea">
+                            <mat-label>Edit Sections (Comma Separated)</mat-label>
+                            <textarea matInput formControlName="expected_sections" rows="3"></textarea>
+                          </mat-form-field>
+                        </div>
+                      </div>
+
+                      <div class="col-md-6">
+                        <div class="structured-list-view h-100">
+                          <label class="list-label">Mandatory Data Fields</label>
+                          <div class="chip-container mb-3">
+                            <mat-chip-set>
+                              <mat-chip *ngFor="let field of template?.expected_fields?.split(',')" class="field-chip">
+                                {{ field.trim() }}
+                              </mat-chip>
+                            </mat-chip-set>
+                          </div>
+
+                          <mat-form-field appearance="outline" class="w-100 mb-n1 tiny-textarea">
+                            <mat-label>Edit Fields (Comma Separated)</mat-label>
+                            <textarea matInput formControlName="expected_fields" rows="3"></textarea>
+                          </mat-form-field>
+                        </div>
+                      </div>
+                    </div>
+      
+                    <div class="actions mt-4 justify-content-center">
+                      <button mat-raised-button color="primary" type="button" class="lg-action-btn" (click)="saveRequirements()">
+                        <mat-icon>save</mat-icon> Update Template Configuration Logic
+                      </button>
+                    </div>
+                  </form>
+                </div>
               </div>
             </div>
           </mat-card-content>

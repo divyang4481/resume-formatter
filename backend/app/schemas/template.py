@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 from datetime import datetime
 from pydantic import BaseModel, Field
 
@@ -21,7 +21,7 @@ class FieldExtractionManifestItem(BaseModel):
     fieldname: str
     marker_text: str
     meaning: str
-    source_hints: str
+    source_hints: Union[str, List[str]]
 
 class TemplateAsset(BaseModel):
     id: str

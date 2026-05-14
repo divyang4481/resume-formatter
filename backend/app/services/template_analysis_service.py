@@ -52,16 +52,18 @@ class TemplateAnalysisService:
 
         # 2. Map the new TemplateManifest model back to the legacy TemplateAnalysis model for backward compatibility
         # This allows existing callers to continue working without breaking changes.
-        fields = []
-        for f in manifest.fields:
-            fields.append(TemplateField(
+        def map_field(f):
+            return TemplateField(
                 fieldname=f.fieldname,
                 marker_text=f.marker_text,
                 field_type=f.field_type,
                 meaning=f.meaning,
                 source_hints=f.source_hints or "",
-                render_locator=RenderLocator(strategy="replace_marker", marker_text=f.marker_text)
-            ))
+                render_locator=RenderLocator(strategy="replace_marker", marker_text=f.marker_text),
+                sub_fields=[map_field(sf) for sf in (f.sub_fields or [])]
+            )
+
+        fields = [map_field(f) for f in manifest.fields]
 
         analysis = TemplateAnalysis(
             template_id=template_id,
@@ -72,9 +74,9 @@ class TemplateAnalysisService:
             validation_errors=manifest.validation_errors,
             validation_warnings=manifest.validation_warnings,
             complexity_score=manifest.complexity_score,
-            model_usage_json=manifest.model_usage_json,
+            model_usage_json=manifest.model_usage,
             llm_attempt_count=manifest.llm_attempt_count,
-            human_review_required=manifest.human_review_required
+            human_review_required=manifest.requires_human_review
         )
         
         # Store metadata in raw_structure for audit
@@ -83,9 +85,9 @@ class TemplateAnalysisService:
             "validation_errors": manifest.validation_errors,
             "validation_warnings": manifest.validation_warnings,
             "complexity_score": manifest.complexity_score,
-            "model_usage": manifest.model_usage_json,
+            "model_usage": manifest.model_usage,
             "llm_attempt_count": manifest.llm_attempt_count,
-            "human_review_required": manifest.human_review_required
+            "human_review_required": manifest.requires_human_review
         }
 
         return analysis

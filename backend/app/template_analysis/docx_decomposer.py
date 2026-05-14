@@ -1,5 +1,6 @@
 import os
 import logging
+from typing import Optional
 from app.services.template_structure_extractor import TemplateStructureExtractor
 from .models import TemplateEvidence, PlaceholderCandidate, SectionCandidate, TableCandidate
 
@@ -23,21 +24,25 @@ def decompose_docx(file_path: Optional[str] = None, content: Optional[bytes] = N
 
     evidence = TemplateEvidence()
 
+    # Load generic placeholders from config
+    from app.services.template_structure_extractor import FIELD_ALIAS_MAP, TABLE_LOOP_PREFIX, TABLE_LOOP_SUFFIX
+    generic_placeholders = FIELD_ALIAS_MAP.get("generic_placeholders", [])
+
     # Map markers
     for marker in structure.detected_markers:
         kind = "merge_marker"
-        if "TableStart:" in marker:
+        if marker.strip("«»").startswith(TABLE_LOOP_PREFIX.strip(":")):
             kind = "repeat_start"
-        elif "TableEnd:" in marker:
+        elif marker.strip("«»").startswith(TABLE_LOOP_SUFFIX.strip(":")):
             kind = "repeat_end"
-        elif "[Type text]" in marker or "Type text" in marker:
-            kind = "generic_fill_instruction"
+        elif any(gp.lower() in marker.lower() for gp in generic_placeholders):
+            kind = "context_placeholder"
         
         evidence.placeholder_candidates.append(PlaceholderCandidate(
             marker=marker,
             candidate_kind=kind,
             location="document_body",
-            context_snippet=None # Could be improved by capturing surrounding text
+            context_snippet=None 
         ))
 
     # Map sections/headings
@@ -56,5 +61,17 @@ def decompose_docx(file_path: Optional[str] = None, content: Optional[bytes] = N
             is_blank=slot.is_blank,
             row_index=i
         ))
+
+    # Map instructions
+    evidence.instruction_blocks = structure.instruction_blocks
+
+    # Map object patterns (headings -> multi-line placeholders)
+    evidence.object_patterns = structure.heading_to_smart_pattern
+
+    # Map repeated markers
+    evidence.repeated_markers = structure.repeated_markers
+
+    # Map bullet slots
+    evidence.bullet_slots = structure.bullet_slots
 
     return evidence

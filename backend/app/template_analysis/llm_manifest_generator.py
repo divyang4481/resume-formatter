@@ -61,5 +61,9 @@ async def generate_manifest_with_llm(
     # Add template_id if missing
     if "template_id" not in data:
         data["template_id"] = "auto-generated"
+    
+    # Add purpose if missing to satisfy Pydantic
+    if "purpose" not in data:
+        data["purpose"] = "Resume Formatting"
         
     return TemplateManifest.model_validate(data)

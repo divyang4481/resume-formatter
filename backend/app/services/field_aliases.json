@@ -162,5 +162,33 @@
             "PersonalInterests",
             "Interests_and_Activities"
         ]
-    }
+    },
+    "generic_placeholders": [
+        "[Type text]",
+        "Type text",
+        "[Consultant comments]",
+        "[...]",
+        "[Organisation]",
+        "[Job description, Date]",
+        "[Bullet point responsibilities]",
+        "[Bullet point list]",
+        "\"[Job description, Date]\"",
+        "\"[Bullet point responsibilities]\""
+    ],
+    "paste_zone_keywords": [
+        "own cv",
+        "paste",
+        "insert cv",
+        "candidate cv",
+        "candidate's cv",
+        "work experience",
+        "employment history",
+        "professional experience",
+        "education",
+        "academic background",
+        "key skills",
+        "interests and activities",
+        "hobbies",
+        "personal interests"
+    ]
 }
