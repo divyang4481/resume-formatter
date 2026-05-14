@@ -24,6 +24,7 @@ COPY ./app/adapters/repositories ./app/adapters/repositories
 COPY ./app/adapters/queue ./app/adapters/queue
 COPY ./app/adapters/storage ./app/adapters/storage
 COPY ./app/adapters/knowledge_base_adapter.py ./app/adapters/knowledge_base_adapter.py
+COPY ./app/adapters/aws_client.py ./app/adapters/aws_client.py
 COPY ./app/db ./app/db
 COPY ./app/domain ./app/domain
 COPY ./app/schemas ./app/schemas

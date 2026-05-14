@@ -14,12 +14,16 @@ from app.dependencies import (
     get_storage_provider,
     get_template_repository,
     get_message_queue,
+    get_document_extraction_service,
+    get_llm_runtime,
 )
 from app.utils import validate_uploaded_file
 from app.domain.interfaces import (
     StorageProvider,
     TemplateRepository,
     EventBus,
+    DocumentExtractionService,
+    LlmRuntimeAdapter,
 )
 from app.config import settings
 

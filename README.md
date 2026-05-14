@@ -85,6 +85,16 @@ Use Docker Compose when you want the API, worker, frontend, local S3/SQS, and a 
    curl http://localhost:4566/_localstack/health
    aws --endpoint-url=http://localhost:4566 s3 ls
    aws --endpoint-url=http://localhost:4566 sqs list-queues
+   curl http://localhost:8000/api/health/dependencies
+   ```
+4. Run the API and infrastructure smoke test. This starts `postgres`, `localstack`, and `api`, verifies RDS-compatible Postgres, LocalStack S3/SQS, A2A/MCP discovery, OpenAPI, and exercises the runtime upload/confirm/status API flow against S3 + SQS:
+   ```bash
+   scripts/smoke-compose.sh
+   ```
+
+   To include the worker or frontend in the same smoke-test startup, set `INCLUDE_WORKER=1` or `INCLUDE_FRONTEND=1`:
+   ```bash
+   INCLUDE_WORKER=1 INCLUDE_FRONTEND=1 scripts/smoke-compose.sh
    ```
 
 Two environment templates are provided:
@@ -125,6 +135,7 @@ After you start the servers, check out these local URLs:
 - **Swagger UI Docs:** [http://localhost:8000/docs](http://localhost:8000/docs) _(FastAPI automatically generates this—you can interactively see and test all your endpoints here)_
 - **ReDoc Docs:** [http://localhost:8000/redoc](http://localhost:8000/redoc) _(Alternative API documentation viewer)_
 - **Health Check:** [http://localhost:8000/api/health](http://localhost:8000/api/health)
+- **Dependency Health Check:** [http://localhost:8000/api/health/dependencies](http://localhost:8000/api/health/dependencies) _(verifies the configured database, S3 storage, and SQS queue)_
 
 Refresh your browser, and you should now seamlessly access the UI as well as the API!
 

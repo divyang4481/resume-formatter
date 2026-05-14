@@ -1,5 +1,5 @@
 import uvicorn
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.routing import APIRoute
 from starlette.routing import BaseRoute
 from fastapi_mcp import FastApiMCP
@@ -28,6 +28,68 @@ def _set_stable_operation_ids(app: FastAPI) -> None:
         count = seen.get(base_id, 0)
         seen[base_id] = count + 1
         route.operation_id = base_id if count == 0 else f"{base_id}_{count + 1}"
+
+
+def _check_dependencies() -> tuple[str, dict]:
+    """Validate local/AWS backing services used by the API container."""
+    from sqlalchemy import text
+
+    from app.adapters.aws_client import aws_service_client
+    from app.db.session import engine
+
+    checks: dict[str, dict[str, object]] = {}
+
+    try:
+        with engine.connect() as connection:
+            connection.execute(text("SELECT 1"))
+        checks["database"] = {"status": "ready", "url": settings.database_url}
+    except Exception as exc:  # pragma: no cover - exercised by container smoke tests
+        checks["database"] = {"status": "error", "error": str(exc)}
+
+    if settings.storage_provider == "s3":
+        try:
+            s3 = aws_service_client("s3", region_name=settings.aws_region)
+            s3.head_bucket(Bucket=settings.s3_bucket_output)
+            checks["s3"] = {
+                "status": "ready",
+                "bucket": settings.s3_bucket_output,
+                "endpoint_url": settings.aws_endpoint_url or "aws",
+            }
+        except Exception as exc:  # pragma: no cover - exercised by container smoke tests
+            checks["s3"] = {
+                "status": "error",
+                "bucket": settings.s3_bucket_output,
+                "error": str(exc),
+            }
+    else:
+        checks["s3"] = {"status": "skipped", "provider": settings.storage_provider}
+
+    if settings.queue_provider == "sqs":
+        try:
+            sqs = aws_service_client("sqs", region_name=settings.aws_region)
+            attributes = sqs.get_queue_attributes(
+                QueueUrl=settings.sqs_processing_queue_url,
+                AttributeNames=["QueueArn"],
+            ).get("Attributes", {})
+            checks["sqs"] = {
+                "status": "ready",
+                "queue_url": settings.sqs_processing_queue_url,
+                "queue_arn": attributes.get("QueueArn"),
+                "endpoint_url": settings.aws_endpoint_url or "aws",
+            }
+        except Exception as exc:  # pragma: no cover - exercised by container smoke tests
+            checks["sqs"] = {
+                "status": "error",
+                "queue_url": settings.sqs_processing_queue_url,
+                "error": str(exc),
+            }
+    else:
+        checks["sqs"] = {"status": "skipped", "provider": settings.queue_provider}
+
+    overall_status = "ready" if all(
+        check["status"] in {"ready", "skipped"} for check in checks.values()
+    ) else "degraded"
+    return overall_status, checks
 
 
 def create_app() -> FastAPI:
@@ -109,6 +171,19 @@ def create_app() -> FastAPI:
             },
         }
 
+    @app.get("/api/health/dependencies")
+    async def dependency_health_check():
+        status_value, checks = _check_dependencies()
+        payload = {
+            "status": status_value,
+            "runtime_mode": settings.runtime_mode,
+            "cloud_provider": settings.cloud_provider,
+            "checks": checks,
+        }
+        if status_value != "ready":
+            raise HTTPException(status_code=503, detail=payload)
+        return payload
+
     @app.get("/api/capabilities")
     async def capabilities():
         return {
@@ -117,6 +192,7 @@ def create_app() -> FastAPI:
                 "docs_url": "/docs",
                 "openapi_url": "/openapi.json",
                 "processing_prefix": "/api/v1/processing",
+                "dependency_health_url": "/api/health/dependencies",
             },
             "a2a": {
                 "status": "ready",
