@@ -128,11 +128,17 @@ services:
       - ./localstack/init:/etc/localstack/init/ready.d:ro
       - /var/run/docker.sock:/var/run/docker.sock
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:4566/_localstack/health"]
+      test:
+        - CMD-SHELL
+        - >
+          curl -fsS http://localhost:4566/_localstack/health >/dev/null
+          && awslocal s3api head-bucket --bucket $${S3_BUCKET_INPUT}
+          && awslocal s3api head-bucket --bucket $${S3_BUCKET_OUTPUT}
+          && awslocal sqs get-queue-url --queue-name $${SQS_PROCESSING_QUEUE_NAME} >/dev/null
       interval: 5s
-      timeout: 5s
-      retries: 20
-      start_period: 10s
+      timeout: 10s
+      retries: 30
+      start_period: 15s
 
 volumes:
   postgres_data:
