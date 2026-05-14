@@ -9,8 +9,8 @@ def test_confidence_zero_text():
 def test_confidence_low_text_length():
     # settings.parser_min_text_chars defaults to 300
     doc = ParsedDocument(text="A short text")
-    # Base 1.0 - 0.5 (low text) = 0.5
-    assert ParseConfidenceService.calculate_confidence(doc) == 0.5
+    # Base 1.0 - 0.5 (low text) - 0.3 (no sections) = 0.2
+    assert round(ParseConfidenceService.calculate_confidence(doc), 1) == 0.2
 
 def test_confidence_docling_good_structure():
     doc = ParsedDocument(
@@ -30,11 +30,3 @@ def test_confidence_docling_poor_structure():
     # sections < 3 (penalty -0.3)
     # Base 1.0 - 0.3 = 0.7
     assert round(ParseConfidenceService.calculate_confidence(doc), 1) == 0.7
-
-def test_confidence_tika_cap():
-    doc = ParsedDocument(
-        text="A" * 350,
-        parser_used="tika"
-    )
-    # Tika is capped at 0.8
-    assert ParseConfidenceService.calculate_confidence(doc) == 0.8

@@ -261,7 +261,6 @@ poetry install --extras "runtime-local-gcp"
 
 ```bash
 poetry install --extras "parser-docling"    # Docling (default)
-poetry install --extras "parser-tika"       # Apache Tika (fallback)
 poetry install --extras "parser-unstructured"  # Unstructured.io
 ```
 
@@ -377,7 +376,6 @@ cloud-aws-native    = ["boto3"]
 cloud-azure-native  = ["azure-ai-documentintelligence", "azure-storage-blob", "azure-identity"]
 cloud-gcp-native    = ["google-cloud-documentai", "google-cloud-storage"]
 parser-docling      = ["docling"]
-parser-tika         = ["tika"]
 parser-unstructured = ["unstructured"]
 dev-local           = ["pytest", "pytest-asyncio"]
 ```

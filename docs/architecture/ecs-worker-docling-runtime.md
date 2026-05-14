@@ -5,11 +5,11 @@ Docling and its underlying AI pipelines (RT-DETR, layout detection, OCR) are com
 
 ## Solution
 We have migrated the parsing workload to an **ECS Fargate Worker**.
-- The `Dockerfile.worker` includes all heavy PyTorch and system dependencies required for robust native processing.
+- The dedicated parser image includes all heavy PyTorch and system dependencies required for robust native processing; the worker calls it as a service.
 - The queue-driven architecture (SQS) allows decoupling the frontend upload speed from the backend processing time.
 
 ## Parser Routing Guard
 To optimize costs and speed:
-1. Native DOCX files can be routed to a lightweight parser (`tika` or `unstructured`).
-2. Scanned PDFs are routed to `docling`.
-3. If Docling encounters errors, it gracefully falls back to a simpler extraction technique, ensuring pipeline stability.
+1. Worker jobs route document parsing through the configured parser provider.
+2. Heavy PDF/DOCX parsing is handled by the dedicated `parser-docling` service.
+3. If Docling encounters errors, the job is failed or retried according to queue/job policy rather than silently switching parser engines.

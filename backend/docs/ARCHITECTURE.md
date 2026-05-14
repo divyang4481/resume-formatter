@@ -48,7 +48,7 @@ The Template/Knowledge plane acts as the governor. It publishes approved assets 
 
 * **Deterministic first, LLM second:** Core orchestration and validation are deterministic; LLMs are used only for specific transformations.
 * **Cloud is an integration concern, not a business-logic concern:** Core workflows depend only on interfaces, relying on dependency injection for AWS/Azure/GCP implementations.
-* **Parser choice is orthogonal to cloud choice:** You can run AWS Textract on Azure, or Azure Document Intelligence on GCP, or local Apache Tika everywhere.
+* **Parser choice is orthogonal to cloud choice:** You can run AWS Textract on Azure, or Azure Document Intelligence on GCP, or local Docling everywhere.
 * **Templates are governed assets, not raw files:** They have lifecycles, versions, and metadata.
 * **Privacy is architectural, not cosmetic:** PII rules dictate data flow boundaries, not just prompt instructions.
 * **Memory must be bounded and auditable:** System state is scoped to the current run or explicitly defined reference sets.
@@ -365,7 +365,7 @@ Templates progress through distinct states:
 
 ### 9.1 Parser/Extractor Abstraction
 The parser provider is pluggable and abstracted behind the `DocumentParserAdapter`. The cloud deployment target and the parser backend are independent dimensions.
-Examples: Azure Document Intelligence, AWS Textract, GCP Document AI, Docling, Apache Tika, Unstructured.
+Examples: Azure Document Intelligence, AWS Textract, GCP Document AI, Docling, cloud document AI, Unstructured.
 
 ### 9.2 Extraction Stages
 1. File validation
@@ -549,7 +549,7 @@ Core business logic remains cloud-agnostic. Provider adapters supply storage, OC
 | Metadata DB | Cosmos DB | DynamoDB | Firestore | SQLite |
 | Search/Vector | AI Search | OpenSearch | Vertex Search | Chroma/FAISS |
 | Model Provider | Azure OpenAI | Bedrock | Vertex AI | Ollama |
-| Parser Provider | Document Intelligence | Textract | Document AI | Docling/Tika |
+| Parser Provider | Document Intelligence | Textract | Document AI | Docling |
 
 ### 14.4 Statelessness and Container Scalability
 To support horizontal scaling and dynamic load balancing across cloud container environments (e.g., Kubernetes, ECS, Cloud Run), the API tier is strictly **stateless**.

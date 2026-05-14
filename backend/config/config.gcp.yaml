@@ -1,6 +1,6 @@
 cloud: "gcp"
 document_parser_backend: "gcp_document_ai"
-document_parser_fallback: "tika"
+document_parser_fallback: "docling_service"
 ocr_backend: "gcp_document_ai"
 docx_parser_backend: "local"
 enable_multi_backend_routing: true
