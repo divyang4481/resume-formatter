@@ -88,13 +88,23 @@ Use Docker Compose when you want the API, worker, frontend, local S3/SQS, and a 
    curl http://localhost:8000/api/health/dependencies
    ```
 4. Run the API and infrastructure smoke test. This starts `postgres`, `localstack`, and `api`, verifies RDS-compatible Postgres, LocalStack S3/SQS, A2A/MCP discovery, OpenAPI, and exercises the runtime upload/confirm/status API flow against S3 + SQS:
+
+   _Mac/Linux (Bash):_
    ```bash
    scripts/smoke-compose.sh
    ```
 
-   To include the worker or frontend in the same smoke-test startup, set `INCLUDE_WORKER=1` or `INCLUDE_FRONTEND=1`:
+   _Windows with Docker Desktop (PowerShell):_
+   ```powershell
+   .\scripts\smoke-compose.ps1
+   ```
+
+   To include the worker or frontend in the same smoke-test startup, set `INCLUDE_WORKER=1` or `INCLUDE_FRONTEND=1` in Bash, or pass `-IncludeWorker` / `-IncludeFrontend` in PowerShell:
    ```bash
    INCLUDE_WORKER=1 INCLUDE_FRONTEND=1 scripts/smoke-compose.sh
+   ```
+   ```powershell
+   .\scripts\smoke-compose.ps1 -IncludeWorker -IncludeFrontend
    ```
 
 Two environment templates are provided:
@@ -106,6 +116,27 @@ Two environment templates are provided:
 
 Inside Docker Compose, services should use `http://localstack:4566` and `postgres:5432`. From the host machine, use `http://localhost:4566` and `localhost:5432`.
 
+
+
+### Windows Docker Desktop helper scripts
+
+Windows developers can run the Compose stack directly from PowerShell:
+
+```powershell
+.\scripts\start-compose.ps1
+```
+
+The helper validates that Docker Desktop is reachable, creates `.env.local` from `.env.local.example` when needed, and starts the full local stack. After the stack is running, validate it with:
+
+```powershell
+.\scripts\smoke-compose.ps1 -NoStartStack
+```
+
+PowerShell parameters mirror the Bash smoke-test environment variables. For example, use `-IncludeWorker` and `-IncludeFrontend` to start and verify the worker and frontend services as part of the smoke test.
+
+### Agent runtime extraction and AgentCore analysis
+
+See [`docs/architecture/agent_runtime_strategy.md`](docs/architecture/agent_runtime_strategy.md) for the current recommendation: keep the containerized API/worker stack as the default runtime, extract the existing agent boundary into a package-style subproject, and evaluate Amazon Bedrock AgentCore Runtime/Memory as optional adapters for mapping, quality reasoning, and reusable formatting preferences.
 
 ### Backend Container Split
 
