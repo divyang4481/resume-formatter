@@ -278,7 +278,7 @@ This gives **true isolation**: AWS SDK conflicts do not infect the Azure environ
 Run the platform natively using Uvicorn:
 
 ```bash
-poetry run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+poetry run uvicorn api_backend.entrypoint:create_app --factory --host 0.0.0.0 --port 8000 --reload
 ```
 
 After starting the server, you can access the following helpful URLs:
@@ -349,11 +349,43 @@ dev-local           = ["pytest", "pytest-asyncio"]
 
 ---
 
+
+## Backend Runtime Split
+
+The backend has two container-focused folders that make the runtime boundary explicit while keeping business logic shared:
+
+| Runtime | Folder | Container responsibility | Shared code usage |
+| --- | --- | --- | --- |
+| API backend | `api_backend/` | Serves the REST API, A2A discovery endpoints, MCP tool surface, OpenAPI docs, and health checks. | Imports `app.main:create_app`. |
+| Worker backend | `worker_backend/` | Polls the configured queue, executes resume/template workflows, writes outputs, and updates job status. | Imports `app.core.worker:run_worker`. |
+
+The `app/` package remains the single source of truth for schemas, services, adapters, repositories, and workflow logic. This avoids copy/paste drift while still allowing each runtime to have its own Dockerfile, entrypoint, and README.
+
+### Container builds
+
+From the repository root:
+
+```bash
+docker build -t agentic-doc-api-local -f backend/api_backend/Dockerfile backend
+docker build -t agentic-doc-worker-local -f backend/worker_backend/Dockerfile backend
+```
+
+### Local process entrypoints
+
+From `backend/`:
+
+```bash
+poetry run uvicorn api_backend.entrypoint:create_app --factory --host 0.0.0.0 --port 8000 --reload
+poetry run python -m worker_backend.entrypoint
+```
+
 ## Project Structure
 
 ```
 backend/
-├── app/               # Core application (routes, workflows, adapters)
+├── api_backend/       # API container wrapper (REST API, A2A, MCP)
+├── worker_backend/    # Worker container wrapper (queue consumer and processors)
+├── app/               # Shared application package (routes, workflows, adapters)
 ├── config/            # Environment and cloud configuration
 ├── docker/            # Docker Compose and Dockerfiles
 ├── docs/              # Architecture and design documentation

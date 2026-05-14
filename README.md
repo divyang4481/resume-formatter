@@ -6,7 +6,9 @@ A full-stack, template-aware document processing platform designed to transform 
 
 ## Project Structure
 
-- **`backend/`**: A FastAPI application managed with Conda and Poetry. Contains the core logic, API routing, PII rule enforcement, and cloud adapters.
+- **`backend/app/`**: Shared backend package containing domain logic, API routes, workflows, schemas, repositories, adapters, and PII rule enforcement.
+- **`backend/api_backend/`**: API backend container wrapper for the REST API, A2A discovery, and MCP tool surface.
+- **`backend/worker_backend/`**: Worker backend container wrapper for queue polling and asynchronous document processing jobs.
 - **`frontend/`**: An Angular Single Page Application (SPA) providing the user interface.
 
 ---
@@ -50,7 +52,7 @@ This will automatically execute the tasks to boot both the frontend and backend 
 
    ```bash
    conda activate cv-architect
-   poetry run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+   poetry run uvicorn api_backend.entrypoint:create_app --factory --host 0.0.0.0 --port 8000 --reload
    ```
 
    _For Windows (PowerShell):_
@@ -58,12 +60,24 @@ This will automatically execute the tasks to boot both the frontend and backend 
    ```powershell
    # Ensure you are using the cv-architect conda environment
    conda activate cv-architect
-   poetry run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+   poetry run uvicorn api_backend.entrypoint:create_app --factory --host 0.0.0.0 --port 8000 --reload
    ```
 
 Because it runs with the `--reload` flag, the server will automatically hot-reload any code changes you make!
 
 ---
+
+
+### Backend Container Split
+
+The backend is deployed as two separate containers while sharing the same `backend/app/` code package:
+
+| Container | Folder | Responsibility | Entrypoint |
+| --- | --- | --- | --- |
+| API backend | `backend/api_backend/` | REST API, A2A discovery, MCP tools, docs, and health checks | `uvicorn api_backend.entrypoint:create_app --factory` |
+| Worker backend | `backend/worker_backend/` | Queue polling, resume/template processing workflows, storage writes, and job status updates | `python -m worker_backend.entrypoint` |
+
+`docker-compose.yml` builds each container from its own backend-specific Dockerfile with `backend/` as the build context, so both containers can import the shared `app` package without duplicating business logic.
 
 ## Configuration
 
@@ -140,7 +154,7 @@ By default, compiling the Docker images pulls a lightweight, CPU-only version of
 If you are deploying to EC2 (e.g., `g4dn`) or have a local GPU and wish to leverage CUDA for faster OCR with Docling, you can build the images with GPU support by passing the `USE_GPU=true` build argument:
 
 ```bash
-docker build -t cv-architect-worker -f backend/Dockerfile.worker --build-arg USE_GPU=true .
+docker build -t cv-architect-worker -f backend/worker_backend/Dockerfile --build-arg USE_GPU=true backend
 ```
 
 ### Step 1: Provisioning AWS Infrastructure (Required for both Local & Prod)
