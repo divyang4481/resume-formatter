@@ -20,6 +20,41 @@ Rather than free-roaming autonomy, the system uses **controlled, policy-governed
 
 ---
 
+
+## Backend Python project split
+
+The backend is split into three installable Python projects so the API image can
+stay small while the worker image can carry heavier parsing and workflow
+dependencies:
+
+- `common/` (`resume-formatter-common`) contains shared schemas, domain
+  interfaces, SQLAlchemy models/session setup, repositories, queue adapters,
+  storage adapters, and utility code.
+- `api_backend/` (`resume-formatter-api`) contains the FastAPI/A2A/MCP entrypoint
+  and API-facing dependencies only. Its Dockerfile copies a minimal source subset
+  and intentionally excludes Docling, Torch, sentence-transformers, and RapidOCR.
+- `worker_backend/` (`resume-formatter-worker`) contains the background worker
+  entrypoint plus heavy document extraction, agent graph, template analysis, and
+  rendering dependencies.
+
+Build or validate the three Python distributions from `backend/` with:
+
+```bash
+python -m pip wheel --no-deps --no-build-isolation -w /tmp/resume-wheels common api_backend worker_backend
+```
+
+Run locally with editable installs from `backend/`:
+
+```bash
+pip install -e common -e api_backend
+uvicorn api_backend.entrypoint:create_app --factory --host 0.0.0.0 --port 8000
+
+pip install -e common -e worker_backend
+python -m worker_backend.entrypoint
+```
+
+---
+
 ## Key Features
 
 - **Workflow First** — Deterministic orchestration pipelines that are auditable, reproducible, and governance-ready.

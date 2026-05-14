@@ -14,20 +14,13 @@ from app.dependencies import (
     get_storage_provider,
     get_template_repository,
     get_message_queue,
-    get_document_extraction_service,
-    get_knowledge_index,
-    get_llm_runtime,
 )
 from app.utils import validate_uploaded_file
-from app.services.template_service import TemplateService
 from app.domain.interfaces import (
     StorageProvider,
     TemplateRepository,
     EventBus,
-    DocumentExtractionService,
-    KnowledgeIndex,
 )
-from app.domain.interfaces import LlmRuntimeAdapter
 from app.config import settings
 
 router = APIRouter()
@@ -46,11 +39,6 @@ async def upload_asset(
     storage_provider: StorageProvider = Depends(get_storage_provider),
     template_repository: TemplateRepository = Depends(get_template_repository),
     event_bus: EventBus = Depends(get_message_queue),
-    extraction_service: DocumentExtractionService = Depends(
-        get_document_extraction_service
-    ),
-    knowledge_index: KnowledgeIndex = Depends(get_knowledge_index),
-    llm: LlmRuntimeAdapter = Depends(get_llm_runtime),
 ):
     try:
         # Validate metadata JSON

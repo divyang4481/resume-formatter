@@ -1,23 +1,34 @@
-# Use the pre-built base image containing all dependencies
-ARG BASE_IMAGE=114644266543.dkr.ecr.ap-south-1.amazonaws.com/agentic-doc-base-dev:v1.2.0
+# ECS/worker backend image. Build context must be backend/.
+ARG BASE_IMAGE=python:3.11-slim
 FROM ${BASE_IMAGE}
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_DEFAULT_TIMEOUT=1000
 
 WORKDIR /app
 
-# Install dependencies not present in base image
-RUN pip install --no-cache-dir "boto3[crt]" lxml docxtpl
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    curl \
+    gcc \
+    g++ \
+    libgl1 \
+    libglib2.0-0 \
+    libsm6 \
+    libxext6 \
+    libxrender1 \
+    libxcb1 \
+    && rm -rf /var/lib/apt/lists/*
 
-# Copy shared application code and worker backend entrypoint
-COPY ./app ./app
+COPY ./common ./common
 COPY ./worker_backend ./worker_backend
+COPY ./app ./app
 COPY ./init_db.py ./init_db.py
+RUN pip install --no-cache-dir -e ./common -e ./worker_backend \
+    && pip install --no-cache-dir rapidocr-onnxruntime
 
-RUN mkdir -p .data
-
-# Install RapidOCR explicitly to enable model pre-downloading
-RUN pip install --no-cache-dir rapidocr-onnxruntime
-
-# Pre-download RapidOCR models so they are ready at runtime
-RUN python -c "from rapidocr_onnxruntime import RapidOCR; RapidOCR()"
+RUN mkdir -p .data \
+    && python -c "from rapidocr_onnxruntime import RapidOCR; RapidOCR()"
 
 CMD ["python", "-m", "worker_backend.entrypoint"]
