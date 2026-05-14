@@ -76,13 +76,18 @@ def with_progress(node_name, node_func, stage_map, job_repo):
                 job = job_repo.get_job(job_id)
                 if job:
                     job.stage = stage_map.get(node_name, node_name)
+                    
+                    # Persist template ID if resolved
+                    if state.get("template_asset_id"):
+                        job.template_asset_id = state.get("template_asset_id")
+                        
                     if state.get("transformed_document_json"):
                         job.transformed_json = json.dumps(state.get("transformed_document_json")) if isinstance(state.get("transformed_document_json"), dict) else str(state.get("transformed_document_json"))
                     if state.get("raw_parsed_data"):
                         job.candidate_facts_json = json.dumps(state.get("raw_parsed_data")) if isinstance(state.get("raw_parsed_data"), dict) else str(state.get("raw_parsed_data"))
                     job_repo.save_job(job)
             except Exception as e:
-                print(f"Non-critical: Failed to update job progress: {e}")
+                logger.warning(f"Non-critical: Failed to update job progress: {e}")
 
         # If the node is a compiled subgraph (Runnable), use ainvoke
         if hasattr(node_func, "ainvoke"):

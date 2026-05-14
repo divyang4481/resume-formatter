@@ -52,6 +52,13 @@ def create_field_harmonization_node(ai_service=None):
         raw_parsed_data = state.get("raw_parsed_data") or {}
         template_contract = state.get("canonical_model") or {}
         field_manifest = state.get("field_extraction_manifest")
+        if isinstance(field_manifest, str):
+            try:
+                field_manifest = json.loads(field_manifest)
+            except Exception:
+                field_manifest = []
+        
+        logger.info(f"Harmonization Node: Contract has {len(field_manifest) if isinstance(field_manifest, list) else 0} fields.")
         formatting_guidance = state.get("formatting_guidance") or ""
         template_text = state.get("template_text") or ""
         
@@ -101,7 +108,13 @@ def create_document_composition_reasoning_node(ai_service):
         harmonized_data = state.get("transformed_document_json") or {}
         template_text = state.get("template_text") or ""
         # FIX: Get manifest directly from state, as template_metadata might be missing or structured differently
-        manifest = state.get("field_extraction_manifest") or []
+        manifest = state.get("field_extraction_manifest")
+        if isinstance(manifest, str):
+            try:
+                manifest = json.loads(manifest)
+            except Exception:
+                manifest = []
+        manifest = manifest or []
         formatting_guidance = state.get("formatting_guidance") or ""
         
         composed_data = await ai_service.apply_composition_logic(

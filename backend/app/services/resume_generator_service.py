@@ -112,7 +112,9 @@ class ResumeGeneratorService:
                     for src in sources:
                         if src in normalized_context and normalized_context[src]:
                             normalized_context[target] = normalized_context[src]
-                            logger.info(f"[Context] Using fallback for '{target}': inherited from '{src}'")
+                            logger.info(
+                                f"[Context] Using fallback for '{target}': inherited from '{src}'"
+                            )
                             break
 
             class CaseInsensitiveDict(dict):
@@ -133,13 +135,21 @@ class ResumeGeneratorService:
 
             smart_context = CaseInsensitiveDict(normalized_context)
             # Aliases for explicit marker names
-            smart_context["CandidateFullName"] = smart_context.get("candidate_full_name", "")
+            smart_context["CandidateFullName"] = smart_context.get(
+                "candidate_full_name", ""
+            )
             smart_context["CVcomments"] = smart_context.get("cv_comments", "")
             smart_context["CheckType"] = smart_context.get("check_type", "")
             smart_context["NoticePeriod"] = smart_context.get("notice_period", "")
-            
-            render_context_with_scope = {**render_context, **smart_context, "_": smart_context}
-            logger.info(f"[Context] Smart context initialized with {len(smart_context)} keys")
+
+            render_context_with_scope = {
+                **render_context,
+                **smart_context,
+                "_": smart_context,
+            }
+            logger.info(
+                f"[Context] Smart context initialized with {len(smart_context)} keys"
+            )
 
             # --- MISSING FIELD VALIDATION (skip instruction_block fields) ---
             skip_types = {"instruction_block"}
@@ -338,7 +348,9 @@ class ResumeGeneratorService:
                     val = v["value"]
                     if isinstance(val, (str, int, float)) and val != "N/A":
                         data_lookup["".join(filter(str.isalnum, k.lower()))] = val
-            logger.info(f"[Lookup] Created data_lookup with {len(data_lookup)} keys: {list(data_lookup.keys())[:20]}...")
+            logger.info(
+                f"[Lookup] Created data_lookup with {len(data_lookup)} keys: {list(data_lookup.keys())[:20]}..."
+            )
 
         # --- Phase 0: Clear instruction blocks ---
         if field_manifest:
@@ -440,9 +452,19 @@ class ResumeGeneratorService:
                     # This allows docxtpl to handle formatting tags like [:B:] and [:L1:] correctly
                     # while our smart context provides the values.
                     norm_target = normalize_key(target_key)
-                    
+
                     # If we are inside a loop, we might need 'item.'
-                    subfields = {"jobtitle", "company", "startdate", "enddate", "description", "degree", "institution", "year", "grade"}
+                    subfields = {
+                        "jobtitle",
+                        "company",
+                        "startdate",
+                        "enddate",
+                        "description",
+                        "degree",
+                        "institution",
+                        "year",
+                        "grade",
+                    }
                     if normalize_key(target_key) in subfields:
                         replacement = f"{{{{ item['{target_key}'] if item is defined else _['{target_key}'] }}}}"
                     else:
@@ -450,7 +472,9 @@ class ResumeGeneratorService:
                         # We use _['key'] which our CaseInsensitiveDict handles gracefully
                         replacement = f"{{{{ _['{target_key}'] }}}}"
 
-                    logger.info(f"Mapped marker '{original}' to Jinja2 tag: '{replacement}'")
+                    logger.info(
+                        f"Mapped marker '{original}' to Jinja2 tag: '{replacement}'"
+                    )
 
                 start, end = match.span()
                 new_text = new_text[:start] + replacement + new_text[end:]
@@ -491,7 +515,9 @@ class ResumeGeneratorService:
                 for m in ["«", "»", "<<", ">>", "[[", "]]", "{{", "}}", "[", "<", "{"]
             )
             if has_marker:
-                logger.info(f"Potential marker detected in paragraph: '{full_text[:100]}'")
+                logger.info(
+                    f"Potential marker detected in paragraph: '{full_text[:100]}'"
+                )
                 new_text, next_counter = transform_text(
                     full_text, fields, current_counter, manifest
                 )
@@ -530,20 +556,33 @@ class ResumeGeneratorService:
             We replace the specific XML nodes so we don't lose surrounding text.
             """
             from lxml import etree
+
             W_NS = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
-            
+
             parts = [doc]
             for s in doc.sections:
-                parts.extend([s.header, s.first_page_header, s.even_page_header, s.footer, s.first_page_footer, s.even_page_footer])
-            
+                parts.extend(
+                    [
+                        s.header,
+                        s.first_page_header,
+                        s.even_page_header,
+                        s.footer,
+                        s.first_page_footer,
+                        s.even_page_footer,
+                    ]
+                )
+
             for part in parts:
-                if not part or not hasattr(part, '_element'): continue
-                
+                if not part or not hasattr(part, "_element"):
+                    continue
+
                 # 1. Handle Simple Fields (w:fldSimple)
                 # These are single nodes, easy to replace.
-                simple_fields = part._element.xpath('.//w:fldSimple[contains(@w:instr, "MERGEFIELD")]')
+                simple_fields = part._element.xpath(
+                    './/w:fldSimple[contains(@w:instr, "MERGEFIELD")]'
+                )
                 for fld in simple_fields:
-                    instr = fld.get(W_NS + 'instr')
+                    instr = fld.get(W_NS + "instr")
                     match = re.search(r'MERGEFIELD\s+"?([^"\s>]+)"?', instr)
                     if match:
                         field_name = match.group(1)
@@ -561,7 +600,9 @@ class ResumeGeneratorService:
                 # But for now, just replacing the instrText's containing run with a marker is often enough
                 # if we also clear the separate/end characters.
                 # A simpler but robust way: replace the instrText with the marker and let the rest be.
-                instr_texts = part._element.xpath('.//w:instrText[contains(text(), "MERGEFIELD")]')
+                instr_texts = part._element.xpath(
+                    './/w:instrText[contains(text(), "MERGEFIELD")]'
+                )
                 for instr in instr_texts:
                     match = re.search(r'MERGEFIELD\s+"?([^"\s>]+)"?', instr.text)
                     if match:
@@ -573,9 +614,11 @@ class ResumeGeneratorService:
                         logger.info(f"Flattened ComplexField: {field_name}")
 
                 # 3. Handle Macro Buttons (MACROBUTTON nomacro [Type text])
-                macros = part._element.xpath('.//w:instrText[contains(text(), "MACROBUTTON")]')
+                macros = part._element.xpath(
+                    './/w:instrText[contains(text(), "MACROBUTTON")]'
+                )
                 for macro in macros:
-                    match = re.search(r'MACROBUTTON\s+nomacro\s+\[(.*?)\]', macro.text)
+                    match = re.search(r"MACROBUTTON\s+nomacro\s+\[(.*?)\]", macro.text)
                     if match:
                         placeholder = match.group(1)
                         macro.text = f"«{placeholder}»"
@@ -589,21 +632,27 @@ class ResumeGeneratorService:
         # 1. Process all parts of the document in a single pass
         parts = [doc]
         for section in doc.sections:
-            parts.extend([section.header, section.first_page_header, section.even_page_header])
-            parts.extend([section.footer, section.first_page_footer, section.even_page_footer])
+            parts.extend(
+                [section.header, section.first_page_header, section.even_page_header]
+            )
+            parts.extend(
+                [section.footer, section.first_page_footer, section.even_page_footer]
+            )
 
         logger.info(f"Scanning {len(parts)} document parts for markers...")
         for part in parts:
-            if not part: continue
+            if not part:
+                continue
             for p in iter_all_paragraphs(part):
                 # 1.1 Heuristic Run Healing (consolidate split markers)
                 t = p.text
                 if any(m in t for m in ["«", "»", "<<", ">>", "[[", "]]", "[", "<"]):
                     if len(p.runs) > 1:
                         full_text = p.text
-                        for run in p.runs: run.text = ""
+                        for run in p.runs:
+                            run.text = ""
                         p.runs[0].text = full_text
-                
+
                 # 1.2 Replace markers with tags or direct values
                 counter = process_paragraph(p, field_list, counter, field_manifest)
 

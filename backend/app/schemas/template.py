@@ -53,9 +53,9 @@ class TemplateAsset(BaseModel):
     is_default_for_industry: bool = False
 
     # Provenance and Storage References
-    original_file_ref: str
+    storage_uri: str
     checksum: str
-    extraction_artifact_ref: Optional[str] = None
+    extraction_uri: Optional[str] = None
     render_config_ref: Optional[str] = None
 
     created_by: str

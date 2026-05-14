@@ -22,7 +22,7 @@ class AgentState(TypedDict):
     privacy_transformed_model: Optional[Dict[str, Any]]
 
     # Template and Formatting rules
-    selected_template_id: Optional[str]
+    template_asset_id: Optional[str]
     template_storage_uri: Optional[str]
     template_text: Optional[str]
     formatting_rules: Optional[str]

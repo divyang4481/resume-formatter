@@ -10,6 +10,11 @@ class TemplateAsset(Base):
     purpose = Column(Text, nullable=True)
     expected_sections = Column(Text, nullable=True)
     expected_fields = Column(Text, nullable=True) # Comma-separated list of identified placeholders
+    # Logical Relationships:
+    # - Master record for a resume template shell.
+    # - Linked to 'processing_jobs' via template_asset_id.
+    # - Defines the 'contract' (expected_fields/manifest) for data mapping.
+    # - status can be DRAFT, ACTIVE, ARCHIVED.
     field_extraction_manifest = Column(Text, nullable=True) # Rich JSON mapping of fieldname, meaning, source_hints
     summary_guidance = Column(Text, nullable=True)
 
@@ -57,6 +62,10 @@ class CandidateResume(Base):
     source_file_name = Column(String, nullable=False)
     source_storage_uri = Column(String, nullable=False)
     extraction_uri = Column(String, nullable=True)
+    # Logical Relationships:
+    # - Represents a single candidate's source resume data.
+    # - Linked to 'processing_jobs' via candidate_resume_id.
+    # - Stores the persistent "ground truth" facts extracted from the resume.
     normalized_resume_json = Column(Text, nullable=True)
     resume_summary = Column(Text, nullable=True)
     industry_hint = Column(String, nullable=True)
@@ -71,6 +80,11 @@ class ProcessingJob(Base):
     candidate_resume_id = Column(String, ForeignKey("candidate_resumes.id"), nullable=True)
     job_type = Column(String, nullable=False, default="RESUME_FORMATTING")
     original_file_ref = Column(String, nullable=True)
+    # Logical Relationships:
+    # - The orchestration record that ties a CandidateResume to a TemplateAsset.
+    # - If job_type=TEMPLATE_PROCESSING: original_file_ref is the template itself.
+    # - If job_type=RESUME_FORMATTING: original_file_ref is the resume, and template_asset_id is the target template.
+    # - Stores the output artifacts: generated_summary, summary_uri, render_docx_uri.
     template_asset_id = Column(String, ForeignKey("template_assets.id"), nullable=True)
     template_version = Column(String, nullable=True)
     status = Column(String, nullable=False)

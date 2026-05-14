@@ -58,7 +58,7 @@ class ResumeWorkflowService:
         actor_role = ext_meta.get("actor_role", "system")
         filename = ext_meta.get("filename", "document.pdf")
         content_type = ext_meta.get("content_type", "application/pdf")
-        selected_template_id = getattr(job, 'selected_template_id', None)
+        template_asset_id = getattr(job, 'template_asset_id', None)
 
         # Fetch template-specific AI steering guidance
         summary_guidance = ""
@@ -70,10 +70,11 @@ class ResumeWorkflowService:
 
         field_extraction_manifest = None
         expected_fields = ""
+        template_storage_uri = None
 
-        if selected_template_id and self.template_repo:
+        if template_asset_id and self.template_repo:
             try:
-                template = self.template_repo.get_template(selected_template_id)
+                template = self.template_repo.get_template(template_asset_id)
                 if template:
                     summary_guidance = template.summary_guidance or ""
                     formatting_guidance = template.formatting_guidance or ""
@@ -83,10 +84,19 @@ class ResumeWorkflowService:
                     language = template.language or "en"
                     
                     # --- FIX: Populate extraction contract fields ---
-                    field_extraction_manifest = template.field_extraction_manifest
+                    manifest_raw = template.field_extraction_manifest
+                    if manifest_raw and isinstance(manifest_raw, str):
+                        try:
+                            field_extraction_manifest = json.loads(manifest_raw)
+                        except Exception:
+                            field_extraction_manifest = []
+                    else:
+                        field_extraction_manifest = manifest_raw or []
+                        
                     expected_fields = template.expected_fields or ""
+                    template_storage_uri = template.storage_uri
             except Exception as te:
-                print(f"Warning: Failed to fetch template guidance for {selected_template_id}: {te}")
+                print(f"Warning: Failed to fetch template guidance for {template_asset_id}: {te}")
 
         # Initial state for the LangGraph execution
         initial_state: TypedAgentState = {
@@ -99,8 +109,8 @@ class ResumeWorkflowService:
             "field_extraction_manifest": field_extraction_manifest,
             "expected_fields": expected_fields,
             "privacy_transformed_model": None,
-            "selected_template_id": selected_template_id,
-            "template_storage_uri": None,
+            "template_asset_id": template_asset_id,
+            "template_storage_uri": template_storage_uri,
             "formatting_guidance": formatting_guidance,
             "summary_guidance": summary_guidance,
             "validation_guidance": validation_guidance,
@@ -126,6 +136,9 @@ class ResumeWorkflowService:
             final_state = await self.graph.ainvoke(initial_state)
 
             # Persist final state back to job
+            if final_state.get("template_asset_id"):
+                job.template_asset_id = final_state["template_asset_id"]
+            
             if final_state.get("summary_uri"):
                 job.summary_uri = final_state["summary_uri"]
             if final_state.get("summary_text"):

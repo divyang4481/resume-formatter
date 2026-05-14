@@ -10,7 +10,10 @@ from .privacy import PiiDetectorAdapter
 class TemplateRepository(ABC):
     @abstractmethod
     def get_template(self, template_id: str, version: Optional[str] = None) -> Any:
-        """Fetches a template asset."""
+        """
+        Fetches a template asset.
+        Logical Relation: Matches ProcessingJob.template_asset_id.
+        """
         pass
 
     @abstractmethod
@@ -93,7 +96,11 @@ class JobRepository(ABC):
 
     @abstractmethod
     def save_job(self, job: Any) -> str:
-        """Saves a processing job."""
+        """
+        Saves a processing job.
+        Logical Relation: Orchestrates CandidateResume (resume facts) and TemplateAsset (formatting rules).
+        Ensures output URIs (summary, docx) are tied to the execution session.
+        """
         pass
 
 

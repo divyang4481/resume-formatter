@@ -39,8 +39,9 @@ FIELD_ALIAS_MAP: Dict[str, Dict[str, Any]] = {
     "employee_specialist_area": {"type": "scalar", "aliases": ["EmployeeSpecialistArea", "SpecialistArea", "ConsultantSpecialism"]},
     "current_salary_benefits": {"type": "scalar", "aliases": ["CurrentSalary", "Salary", "CurrentSalaryBenefits", "Current_Salary"]},
     "work_experience": {"type": "rich_text", "aliases": ["WorkExperience", "EmploymentHistory", "Work_Experience", "Experience", "Employment_History"]},
-    "education": {"type": "rich_text", "aliases": ["Education", "AcademicBackground", "Qualifications", "Academic_Background"]},
-    "skills": {"type": "rich_text", "aliases": ["Skills", "KeySkills", "CoreCompetencies", "Key_Skills"]},
+    "education": {"type": "rich_text", "aliases": ["Education", "AcademicBackground", "Qualifications", "Academic_Background", "Professional qualifications"]},
+    "professional_qualifications": {"type": "array_simple", "aliases": ["ProfessionalQualifications", "CheckType", "Certifications", "Professional qualifications"]},
+    "skills": {"type": "array_simple", "aliases": ["Skills", "KeySkills", "CoreCompetencies", "Key_Skills", "Key skills"]},
     "interests_and_activities": {"type": "rich_text", "aliases": ["InterestsAndActivities", "Hobbies", "PersonalInterests", "Interests_and_Activities"]},
 }
 

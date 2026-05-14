@@ -6,7 +6,7 @@ from app.schemas.enums import AssetStatus
 
 class TemplateRecommendationResult(BaseModel):
     suggested_industry_id: Optional[str] = None
-    suggested_template_id: Optional[str] = None
+    template_asset_id: Optional[str] = None
     allowed_template_ids: List[str] = []
     confidence: Optional[float] = None
     reasoning_summary: Optional[str] = None
@@ -40,7 +40,7 @@ class TemplateResolutionService:
 
         if not available_templates:
             return TemplateRecommendationResult(
-                suggested_template_id=None,
+                template_asset_id=None,
                 allowed_template_ids=[]
             )
 
@@ -88,13 +88,13 @@ class TemplateResolutionService:
 
             return TemplateRecommendationResult(
                 suggested_industry_id=guessed_industry,
-                suggested_template_id=chosen_template,
+                template_asset_id=chosen_template,
                 allowed_template_ids=allowed_ids,
                 confidence=0.85
             )
         except Exception as e:
             print(f"Error during template resolution: {e}")
             return TemplateRecommendationResult(
-                suggested_template_id=default_template,
+                template_asset_id=default_template,
                 allowed_template_ids=allowed_ids
             )

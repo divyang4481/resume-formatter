@@ -163,7 +163,7 @@ async def submit_document(
 
     requires_confirmation = True
     suggested_industry_id = None
-    suggested_template_id = None
+    template_asset_id_val = None
     allowed_template_ids = None
     job_status = JobStatus.WAITING_FOR_CONFIRMATION
 
@@ -171,6 +171,7 @@ async def submit_document(
         # If template is explicitly provided (common for Test Runs), skip AI suggestion
         requires_confirmation = False
         job_status = JobStatus.CONFIRMED
+        template_asset_id_val = template_id
         # Ensure we have an industry if possible, or default to 'it'
         if not industry_id:
             industry_id = "it" 
@@ -194,7 +195,7 @@ async def submit_document(
             )
 
             suggested_industry_id = rec_result.suggested_industry_id
-            suggested_template_id = rec_result.suggested_template_id
+            template_asset_id_val = rec_result.template_asset_id
             allowed_template_ids = rec_result.allowed_template_ids
 
             # Phase 3: Shadow mode execution
@@ -217,7 +218,7 @@ async def submit_document(
                     logger.info(
                         "template_selection_comparison",
                         extra={
-                            "old_template_id": suggested_template_id,
+                            "old_template_id": template_asset_id_val,
                             "new_template_id": hybrid_suggested_id,
                             "mode": settings.template_selector_mode,
                             "vector_enabled": settings.vector_search_enabled,
@@ -243,17 +244,17 @@ async def submit_document(
                         detail="No active resume templates found in the system. Please upload a template in the Admin UI first."
                     )
                 
-                suggested_template_id = first_tpl[0].id
+                template_asset_id_val = first_tpl[0].id
                 suggested_industry_id = getattr(first_tpl[0], 'industry', "it")
-                allowed_template_ids = [suggested_template_id]
+                allowed_template_ids = [template_asset_id_val]
             finally:
                 db.close()
         
         # FORCE AUTO-CONFIRM: Skip human review and move straight to processing
-        logger.info(f"Auto-confirming job {job_id} with template {suggested_template_id}")
+        logger.info(f"Auto-confirming job {job_id} with template {template_asset_id_val}")
         requires_confirmation = False
         job_status = JobStatus.CONFIRMED
-        template_id = suggested_template_id
+        template_id = template_asset_id_val
         industry_id = suggested_industry_id
 
     # Create job record
@@ -263,7 +264,7 @@ async def submit_document(
         status=job_status,
         original_file_ref=storage_ref,
         created_by=x_actor_role,
-        selected_template_id=template_id if not requires_confirmation else None,
+        template_asset_id=template_id if not requires_confirmation else None,
         extension_metadata={
             "industry_id": industry_id if not requires_confirmation else None,
             "intent": execution_mode.value,
@@ -312,7 +313,7 @@ async def submit_document(
         provided_industry_id=industry_id,
         provided_template_id=template_id,
         suggested_industry_id=suggested_industry_id,
-        suggested_template_id=suggested_template_id,
+        template_asset_id=template_asset_id_val,
         allowed_template_ids=allowed_template_ids,
         message="Document submitted successfully."
     )
@@ -354,8 +355,8 @@ async def confirm_document(
     if job.status not in (JobStatus.WAITING_FOR_CONFIRMATION, JobStatus.WAITING_FOR_CONFIRMATION.value):
         raise HTTPException(status_code=400, detail="Job is not waiting for confirmation")
 
-    if hasattr(job, 'selected_template_id'):
-        job.selected_template_id = request.template_id
+    if hasattr(job, 'template_asset_id'):
+        job.template_asset_id = request.template_asset_id
     if hasattr(job, 'extension_metadata'):
         job.extension_metadata["industry_id"] = request.industry_id
     job.status = JobStatus.CONFIRMED
@@ -505,7 +506,7 @@ async def get_job_template(
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
     
-    tpl_id = getattr(job, "selected_template_id", None) or getattr(job, "template_asset_id", None)
+    tpl_id = getattr(job, "template_asset_id", None) or getattr(job, "selected_template_id", None)
     if not tpl_id:
         raise HTTPException(status_code=404, detail="Template not associated with this job")
     

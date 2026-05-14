@@ -52,9 +52,9 @@ class SqlAlchemyTemplateRepository(TemplateRepository):
             validation_guidance=model.validation_guidance,
             pii_guidance=model.pii_guidance,
             selection_weight=model.selection_weight or 50,
-            original_file_ref=model.storage_uri or "",
+            storage_uri=model.storage_uri or "",
             checksum=model.checksum_sha256 or "",
-            extraction_artifact_ref=model.extraction_uri,
+            extraction_uri=model.extraction_uri,
             created_by=model.created_by,
             created_at=model.created_at or datetime.utcnow(),
             updated_at=model.updated_at or datetime.utcnow(),
@@ -93,9 +93,9 @@ class SqlAlchemyTemplateRepository(TemplateRepository):
         model.formatting_guidance = template_asset.formatting_guidance
         model.validation_guidance = template_asset.validation_guidance
         model.pii_guidance = template_asset.pii_guidance
-        model.storage_uri = template_asset.original_file_ref
+        model.storage_uri = template_asset.storage_uri
         model.checksum_sha256 = template_asset.checksum
-        model.extraction_uri = template_asset.extraction_artifact_ref
+        model.extraction_uri = template_asset.extraction_uri
         model.created_by = template_asset.created_by
         model.created_at = template_asset.created_at
         model.updated_at = template_asset.updated_at
@@ -151,9 +151,9 @@ class SqlAlchemyTemplateRepository(TemplateRepository):
                     validation_guidance=model.validation_guidance,
                     pii_guidance=model.pii_guidance,
                     selection_weight=model.selection_weight or 50,
-                    original_file_ref=model.storage_uri or "",
+                    storage_uri=model.storage_uri or "",
                     checksum=model.checksum_sha256 or "",
-                    extraction_artifact_ref=model.extraction_uri,
+                    extraction_uri=model.extraction_uri,
                     created_by=model.created_by,
                     created_at=model.created_at or datetime.utcnow(),
                     updated_at=model.updated_at or datetime.utcnow(),
@@ -161,3 +161,5 @@ class SqlAlchemyTemplateRepository(TemplateRepository):
                 )
             )
         return results
+    def list_active_templates(self) -> List[TemplateAsset]:
+        return self.list_templates(filters={"status": "active"})

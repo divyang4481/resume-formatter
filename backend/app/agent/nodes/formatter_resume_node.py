@@ -23,8 +23,12 @@ def create_document_composition_node(
         summary_text = state.get("summary_text", "")
         summary_uri = state.get("summary_uri", "")
         resume_data = state.get("transformed_document_json") or {}
-        template_id = state.get("selected_template_id") or state.get("template_asset_id") or "MISSING_TEMPLATE_ID"
+        template_asset_id = state.get("template_asset_id")
         
+        if not template_asset_id:
+             logger.warning("No template_asset_id found in state. Falling back to 'MISSING_TEMPLATE_ID'.")
+             template_asset_id = "MISSING_TEMPLATE_ID"
+
         # Initialize return variables
         render_docx_uri = None
         all_missing_fields = state.get("missing_fields") or []
@@ -49,13 +53,17 @@ def create_document_composition_node(
                         language=language,
                     )
                 else:
-                    summary_text = "Original resume text not found. Summary cannot be generated."
-            
+                    summary_text = (
+                        "Original resume text not found. Summary cannot be generated."
+                    )
+
             # Save Summary Artifact
             summary_key = f"jobs/{session_id}/output/summary.md"
             final_summary_md = f"### CV Summary\n\n{summary_text}"
-            summary_uri = storage.put_bytes(final_summary_md.encode("utf-8"), summary_key)
-            
+            summary_uri = storage.put_bytes(
+                final_summary_md.encode("utf-8"), summary_key
+            )
+
         except Exception as e:
             logger.error(f"Summary generation error: {e}")
             summary_text = summary_text or "Summary generation failed."
@@ -64,48 +72,85 @@ def create_document_composition_node(
         try:
             # Resolve Template Bytes
             template_storage_uri = state.get("template_storage_uri")
+            template_bytes = None
+
+            # If URI is missing but ID exists, fetch metadata from DB as a single clean fallback
+            if not template_storage_uri and template_asset_id != "MISSING_TEMPLATE_ID":
+                from app.db.session import SessionLocal
+                from app.adapters.repositories.template_repository import SqlAlchemyTemplateRepository
+                
+                with SessionLocal() as db:
+                    repo = SqlAlchemyTemplateRepository(db)
+                    template_meta = repo.get_template(template_asset_id)
+                    if template_meta:
+                        template_storage_uri = template_meta.storage_uri
+                        logger.info(f"Resolved template_storage_uri from DB: {template_storage_uri}")
+
             if template_storage_uri:
+                logger.info(f"Attempting to fetch template from: {template_storage_uri}")
+                # Normalize storage key
                 template_key = template_storage_uri.replace("local://", "")
-            else:
-                from app.config import settings
-                if settings.storage_provider == "s3":
-                    template_key = f"s3://{settings.s3_bucket_output}/templates/{template_id}/template.docx"
-                else:
-                    template_key = f"templates/{template_id}/template.docx"
-            
-            try:
-                template_bytes = storage.get_bytes(template_key)
-            except Exception as s3_err:
-                logger.warning(f"Template {template_id} not found: {s3_err}")
-                raise s3_err
+                if template_key.startswith("s3://"):
+                    from app.config import settings
+                    template_key = template_key.replace(f"s3://{settings.s3_bucket_output}/", "")
+
+                try:
+                    template_bytes = storage.get_bytes(template_key)
+                except Exception as e:
+                    logger.error(f"Failed to fetch template from storage key '{template_key}': {e}")
+
+            if not template_bytes:
+                raise ValueError(
+                    f"Template content not found for ID '{template_asset_id}'. Ensure the template is uploaded and metadata is correct."
+                )
 
             # Prepare Context & Manifest
             if not expected_fields_raw and state.get("selected_template"):
                 template_obj = state.get("selected_template")
                 if isinstance(template_obj, dict):
                     expected_fields_raw = template_obj.get("expected_fields", "")
-            
-            expected_fields_raw = state.get("expected_fields") or expected_fields_raw or ""
-            field_manifest = state.get("field_extraction_manifest") or []
-            
+
+            expected_fields_raw = (
+                state.get("expected_fields") or expected_fields_raw or ""
+            )
+            field_manifest = state.get("field_extraction_manifest")
+            if isinstance(field_manifest, str):
+                try:
+                    field_manifest = json.loads(field_manifest)
+                except Exception:
+                    field_manifest = []
+            field_manifest = field_manifest or []
+
             if resume_data:
-                final_context = {**resume_data, "summary": summary_text, "job_id": session_id}
+                final_context = {
+                    **resume_data,
+                    "summary": summary_text,
+                    "job_id": session_id,
+                }
             else:
                 final_context = {"summary": summary_text, "job_id": session_id}
 
             # --- RENDER CONTEXT DUMP ---
-            logger.info("\n" + "-"*60 + "\n--- FINAL RENDERING CONTEXT ---\n" + "-"*60)
-            logger.info(json.dumps(final_context, indent=2)[:2000] + "..." if len(json.dumps(final_context)) > 2000 else json.dumps(final_context, indent=2))
-            logger.info("-"*60 + "\n")
+            logger.info(
+                "\n" + "-" * 60 + "\n--- FINAL RENDERING CONTEXT ---\n" + "-" * 60
+            )
+            logger.info(
+                json.dumps(final_context, indent=2)[:2000] + "..."
+                if len(json.dumps(final_context)) > 2000
+                else json.dumps(final_context, indent=2)
+            )
+            logger.info("-" * 60 + "\n")
 
             # Render Document
-            docx_bytes, gen_missing_fields = generator_service.render_formatted_document(
-                template_bytes=template_bytes,
-                resume_data=final_context,
-                expected_fields=expected_fields_raw,
-                field_manifest=field_manifest,
+            docx_bytes, gen_missing_fields = (
+                generator_service.render_formatted_document(
+                    template_bytes=template_bytes,
+                    resume_data=final_context,
+                    expected_fields=expected_fields_raw,
+                    field_manifest=field_manifest,
+                )
             )
-            
+
             if gen_missing_fields:
                 all_missing_fields = list(set(all_missing_fields + gen_missing_fields))
 
@@ -116,9 +161,11 @@ def create_document_composition_node(
             logger.error(f"Template rendering failed: {e}")
             error_msg = str(e)
             if "NoSuchKey" in error_msg:
-                error_msg = f"TEMPLATE MISSING: The file '{template_id}' was not found in S3. Please upload the template in the Admin UI."
-            
-            error_docx = generator_service.generate_error_docx(template_id, error_msg)
+                error_msg = f"TEMPLATE MISSING: The file '{template_asset_id}' was not found in S3. Please upload the template in the Admin UI."
+
+            error_docx = generator_service.generate_error_docx(
+                template_asset_id, error_msg
+            )
             render_key = f"jobs/{session_id}/output/formatted_resume.docx"
             render_docx_uri = storage.put_bytes(error_docx, render_key)
 
@@ -128,6 +175,7 @@ def create_document_composition_node(
 
         # 4. Final Cleanup for Web UI Result Item
         from app.agent.utils.llm_sanitizer import LlmSanitizer
+
         clean_ui_summary = LlmSanitizer.strip_cvml(summary_text)
 
         return {
