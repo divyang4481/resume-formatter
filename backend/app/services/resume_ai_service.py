@@ -985,6 +985,31 @@ class ResumeAiService:
         generates the final `filled_template_manifest` candidate-specific resolved contract,
         and populates the detailed `template_fill_result` mapping for down-stream document generation.
         """
+        ALLOWED_STATUSES = {
+            "extracted",
+            "inferred",
+            "generated_from_resume",
+            "not_found",
+            "needs_user_input",
+        }
+
+        STATUS_NORMALIZATION = {
+            "structured_from_resume": "generated_from_resume",
+            "generated": "generated_from_resume",
+            "missing": "not_found",
+            "empty": "not_found",
+        }
+
+        def normalize_status(status: str, is_empty: bool) -> str:
+            if is_empty:
+                return "not_found"
+            if not status:
+                return "extracted"
+            status = STATUS_NORMALIZATION.get(status, status)
+            if status not in ALLOWED_STATUSES:
+                return "extracted"
+            return status
+
         logger.info("\n" + "=" * 80 + "\n[ManifestCompliance] STARTING HIGH-FIDELITY COMPLIANCE PROTOCOL\n" + "=" * 80)
         
         if isinstance(field_manifest, str):
@@ -1094,7 +1119,6 @@ class ResumeAiService:
 
                 if ai_entry is not None:
                     if isinstance(ai_entry, dict):
-                        # AI returned a structured object
                         # Check nested structure
                         if "field_extraction_manifest" in ai_entry:
                             fem = ai_entry["field_extraction_manifest"]
@@ -1140,7 +1164,6 @@ class ResumeAiService:
                         validated_val = None
                     elif isinstance(raw_val, (list, dict)):
                         validation_warning = f"Type mismatch: expected scalar, got {type(raw_val).__name__}."
-                        # Coerce to string representation
                         validated_val = json.dumps(raw_val)
                     else:
                         validated_val = raw_val
@@ -1160,9 +1183,7 @@ class ResumeAiService:
                     if raw_val is None or raw_val == "" or raw_val == []:
                         validated_val = []
                     elif isinstance(raw_val, str):
-                        # Coerce string to list of strings
                         validation_warning = "Coerced simple string to array."
-                        # Split by comma or newline if present
                         if "\n" in raw_val:
                             validated_val = [line.strip().strip("•-* ").strip() for line in raw_val.split("\n") if line.strip()]
                         elif "," in raw_val:
@@ -1184,7 +1205,6 @@ class ResumeAiService:
                     else:
                         validation_warning = f"Type mismatch: expected complex_object (dict), got {type(raw_val).__name__}."
                         try:
-                            # Try to parse string as json
                             validated_val = json.loads(str(raw_val))
                             if not isinstance(validated_val, dict):
                                 validated_val = {"raw_value": str(raw_val)}
@@ -1208,7 +1228,6 @@ class ResumeAiService:
                         validated_val = []
 
                 elif ftype == "paste_zone":
-                    # paste_zone is flexible, it can be rich_text or complex_object
                     if isinstance(raw_val, dict):
                         val_type = "complex_object"
                         validated_val = raw_val
@@ -1216,7 +1235,6 @@ class ResumeAiService:
                         val_type = "rich_text"
                         validated_val = str(raw_val) if raw_val is not None else None
 
-                # Detailed logging of validation warnings
                 if validation_warning:
                     logger.warning(f"[ManifestCompliance] [VALIDATION WARNING] Field '{fieldname}': {validation_warning}")
 
@@ -1233,19 +1251,21 @@ class ResumeAiService:
 
                 if is_empty:
                     confidence = 0.0
+                    normalized_ai_status = normalize_status(ai_status, is_empty=True)
                     if required:
                         status = "needs_user_input"
                         reason = f"Required field '{fieldname}' was not found in candidate's resume."
                     else:
-                        status = "not_found"
+                        status = normalized_ai_status
                         reason = f"Field '{fieldname}' could not be located in candidate's resume."
                     
                     missing_fields.append(fieldname)
                     logger.info(f"[ManifestCompliance] Field '{fieldname}' is EMPTY. Status set to: {status}")
                 else:
                     # Value is present, determine status
-                    if ai_status in ["extracted", "inferred", "generated_from_resume", "needs_user_input"]:
-                        status = ai_status
+                    normalized_ai_status = normalize_status(ai_status, is_empty=False) if ai_status else None
+                    if normalized_ai_status:
+                        status = normalized_ai_status
                     else:
                         # Automatically categorize based on field and confidence
                         if fieldname == "cv_comments":
@@ -1318,7 +1338,7 @@ class ResumeAiService:
         ai_output["filled_template_manifest"] = filled_template_manifest
 
         if field_manifest:
-            ai_output["template_fill_result"]["_manifest"] = field_manifest
+            ai_output["_source_template_manifest"] = field_manifest
 
         # Print detailed logger report at the end
         logger.info("\n" + "=" * 80)

@@ -188,6 +188,10 @@ class ResumeGeneratorService:
 
             for key in all_target_keys:
                 val = render_context_with_scope.get("_", {}).get(key)
+                if val is None or val == "" or val == []:
+                    std_key = "".join(filter(str.isalnum, key.lower()))
+                    val = render_context_with_scope.get("_", {}).get(std_key)
+
                 if (
                     val is None
                     or val == ""
@@ -328,7 +332,10 @@ class ResumeGeneratorService:
 
             # Unwrap dict-wrapped values (e.g. from template_fill_result containing "value" key)
             if isinstance(value, dict) and "value" in value:
-                value = value["value"]
+                raw_val = value.get("value")
+                if raw_val is None and isinstance(value.get("field_extraction_manifest"), dict):
+                    raw_val = value["field_extraction_manifest"].get("value")
+                value = raw_val
 
             # --- array_simple: list of strings ---
             if field_type == "array_simple" and isinstance(value, list):

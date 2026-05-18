@@ -94,14 +94,41 @@ def create_document_composition_node(
                     field_manifest = []
             field_manifest = field_manifest or []
 
+            # Prefer resolved candidate-specific manifest if available
+            resolved_manifest = (
+                resume_data.get("filled_template_manifest", {}).get("fields")
+                if isinstance(resume_data, dict)
+                else None
+            )
+            if resolved_manifest:
+                field_manifest = resolved_manifest
+
+            # Deterministic render-context builder
+            from app.services.render_context_builder import (
+                build_render_context_from_template_fill_result,
+                add_table_loop_aliases,
+            )
+
+            template_fill_result = resume_data.get("template_fill_result", {}) if isinstance(resume_data, dict) else {}
+            render_context = build_render_context_from_template_fill_result(
+                template_fill_result=template_fill_result,
+                manifest_fields=field_manifest,
+            )
+            add_table_loop_aliases(render_context, field_manifest)
+
             if resume_data:
                 final_context = {
                     **resume_data,
+                    **render_context,
                     "summary": summary_text,
                     "job_id": session_id,
                 }
             else:
-                final_context = {"summary": summary_text, "job_id": session_id}
+                final_context = {
+                    **render_context,
+                    "summary": summary_text,
+                    "job_id": session_id,
+                }
 
             # --- RENDER CONTEXT DUMP ---
             logger.info(
