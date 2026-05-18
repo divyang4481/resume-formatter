@@ -167,16 +167,16 @@ class TemplateAnalysisService:
             
             # 2. Fieldname Normalization (Consistency)
             # If the LLM returned a fieldname that matches an alias, force it to canonical
-            current_fn = field.fieldname
+            current_fn = field.field_name
             norm_fn = current_fn.lower().replace("_", "")
             
             from app.services.template_structure_extractor import FIELD_ALIAS_MAP
             for canonical, info in FIELD_ALIAS_MAP.items():
                 aliases = [a.lower().replace("_", "").replace(" ", "") for a in info.get("aliases", [])]
                 if norm_fn in aliases or norm_fn == canonical.lower().replace("_", ""):
-                    if field.fieldname != canonical:
-                        logger.info(f"[Reconcile] Normalizing fieldname: '{field.fieldname}' -> '{canonical}'")
-                        field.fieldname = canonical
+                    if field.field_name != canonical:
+                        logger.info(f"[Reconcile] Normalizing fieldname: '{field.field_name}' -> '{canonical}'")
+                        field.field_name = canonical
                     break
                 
             used_markers.add(field.marker_text)
