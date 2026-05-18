@@ -919,6 +919,7 @@ class ResumeAiService:
             "data_linearization.jinja2",
             structured_data_json=json.dumps(structured_data, indent=2),
             field_extraction_manifest=field_manifest,
+            field_extraction_manifest_json=json.dumps(field_manifest, indent=2),
             detected_placeholders_list=detected_placeholders,
             formatting_guidance=formatting_guidance,
             template_text=template_text[:4000],
