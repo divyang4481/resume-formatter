@@ -15,6 +15,8 @@ def validate_manifest_against_evidence(
 
     # 1. Check for missing placeholders
     evidence_markers = {ph.marker for ph in evidence.placeholder_candidates}
+    evidence_table_labels = {table.label for table in evidence.tables}
+    evidence_paste_zones = set(evidence.paste_zones)
     manifest_markers = {field.marker_text for field in manifest.fields if field.marker_text}
 
     missing_markers = evidence_markers - manifest_markers
@@ -27,13 +29,16 @@ def validate_manifest_against_evidence(
     # 2. Hallucination check: Markers in manifest must exist in evidence
     hallucinated_markers = manifest_markers - evidence_markers
     for m in hallucinated_markers:
+        if m in evidence_table_labels or m in evidence_paste_zones:
+            continue
         # Sometimes LLMs clean up markers or strip characters, but we want exact match for rendering
         errors.append(f"Field marker '{m}' in manifest does not exist in document evidence.")
 
     # 3. Validate repeat blocks
     for field in manifest.fields:
         if field.field_type in ("table_loop", "repeat_block"):
-             if "TableStart:" not in field.marker_text:
+             strategy = (field.injection_hints or field.render_locator or {}).get("strategy", "")
+             if "TableStart:" not in field.marker_text and strategy != "replace_table_loop":
                   errors.append(f"Field '{field.fieldname}' is marked as {field.field_type} but marker '{field.marker_text}' is not a TableStart marker.")
 
     # 4. Instruction blocks should not be resume_fillable
