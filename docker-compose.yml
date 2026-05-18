@@ -3,6 +3,8 @@ services:
     build: 
       context: ./backend
       dockerfile: Dockerfile.api
+      args:
+        - BASE_IMAGE=agentic-doc-base-local:latest
     image: agentic-doc-api-local:v1.5.0
     ports:
       - "8000:8000"
@@ -37,6 +39,8 @@ services:
     build: 
       context: ./backend
       dockerfile: Dockerfile.worker
+      args:
+        - BASE_IMAGE=agentic-doc-base-local:latest
     image: agentic-doc-worker-local:v1.5.0
     environment:
       - CLOUD_PROVIDER=aws

@@ -10,15 +10,16 @@ def create_validate_node(ai_service: ResumeAiService):
     async def validate_node(state: AgentState) -> dict:
         print("Executing Validation Node...")
 
-        transformed_json_str = state.get("transformed_document_json", "")
+        transformed_data = state.get("transformed_document_json")
         validation_guidance = state.get("validation_guidance") or "Check structural integrity and placeholder leaks."
         
-        if not transformed_json_str:
+        if not transformed_data:
             return {"status": "validation_skipped", "validation_passed": False}
 
         try:
-            # Parse the current transformed JSON
-            transformed_data = json.loads(transformed_json_str)
+            # Parse the current transformed JSON if string, otherwise use directly
+            if isinstance(transformed_data, str):
+                transformed_data = json.loads(transformed_data)
             
             # Delegate semantic validation to the specialized AI service
             validation_result = await ai_service.validate_output(

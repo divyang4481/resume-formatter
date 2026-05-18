@@ -71,8 +71,12 @@ class Settings(BaseSettings):
     bedrock_max_output_tokens_template_analysis: int = 8192
     bedrock_temperature_template_analysis: float = 0.0   # Deterministic JSON
 
+    # Data mapping quality controls (resume extraction/mapping)
+    bedrock_max_output_tokens_data_mapping: int = 8192
+    bedrock_temperature_data_mapping: float = 0.0   # Deterministic JSON
+
     # General output token limits
-    bedrock_max_output_tokens_default: int = 4096
+    bedrock_max_output_tokens_default: int = 8192
     bedrock_temperature_default: float = 0.1
     # ---------------------------------------------------------------------------
 

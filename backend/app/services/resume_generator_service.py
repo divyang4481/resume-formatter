@@ -326,6 +326,10 @@ class ResumeGeneratorService:
                 expanded.pop(fieldname, None)
                 continue
 
+            # Unwrap dict-wrapped values (e.g. from template_fill_result containing "value" key)
+            if isinstance(value, dict) and "value" in value:
+                value = value["value"]
+
             # --- array_simple: list of strings ---
             if field_type == "array_simple" and isinstance(value, list):
                 expanded[fieldname] = [str(v) for v in value if v]

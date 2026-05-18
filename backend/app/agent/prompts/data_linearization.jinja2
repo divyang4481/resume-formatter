@@ -1,4 +1,4 @@
-TASK: Map Candidate Data to Template-Specific Fields with Deep Reasoning.
+TASK: Map Candidate Data to Template-Specific Fields with Deep Reasoning and Schema Enforcement.
 
 CANDIDATE DATA (Raw Extraction):
 {{ structured_data_json }}
@@ -30,11 +30,11 @@ RUNTIME CONTEXT:
 MAPPING INTELLIGENCE PROTOCOL (MANDATORY):
 1. **100% Manifest Coverage**: 
    - Every field in the TEMPLATE CONTRACT MUST have a corresponding entry in `template_fill_result`.
-   - Do NOT skip any fields. If you cannot find data, provide an empty string "" for scalars or an empty list [] for arrays.
+   - Do NOT skip any fields. If you cannot find data, provide null or empty string "" for scalars, empty list [] for arrays.
 
 2. **STRICT Fieldname Compliance**:
    - **LOCKED KEYS**: Use ONLY the EXACT fieldnames (keys) defined in the TEMPLATE CONTRACT.
-   - **FORBIDDEN**: Do NOT invent new keys or use aliases like 'candidate_name' if the manifest says 'candidate_full_name'.
+   - **FORBIDDEN**: Do NOT invent new keys or use aliases.
 
 3. **Marker Preservation (CRITICAL)**:
    - **PHYSICAL STRING COPY**: For every field, you MUST copy the value of `Marker Text` from the TEMPLATE CONTRACT **verbatim** into the `marker_text` field of your output. 
@@ -42,20 +42,19 @@ MAPPING INTELLIGENCE PROTOCOL (MANDATORY):
 
 4. **Field Type Schema Adherence**:
    - **scalar**: Provide a single string or number.
-   - **array_simple**: Provide a flat list of strings (e.g., for Skills).
-   - **array_complex**: Provide a list of structured objects (e.g., for Work Experience or Education). Look at 'Item Schema' in the manifest for required sub-fields.
+   - **rich_text**: Provide a generated or extracted block of formatted text.
+   - **array_simple**: Provide a flat list of strings.
+   - **array_complex**: Provide a list of structured objects (e.g. Work Experience or Education).
+   - **paste_zone**: A rich text block or complex object.
 
-5. **Contextual Mapping**:
-   - Map facts based on 'Meaning' and 'Source Hints'. 
-   - Example: If a field says "How soon can the candidate start", look for "Notice Period" or "Availability" in the resume.
-
-5. **Deep Reasoning Output**:
-   - For EVERY field you can answer, provide:
-     * `value`: The final string/array/object.
-     * `marker_text`: The EXACT `Marker Text` from the contract.
-     * `source`: The specific section or field in the raw data used.
-     * `confidence`: 0.0 to 1.0.
-     * `note`: Why you chose this mapping.
+5. **Contextual Mapping & Extraction Manifest**:
+   - For every field, you MUST generate a nested `field_extraction_manifest` property containing:
+     * `value_type`: one of "scalar", "rich_text", "array", "complex_object", "array_complex"
+     * `value`: The validated candidate value.
+     * `confidence`: A float from 0.0 to 1.0.
+     * `status`: one of ["extracted", "inferred", "generated_from_resume", "not_found", "needs_user_input"]
+     * `reason`: optional explanation, required if status is "inferred", "not_found", or "needs_user_input".
+     * `source`: an object containing `resume_section` and `evidence`.
 
 ---
 NEGATIVE CONSTRAINTS (STRICT):
@@ -69,22 +68,60 @@ OUTPUT JSON STRUCTURE (STRICT):
     "candidate_full_name": {
       "value": "John Doe",
       "marker_text": "«CandidateFullName»",
-      "source": "sections.Details.content",
+      "field_type": "scalar",
+      "mapping_category": "simple scalar replacement",
       "confidence": 1.0,
-      "note": "Extracted directly from details section."
+      "status": "extracted",
+      "source": "sections.Details.content",
+      "field_extraction_manifest": {
+        "value_type": "scalar",
+        "value": "John Doe",
+        "confidence": 1.0,
+        "status": "extracted",
+        "source": {
+          "resume_section": "Details",
+          "evidence": "John Doe found in header/details"
+        }
+      }
     },
     "notice_period": {
       "value": "1 Month",
       "marker_text": "«NoticePeriod»",
-      "source": "sections.Profile.content",
+      "field_type": "scalar",
+      "mapping_category": "simple scalar replacement",
       "confidence": 0.9,
-      "note": "Found in profile summary text."
+      "status": "inferred",
+      "source": "sections.Profile.content",
+      "field_extraction_manifest": {
+        "value_type": "scalar",
+        "value": "1 Month",
+        "confidence": 0.9,
+        "status": "inferred",
+        "reason": "Derived from availability statement in profile summary.",
+        "source": {
+          "resume_section": "Profile Summary",
+          "evidence": "Candidate states 'available immediately with 4 weeks notice'"
+        }
+      }
     },
     "skills": {
       "value": ["Python", "AWS", "GenAI"],
       "marker_text": "«Skills»",
+      "field_type": "array_simple",
+      "mapping_category": "array",
+      "confidence": 1.0,
+      "status": "extracted",
       "source": "sections.Skills.content",
-      "confidence": 1.0
+      "field_extraction_manifest": {
+        "value_type": "array",
+        "value": ["Python", "AWS", "GenAI"],
+        "confidence": 1.0,
+        "status": "extracted",
+        "source": {
+          "resume_section": "Technical Skills",
+          "evidence": "Listed skills in the skills block"
+        }
+      }
     },
     "work_experience": {
       "value": [
@@ -97,8 +134,29 @@ OUTPUT JSON STRUCTURE (STRICT):
         }
       ],
       "marker_text": "«TableStart:WorkExperience»",
+      "field_type": "array_complex",
+      "mapping_category": "complex smart object",
+      "confidence": 0.95,
+      "status": "extracted",
       "source": "sections.Employment History.content",
-      "confidence": 0.95
+      "field_extraction_manifest": {
+        "value_type": "array_complex",
+        "value": [
+          {
+            "job_title": "Solution Architect",
+            "company": "Cognizant",
+            "start_date": "MAY 2020",
+            "end_date": "PRESENT",
+            "responsibilities": ["Led GenAI adoption", "Architected API platforms"]
+          }
+        ],
+        "confidence": 0.95,
+        "status": "extracted",
+        "source": {
+          "resume_section": "Employment History",
+          "evidence": "Entire employment history block"
+        }
+      }
     }
   },
   "additional_resume_facts_available": {
@@ -113,8 +171,8 @@ WRITER'S MANDATE (STRICT):
 1. ROLE: You are an Executive Resume Writer for Hays.
 2. OUTPUT FORMAT: Single valid JSON object.
 3. KEYS: Use ONLY the EXACT fieldnames from the TEMPLATE CONTRACT in `template_fill_result`.
-4. CROSS-VALIDATION: Before outputting, check each key in `template_fill_result`. If it's not in the manifest, DELETE IT.
-5. RICH TEXT: Use CVML tags — [:B:], [:L1:], [:BR:], [:PIPE:].
+4. RICH TEXT: Use CVML tags — [:B:], [:L1:], [:BR:], [:PIPE:].
+5. FORMAT COMPLIANCE: Adhere precisely to the nested JSON structure.
 
 ---
 OUTPUT PROTOCOL:

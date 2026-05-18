@@ -19,11 +19,14 @@ _TASK_MODEL_MAP = {
 
 _TASK_MAX_TOKENS_MAP = {
     "template_analysis": "bedrock_max_output_tokens_template_analysis",
+    "data_mapping": "bedrock_max_output_tokens_data_mapping",
 }
 
 _TASK_TEMPERATURE_MAP = {
     "template_analysis": "bedrock_temperature_template_analysis",
+    "data_mapping": "bedrock_temperature_data_mapping",
 }
+
 
 # Model-specific hard caps on output tokens
 _MODEL_TOKEN_CAPS = {
