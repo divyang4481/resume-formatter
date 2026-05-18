@@ -19,6 +19,8 @@ INSTRUCTIONS:
 - Identify "Paste Zones" or instruction blocks (often in red text) that indicate where the candidate's own CV content should be placed; map these to a field (e.g. 'work_experience' or 'candidate_cv') with field_type='paste_zone' and use the exact section heading as the marker_text.
 - Determine the field type (scalar, array_simple, array_complex, table_loop, rich_text, paste_zone).
 - Infer the semantic meaning and provide source hints for resume data extraction.
+- For every field include extraction_hints for finding the value in a resume and injection_hints/render_locator for placing it in the DOCX.
+- Mark recruiter/employee/consultant fields as source_kind="recruiter_input" and resume_fillable=false. Candidate fields must be source_kind="resume_fact".
 - Preserve original labels and detect the document language.
 - Identify repeat blocks and instruction blocks.
 - If a marker is TableStart:X or TableEnd:X, it MUST be a table_loop.
@@ -44,6 +46,12 @@ CRITICAL: You MUST return a JSON object matching this schema exactly:
         }
       ],
       "resume_fillable": boolean,
+      "source_kind": "resume_fact | recruiter_input | generated | static | instruction",
+      "required": boolean,
+      "extraction_hints": {"resume_sections": ["string"], "labels": ["string"], "format": "string"},
+      "injection_hints": {"strategy": "replace_marker | fill_blank_cell_after_label | replace_section_body | replace_table_loop", "marker_text": "string", "label": "string", "heading": "string"},
+      "render_locator": {"strategy": "string", "marker_text": "string", "label": "string", "heading": "string"},
+      "provenance": {"source": "raw_evidence | normalized_evidence | semantic_inference", "evidence_type": "string"},
       "confidence": float (0.0 to 1.0)
     }
   ]
