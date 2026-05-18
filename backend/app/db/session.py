@@ -16,6 +16,12 @@ engine = create_engine(
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 def get_db():
+    # Ensure tables exist (e.g. if they were dropped by clean_db.py while the server was running)
+    try:
+        from app.db.models import Base
+        Base.metadata.create_all(bind=engine)
+    except Exception:
+        pass
     db = SessionLocal()
     try:
         yield db

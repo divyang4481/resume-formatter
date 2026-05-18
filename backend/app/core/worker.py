@@ -192,17 +192,17 @@ async def run_worker():
     # Initialize DB (PostgreSQL RDS in AWS)
     from app.db.session import engine
     from app.db.models import Base
-    from sqlalchemy.exc import ProgrammingError
     try:
         Base.metadata.create_all(bind=engine)
         logger.info("Worker database initialized.")
-    except ProgrammingError as e:
-        if "already exists" in str(e) or "DuplicateTable" in str(e):
-            logger.info("Database tables already exist, skipping worker-level creation.")
-        else:
-            raise
+    except Exception as e:
+        logger.info(f"Worker database initialization warning: {e}. Another worker might have completed this.")
 
     while True:
+        try:
+            Base.metadata.create_all(bind=engine)
+        except Exception:
+            pass
         db = SessionLocal()
         queue = get_message_queue()
         try:

@@ -14,6 +14,13 @@ def mock_is_admin(request: Request) -> bool:
 
 # --- Database ---
 def get_db_session():
+    # Ensure tables exist (e.g. if they were dropped by clean_db.py while the server was running)
+    try:
+        from app.db.session import engine
+        from app.db.models import Base
+        Base.metadata.create_all(bind=engine)
+    except Exception as e:
+        logger.error(f"Error ensuring tables exist in get_db_session: {e}")
     db = SessionLocal()
     try:
         yield db

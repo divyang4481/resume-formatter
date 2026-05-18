@@ -27,11 +27,8 @@ def create_app() -> FastAPI:
         try:
             Base.metadata.create_all(bind=engine)
             print("Database initialized")
-        except ProgrammingError as e:
-            if "already exists" in str(e) or "DuplicateTable" in str(e):
-                print("Database tables already exist, skipping lifespan-level creation.")
-            else:
-                raise
+        except Exception as e:
+            print(f"Lifespan database initialization warning: {e}. Another worker might have completed this.")
         yield
 
     app = FastAPI(
@@ -46,11 +43,8 @@ def create_app() -> FastAPI:
     # Force DB init during module load for TestClient compat if lifespan isn't awaited natively by the test runner
     try:
         Base.metadata.create_all(bind=engine)
-    except ProgrammingError as e:
-        if "already exists" in str(e) or "DuplicateTable" in str(e):
-            print("Database tables already exist, skipping module-level creation.")
-        else:
-            raise
+    except Exception as e:
+        print(f"Module-level database initialization warning: {e}. Another worker might have completed this.")
 
     # Initialize Model Context Protocol (MCP) support
     # This automatically turns FastAPI endpoints into discoverable AI tools

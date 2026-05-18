@@ -300,12 +300,20 @@ class ResumeGeneratorService:
         expanded = dict(resume_data)
 
         # Build a quick lookup of field_type by fieldname
-        fields_list = field_manifest.get("fields", []) if isinstance(field_manifest, dict) else field_manifest
-        manifest_map: Dict[str, Dict] = {
-            entry["fieldname"]: entry
-            for entry in fields_list
-            if isinstance(entry, dict) and entry.get("fieldname")
-        }
+        if not field_manifest:
+            fields_list = []
+        elif isinstance(field_manifest, dict):
+            fields_list = field_manifest.get("fields", []) or []
+        else:
+            fields_list = field_manifest
+            
+        manifest_map: Dict[str, Dict] = {}
+        if fields_list:
+            manifest_map = {
+                entry["fieldname"]: entry
+                for entry in fields_list
+                if isinstance(entry, dict) and entry.get("fieldname")
+            }
 
         for fieldname, value in list(expanded.items()):
             entry = manifest_map.get(fieldname, {})
@@ -382,6 +390,8 @@ class ResumeGeneratorService:
                 instruction_texts.extend(field_manifest.get("instruction_blocks", []))
                 
             fields_list = field_manifest.get("fields", []) if isinstance(field_manifest, dict) else field_manifest
+            if not fields_list:
+                fields_list = []
             for item in fields_list:
                 if not isinstance(item, dict):
                     continue
