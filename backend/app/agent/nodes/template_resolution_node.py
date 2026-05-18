@@ -116,6 +116,15 @@ def create_template_resolve_node(llm_runtime, storage_provider, doc_parser):
             else:
                 field_manifest = []
 
+            # If the manifest is wrapped in a rich dictionary (e.g. {"fields": [...], "instruction_blocks": [...]})
+            # or is a legacy dumped model containing "fields", extract the list of fields.
+            if isinstance(field_manifest, dict):
+                if "fields" in field_manifest:
+                    field_manifest = field_manifest["fields"]
+                else:
+                    field_manifest = list(field_manifest.values())
+
+
             if field_manifest:
                 logger.info(f"Successfully resolved manifest with {len(field_manifest)} fields for template {template_asset_id}")
             else:

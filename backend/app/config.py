@@ -56,7 +56,7 @@ class Settings(BaseSettings):
 
     # Template analysis uses Claude Sonnet for superior instruction-following
     # and deterministic JSON generation. Set to empty string to fall back to default.
-    bedrock_template_analysis_model_id: str = "apac.anthropic.claude-3-5-sonnet-20241022-v2:0"
+    bedrock_template_analysis_model_id: str = "qwen.qwen3-235b-a22b-2507-v1:0"
 
     # Resume summary generation — Qwen is fine for narrative tasks
     bedrock_resume_summary_model_id: str = ""  # falls back to default
@@ -65,7 +65,7 @@ class Settings(BaseSettings):
     bedrock_data_mapping_model_id: str = ""  # falls back to default
 
     # Fallback model if primary model fails (access error / throttle exhaust)
-    bedrock_fallback_model_id: str = "qwen.qwen3-235b-a22b-2507-v1:0"
+    bedrock_fallback_model_id: str = "meta.llama3-70b-instruct-v1:0"
 
     # Template analysis quality controls
     bedrock_max_output_tokens_template_analysis: int = 8192
@@ -81,9 +81,9 @@ class Settings(BaseSettings):
     template_analysis_models: dict = {
         "evidence_normalizer": {
             "provider": "aws_bedrock",
-            "model_id": "amazon.nova-lite-v1:0",
+            "model_id": "qwen.qwen3-235b-a22b-2507-v1:0",
             "temperature": 0.0,
-            "max_tokens": 4000
+            "max_tokens": 8192
         },
         "manifest_generator": {
             "provider": "aws_bedrock",
@@ -99,7 +99,7 @@ class Settings(BaseSettings):
         },
         "manifest_critic": {
             "provider": "aws_bedrock",
-            "model_id": "apac.anthropic.claude-3-5-sonnet-20241022-v2:0",
+            "model_id": "meta.llama3-70b-instruct-v1:0",
             "temperature": 0.0,
             "max_tokens": 6000,
             "enabled": False

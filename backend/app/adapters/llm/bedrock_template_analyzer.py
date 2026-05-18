@@ -31,7 +31,7 @@ class BedrockTemplateAnalyzer:
             "Always return a single JSON object."
         )
 
-        model_id = settings.bedrock_template_analysis_model_id or "anthropic.claude-3-5-sonnet-20241022-v2:0"
+        model_id = settings.bedrock_template_analysis_model_id or "qwen.qwen3-235b-a22b-2507-v1:0"
 
         response = self.runtime.generate(
             prompt,
@@ -54,8 +54,8 @@ class BedrockTemplateAnalyzer:
             "Provide a confidence score for each section."
         )
 
-        # Map to specific Haiku model for speed/cost if configured
-        model_id = getattr(settings, "bedrock_resume_extraction_model_id", "anthropic.claude-3-haiku-20240307-v1:0")
+        # Map to specific Qwen model for high capacity and 8192 token limit
+        model_id = getattr(settings, "bedrock_resume_extraction_model_id", "qwen.qwen3-235b-a22b-2507-v1:0")
 
         response = self.runtime.generate(
             prompt,

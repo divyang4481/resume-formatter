@@ -156,7 +156,7 @@ async def analyze_template_docx(
         manifest.average_confidence = sum(confidences) / len(confidences)
     
     # Heuristic for human review
-    if errors or manifest.average_confidence < 0.75:
+    if errors or (manifest.average_confidence is not None and manifest.average_confidence < 0.75):
         manifest.requires_human_review = True
         if errors:
             manifest.review_reasons.append(f"Validation failed with {len(errors)} errors.")

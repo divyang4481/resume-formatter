@@ -29,6 +29,7 @@ _TASK_TEMPERATURE_MAP = {
 _MODEL_TOKEN_CAPS = {
     "llama3": 2048,
     "qwen3-235b": 8192,
+    "qwen": 8192,
     "gemma-3": 8192,
     "nova": 10000,
     "claude": 8192,   # Claude 3.5+ supports up to 8192 output tokens

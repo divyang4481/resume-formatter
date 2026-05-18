@@ -572,7 +572,9 @@ class ResumeAiService:
         # Build inverted alias: CamelCase alias → fieldname
         alias_inverted: Dict[str, str] = {}
         for fn, info in FIELD_ALIAS_MAP.items():
-            for alias in info["aliases"]:
+            if not isinstance(info, dict):
+                continue
+            for alias in info.get("aliases", []):
                 alias_inverted[alias.lower()] = fn
 
         # Track which detected markers are already used
@@ -635,16 +637,17 @@ class ResumeAiService:
             # Try alias map first (high confidence)
             if fn in FIELD_ALIAS_MAP:
                 info = FIELD_ALIAS_MAP[fn]
-                for alias in info["aliases"]:
-                    # Try all common wrappings to find the actual marker in the document
-                    potential_matches = [
-                        f"«{alias}»",
-                        f"[{alias}]",
-                        f"[[{alias}]]",
-                        f"<<{alias}>>",
-                        f"{{{alias}}}",
-                        alias,
-                    ]
+                if isinstance(info, dict):
+                    for alias in info.get("aliases", []):
+                        # Try all common wrappings to find the actual marker in the document
+                        potential_matches = [
+                            f"«{alias}»",
+                            f"[{alias}]",
+                            f"[[{alias}]]",
+                            f"<<{alias}>>",
+                            f"{{{alias}}}",
+                            alias,
+                        ]
 
                     found_marker = next(
                         (
@@ -793,6 +796,8 @@ class ResumeAiService:
             m_norm_clean = m_norm.replace("table start ", "").replace("table end ", "").replace("tablestart", "").replace("tableend", "").strip()
             
             for fn_alias, info in FIELD_ALIAS_MAP.items():
+                if not isinstance(info, dict):
+                    continue
                 alias_list = [normalize_marker_name(a) for a in info.get("aliases", [])]
                 if m_norm_clean in alias_list or normalize_marker_name(fn_alias) == m_norm_clean:
                     fn_for_marker = fn_alias
@@ -896,6 +901,17 @@ class ResumeAiService:
         job_id: str = "N/A",
     ) -> Dict[str, Any]:
         """Restored method to map resume data to the template contract."""
+        if isinstance(field_manifest, str):
+            try:
+                field_manifest = json.loads(field_manifest)
+            except Exception:
+                field_manifest = []
+
+        if isinstance(field_manifest, dict):
+            if "fields" in field_manifest:
+                field_manifest = field_manifest["fields"]
+            else:
+                field_manifest = list(field_manifest.values())
 
         logger.info(f"Harmonize Request: Manifest has {len(field_manifest) if field_manifest else 'None'} fields.")
         
@@ -966,6 +982,18 @@ class ResumeAiService:
         Strictly reconstructs the result based on the manifest.
         Any key NOT in the manifest is moved to additional facts.
         """
+        if isinstance(field_manifest, str):
+            try:
+                field_manifest = json.loads(field_manifest)
+            except Exception:
+                field_manifest = []
+
+        if isinstance(field_manifest, dict):
+            if "fields" in field_manifest:
+                field_manifest = field_manifest["fields"]
+            else:
+                field_manifest = list(field_manifest.values())
+
         # 1. Gather all potential source data (flatten root and nested result)
         raw_nested = ai_output.get("template_fill_result", {})
         if not isinstance(raw_nested, dict): raw_nested = {}

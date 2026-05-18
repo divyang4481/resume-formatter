@@ -56,28 +56,80 @@ class TemplateAnalysisService:
         # 2. Map the new TemplateManifest model back to the legacy TemplateAnalysis model for backward compatibility
         # This allows existing callers to continue working without breaking changes.
         def map_field(f):
-            locator_data = f.render_locator or f.injection_hints or {
-                "strategy": "replace_marker",
-                "marker_text": f.marker_text,
-            }
+            if isinstance(f, dict):
+                fieldname = f.get("fieldname") or f.get("field_name") or ""
+                marker_text = f.get("marker_text") or ""
+                field_type = f.get("field_type") or "scalar"
+                source_kind = f.get("source_kind") or "resume_fact"
+                meaning = f.get("meaning") or ""
+                source_hints = f.get("source_hints") or ""
+                required = f.get("required") or False
+                confidence = f.get("confidence") or 0.0
+                occurrence_index = f.get("occurrence_index") or 1
+                canonical_fieldname = f.get("canonical_fieldname")
+                original_label = f.get("original_label")
+                context = f.get("context") or {}
+                extraction_hints = f.get("extraction_hints") or {}
+                injection_hints = f.get("injection_hints") or {}
+                provenance = f.get("provenance") or {}
+                locator_data = f.get("render_locator") or f.get("injection_hints") or {
+                    "strategy": "replace_marker",
+                    "marker_text": marker_text,
+                }
+                sub_fields = f.get("sub_fields") or []
+            else:
+                fieldname = getattr(f, "fieldname", getattr(f, "field_name", ""))
+                marker_text = getattr(f, "marker_text", "")
+                field_type = getattr(f, "field_type", "scalar")
+                source_kind = getattr(f, "source_kind", "resume_fact")
+                meaning = getattr(f, "meaning", "")
+                source_hints = getattr(f, "source_hints", "") or ""
+                required = getattr(f, "required", False)
+                confidence = getattr(f, "confidence", 0.0)
+                occurrence_index = getattr(f, "occurrence_index", 1)
+                canonical_fieldname = getattr(f, "canonical_fieldname", None)
+                original_label = getattr(f, "original_label", None)
+                context = getattr(f, "context", {}) or {}
+                extraction_hints = getattr(f, "extraction_hints", {}) or {}
+                injection_hints = getattr(f, "injection_hints", {}) or {}
+                provenance = getattr(f, "provenance", {}) or {}
+                locator_data = getattr(f, "render_locator", None) or getattr(f, "injection_hints", None) or {
+                    "strategy": "replace_marker",
+                    "marker_text": marker_text,
+                }
+                sub_fields = getattr(f, "sub_fields", []) or []
+
+            # Ensure locator_data is dict
+            if not isinstance(locator_data, dict):
+                if hasattr(locator_data, "model_dump"):
+                    locator_data = locator_data.model_dump()
+                elif hasattr(locator_data, "__dict__"):
+                    locator_data = dict(locator_data)
+                else:
+                    locator_data = {}
+
+            # Ensure source_hints is string or list of strings as expected by legacy schema
+            if isinstance(source_hints, list):
+                source_hints = ", ".join(source_hints) if source_hints else ""
+
             return TemplateField(
-                fieldname=f.fieldname,
-                marker_text=f.marker_text,
-                field_type=f.field_type,
-                source_kind=f.source_kind,
-                meaning=f.meaning,
-                source_hints=f.source_hints or "",
-                required=f.required,
-                confidence=f.confidence,
-                occurrence_index=f.occurrence_index,
-                canonical_fieldname=f.canonical_fieldname,
-                original_label=f.original_label,
-                context=f.context,
-                extraction_hints=f.extraction_hints,
-                injection_hints=f.injection_hints,
-                provenance=f.provenance,
+                fieldname=fieldname,
+                marker_text=marker_text,
+                field_type=field_type,
+                source_kind=source_kind,
+                meaning=meaning,
+                source_hints=source_hints,
+                required=required,
+                confidence=confidence,
+                occurrence_index=occurrence_index,
+                canonical_fieldname=canonical_fieldname,
+                original_label=original_label,
+                context=context,
+                extraction_hints=extraction_hints,
+                injection_hints=injection_hints,
+                provenance=provenance,
                 render_locator=RenderLocator(**locator_data),
-                sub_fields=[map_field(sf) for sf in (f.sub_fields or [])]
+                sub_fields=[map_field(sf) for sf in sub_fields]
             )
 
         fields = [map_field(f) for f in manifest.fields]
@@ -194,6 +246,8 @@ class TemplateAnalysisService:
             
             from app.services.template_structure_extractor import FIELD_ALIAS_MAP
             for canonical, info in FIELD_ALIAS_MAP.items():
+                if not isinstance(info, dict):
+                    continue
                 aliases = [a.lower().replace("_", "").replace(" ", "") for a in info.get("aliases", [])]
                 if norm_fn in aliases or norm_fn == canonical.lower().replace("_", ""):
                     if field.field_name != canonical:
