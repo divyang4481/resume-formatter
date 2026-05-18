@@ -147,8 +147,10 @@ class DocxTemplateRenderer:
                 f"[Renderer] Processing field '{fieldname}' with strategy '{strategy}'"
             )
 
-            if strategy == "replace_marker":
-                # Prioritize marker_text from manifest
+            if strategy in ("replace_marker", "replace_table_loop"):
+                # Prioritize marker_text from manifest. For table loops, this creates a
+                # safe fallback tag at the loop start; richer repeat rendering can use
+                # the field's sub_fields from the manifest contract.
                 marker = field.marker_text or field.render_locator.marker_text
                 if not marker:
                     logger.warning(

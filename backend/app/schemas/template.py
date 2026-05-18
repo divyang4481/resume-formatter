@@ -22,6 +22,20 @@ class FieldExtractionManifestItem(BaseModel):
     marker_text: str
     meaning: str
     source_hints: Union[str, List[str]]
+    field_type: str = "scalar"
+    canonical_fieldname: Optional[str] = None
+    original_label: Optional[str] = None
+    resume_fillable: bool = True
+    source_kind: str = "resume_fact"
+    required: bool = False
+    confidence: float = 0.0
+    occurrence_index: int = 1
+    context: Dict[str, Any] = Field(default_factory=dict)
+    extraction_hints: Dict[str, Any] = Field(default_factory=dict)
+    injection_hints: Dict[str, Any] = Field(default_factory=dict)
+    render_locator: Dict[str, Any] = Field(default_factory=dict)
+    provenance: Dict[str, Any] = Field(default_factory=dict)
+    sub_fields: List[Dict[str, Any]] = Field(default_factory=list)
 
 class TemplateAsset(BaseModel):
     id: str

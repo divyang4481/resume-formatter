@@ -17,6 +17,13 @@ class TemplateField(BaseModel):
     source_hints: Union[str, List[str]] = ""
     required: bool = False
     confidence: float = 0.0
+    occurrence_index: int = 1
+    canonical_fieldname: Optional[str] = None
+    original_label: Optional[str] = None
+    context: Dict[str, Any] = Field(default_factory=dict)
+    extraction_hints: Dict[str, Any] = Field(default_factory=dict)
+    injection_hints: Dict[str, Any] = Field(default_factory=dict)
+    provenance: Dict[str, Any] = Field(default_factory=dict)
     sub_fields: List["TemplateField"] = Field(default_factory=list)
 
     model_config = {
@@ -66,6 +73,9 @@ class TemplateAnalysis(BaseModel):
     validation_warnings: List[str] = Field(default_factory=list)
     complexity_score: float = 0.0
     model_usage_json: Dict[str, Any] = Field(default_factory=dict)
+    evidence_summary: Dict[str, Any] = Field(default_factory=dict)
+    extraction_contract: Dict[str, Any] = Field(default_factory=dict)
+    injection_contract: Dict[str, Any] = Field(default_factory=dict)
     llm_attempt_count: int = 0
     human_review_required: bool = False
 

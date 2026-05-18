@@ -32,8 +32,14 @@ class ResumeFactExtractionService:
             all_fields = list(analysis.fields)
             for s in analysis.sections: all_fields.extend(s.fields)
             for f in all_fields:
-                if not f.field_name.startswith("_instruction_"):
-                    hints.append(f"- {f.field_name}: {f.meaning}")
+                if f.field_name.startswith("_instruction_") or getattr(f, "source_kind", "resume_fact") != "resume_fact":
+                    continue
+                extraction_hints = getattr(f, "extraction_hints", {}) or {}
+                source_hints = getattr(f, "source_hints", "") or ""
+                hints.append(
+                    f"- {f.field_name} ({getattr(f, 'field_type', 'scalar')}): {f.meaning}; "
+                    f"source_hints={source_hints}; extraction_hints={extraction_hints}"
+                )
         
         prompt = prompt_manager.get_prompt(
             "resume_fact_extraction.jinja2",

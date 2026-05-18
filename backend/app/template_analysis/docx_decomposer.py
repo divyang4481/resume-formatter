@@ -28,6 +28,27 @@ def decompose_docx(file_path: Optional[str] = None, content: Optional[bytes] = N
     from app.services.template_structure_extractor import FIELD_ALIAS_MAP, TABLE_LOOP_PREFIX, TABLE_LOOP_SUFFIX
     generic_placeholders = FIELD_ALIAS_MAP.get("generic_placeholders", [])
 
+    # Preserve full deterministic ground truth for prompts, validators, and debugging.
+    evidence.raw_structure = structure.to_dict()
+    evidence.layout_style = structure.layout_style
+    evidence.paste_zones = list(structure.paste_zones)
+    evidence.header_footer_markers = list(structure.headers_footers_markers)
+    evidence.table_loops = [loop.to_dict() for loop in structure.table_loops]
+    evidence.table_loop_fields = {loop.loop_name: list(loop.item_fields) for loop in structure.table_loops}
+    evidence.heading_to_loop = dict(structure.heading_to_loop)
+    evidence.blank_label_slots = list(structure.blank_label_slots)
+
+    heading_context_by_marker = {}
+    for heading, markers in structure.heading_to_smart_pattern.items():
+        for marker in markers:
+            heading_context_by_marker[marker] = f"Under heading: {heading}"
+
+    table_context_by_marker = {
+        slot.marker_text: f"Table label: {slot.label}; blank value cell: {slot.is_blank}"
+        for slot in structure.table_label_value_pairs
+        if slot.marker_text
+    }
+
     # Map markers
     for marker in structure.detected_markers:
         kind = "merge_marker"
@@ -41,8 +62,8 @@ def decompose_docx(file_path: Optional[str] = None, content: Optional[bytes] = N
         evidence.placeholder_candidates.append(PlaceholderCandidate(
             marker=marker,
             candidate_kind=kind,
-            location="document_body",
-            context_snippet=None 
+            location="header_footer" if marker in structure.headers_footers_markers else "document_body",
+            context_snippet=table_context_by_marker.get(marker) or heading_context_by_marker.get(marker)
         ))
 
     # Map sections/headings

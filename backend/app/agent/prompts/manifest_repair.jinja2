@@ -9,7 +9,9 @@ Rules:
 4. Cover all explicit placeholders.
 5. Repeat markers must become repeat_block fields.
 6. Instruction blocks must not be resume_fillable=true.
-7. Return ONLY the corrected TemplateManifest JSON.
+7. Include detailed extraction_hints plus injection_hints/render_locator for every field.
+8. Employee/consultant/recruiter fields must be source_kind="recruiter_input" and resume_fillable=false.
+9. Return ONLY the corrected TemplateManifest JSON.
 
 Validation errors:
 {{ errors_json }}

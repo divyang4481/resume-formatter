@@ -56,13 +56,27 @@ class TemplateAnalysisService:
         # 2. Map the new TemplateManifest model back to the legacy TemplateAnalysis model for backward compatibility
         # This allows existing callers to continue working without breaking changes.
         def map_field(f):
+            locator_data = f.render_locator or f.injection_hints or {
+                "strategy": "replace_marker",
+                "marker_text": f.marker_text,
+            }
             return TemplateField(
                 fieldname=f.fieldname,
                 marker_text=f.marker_text,
                 field_type=f.field_type,
+                source_kind=f.source_kind,
                 meaning=f.meaning,
                 source_hints=f.source_hints or "",
-                render_locator=RenderLocator(strategy="replace_marker", marker_text=f.marker_text),
+                required=f.required,
+                confidence=f.confidence,
+                occurrence_index=f.occurrence_index,
+                canonical_fieldname=f.canonical_fieldname,
+                original_label=f.original_label,
+                context=f.context,
+                extraction_hints=f.extraction_hints,
+                injection_hints=f.injection_hints,
+                provenance=f.provenance,
+                render_locator=RenderLocator(**locator_data),
                 sub_fields=[map_field(sf) for sf in (f.sub_fields or [])]
             )
 
@@ -78,19 +92,27 @@ class TemplateAnalysisService:
             validation_warnings=manifest.validation_warnings,
             complexity_score=manifest.complexity_score,
             model_usage_json=manifest.model_usage,
+            evidence_summary=manifest.evidence_summary,
+            extraction_contract=manifest.extraction_contract,
+            injection_contract=manifest.injection_contract,
             llm_attempt_count=manifest.llm_attempt_count,
-            human_review_required=manifest.requires_human_review
+            human_review_required=manifest.requires_human_review,
+            raw_structure=structure.to_dict()
         )
         
         # Store metadata in raw_structure for audit
         analysis.raw_structure = {
+            "structure": structure.to_dict(),
             "analysis_status": manifest.analysis_status,
             "validation_errors": manifest.validation_errors,
             "validation_warnings": manifest.validation_warnings,
             "complexity_score": manifest.complexity_score,
             "model_usage": manifest.model_usage,
             "llm_attempt_count": manifest.llm_attempt_count,
-            "human_review_required": manifest.requires_human_review
+            "human_review_required": manifest.requires_human_review,
+            "evidence_summary": manifest.evidence_summary,
+            "extraction_contract": manifest.extraction_contract,
+            "injection_contract": manifest.injection_contract,
         }
 
         # Run reconciliation to enrich the legacy model with deterministic grounding (e.g. instruction blocks)
