@@ -1,6 +1,7 @@
 import io
 import re
 import logging
+import traceback
 from typing import Any, Dict, List, Optional
 from docxtpl import DocxTemplate, RichText
 from docx import Document
@@ -105,6 +106,8 @@ class ResumeGeneratorService:
             # --- DYNAMIC TAXONOMY MAPPING ---
             # Use FIELD_ALIAS_MAP to provide aliases and fallbacks dynamically
             for canonical, info in FIELD_ALIAS_MAP.items():
+                if not isinstance(info, dict):
+                    continue
                 val = normalized_context.get(canonical)
                 if not val:
                     # Try aliases
@@ -151,6 +154,8 @@ class ResumeGeneratorService:
             
             # Inject all aliases from taxonomy into smart_context for explicit marker support
             for canonical, info in FIELD_ALIAS_MAP.items():
+                if not isinstance(info, dict):
+                    continue
                 if normalized_context.get(canonical):
                     for alias in info.get("aliases", []):
                         if alias not in smart_context:
@@ -170,11 +175,12 @@ class ResumeGeneratorService:
             missing_fields = []
             all_target_keys = set()
             if field_manifest:
+                fields_list = field_manifest.get("fields", []) if isinstance(field_manifest, dict) else field_manifest
                 all_target_keys.update(
                     [
                         item["fieldname"]
-                        for item in field_manifest
-                        if item.get("field_type") not in skip_types
+                        for item in fields_list
+                        if isinstance(item, dict) and "fieldname" in item and item.get("field_type") not in skip_types
                     ]
                 )
             if expected_fields_list:
@@ -216,8 +222,8 @@ class ResumeGeneratorService:
             return out_stream.getvalue(), missing_fields
 
         except Exception as e:
-            logger.error(f"Document rendering failed: {e}")
-            raise RuntimeError(f"Failed to render document: {str(e)}")
+            logger.exception("Document rendering failed with exception details:")
+            raise RuntimeError(f"Failed to render document: {str(e)}\n{traceback.format_exc()}")
 
     def _apply_rendering_actions(self, data: Any, tpl: DocxTemplate) -> Any:
         """
@@ -294,10 +300,11 @@ class ResumeGeneratorService:
         expanded = dict(resume_data)
 
         # Build a quick lookup of field_type by fieldname
+        fields_list = field_manifest.get("fields", []) if isinstance(field_manifest, dict) else field_manifest
         manifest_map: Dict[str, Dict] = {
             entry["fieldname"]: entry
-            for entry in field_manifest
-            if entry.get("fieldname")
+            for entry in fields_list
+            if isinstance(entry, dict) and entry.get("fieldname")
         }
 
         for fieldname, value in list(expanded.items()):
@@ -368,23 +375,42 @@ class ResumeGeneratorService:
 
         # --- Phase 0: Clear instruction blocks ---
         if field_manifest:
-            for item in field_manifest:
+            instruction_texts = []
+            
+            # Support new dict manifest format
+            if isinstance(field_manifest, dict):
+                instruction_texts.extend(field_manifest.get("instruction_blocks", []))
+                
+            fields_list = field_manifest.get("fields", []) if isinstance(field_manifest, dict) else field_manifest
+            for item in fields_list:
+                if not isinstance(item, dict):
+                    continue
                 if (
-                    item.get("render_locator", {}).get("strategy")
-                    == "clear_instruction_block"
+                    item.get("render_locator", {}).get("strategy") == "clear_instruction_block" or
+                    item.get("field_type") == "instruction_block"
                 ):
                     target_text = item.get("marker_text", "").strip()
                     if target_text:
-                        match_prefix = target_text[:100]
-                        for para in doc.paragraphs:
-                            if match_prefix in para.text:
-                                para.text = ""
-                        for tbl in doc.tables:
-                            for row in tbl.rows:
-                                for cell in row.cells:
-                                    if match_prefix in cell.text:
-                                        for p in cell.paragraphs:
-                                            p.text = ""
+                        instruction_texts.append(target_text)
+
+            for target_text in instruction_texts:
+                if not isinstance(target_text, str) or not target_text:
+                    continue
+                
+                # Normalize whitespace and case for robust matching
+                match_prefix = target_text.strip()[:100].replace("\xa0", " ").lower()
+                
+                for para in doc.paragraphs:
+                    p_text_norm = para.text.replace("\xa0", " ").lower()
+                    if match_prefix in p_text_norm:
+                        para.text = ""
+                for tbl in doc.tables:
+                    for row in tbl.rows:
+                        for cell in row.cells:
+                            c_text_norm = cell.text.replace("\xa0", " ").lower()
+                            if match_prefix in c_text_norm:
+                                for p in cell.paragraphs:
+                                    p.text = ""
 
         # Regex for common placeholder patterns - handle guillemets and brackets with wide whitespace support
         # Supports: «Field», <<Field>>, [[Field]], [Field], {Field}
@@ -424,7 +450,10 @@ class ResumeGeneratorService:
                     # 1. Try to find in manifest
                     if manifest:
                         norm_raw = normalize_key(raw_marker_text)
-                        for item in manifest:
+                        fields_list = manifest.get("fields", []) if isinstance(manifest, dict) else manifest
+                        for item in fields_list:
+                            if not isinstance(item, dict):
+                                continue
                             m_text = item.get("marker_text", "")
                             norm_m = normalize_key(m_text)
 
@@ -505,7 +534,12 @@ class ResumeGeneratorService:
 
             # 1. First, check manifest for VERBATIM matches (Instruction blocks, etc.)
             if manifest:
-                for item in manifest:
+                # If manifest is a dict (new TemplateManifest structure), extract 'fields'
+                fields_list = manifest.get("fields", []) if isinstance(manifest, dict) else manifest
+                
+                for item in fields_list:
+                    if not isinstance(item, dict):
+                        continue
                     field_type = item.get("field_type", "scalar")
                     anchor = item.get("marker_text", "")
                     fieldname = item.get("fieldname", "")
@@ -518,9 +552,14 @@ class ResumeGeneratorService:
                         paragraph.text = ""
                         return current_counter
 
-                    if field_type == "paste_zone" and anchor in full_text:
+                    if field_type == "paste_zone" and anchor.lower() in full_text.lower():
                         logger.info(f"Paste Zone Replace: '{anchor}' -> '{fieldname}'")
-                        paragraph.text = f"{{{{ _['{fieldname}'] }}}}"
+                        # If the anchor is just a heading (e.g., 'Work Experience'), append the content. 
+                        # If it's an instruction (e.g., 'Paste CV here'), replace it entirely.
+                        if any(kw in anchor.lower() for kw in ["paste", "insert", "own cv"]):
+                            paragraph.text = f"{{{{ _['{fieldname}'] }}}}"
+                        else:
+                            paragraph.text = full_text + f"\n{{{{ _['{fieldname}'] }}}}"
                         return current_counter
 
             # 2. Check for patterns (guillemets, brackets, etc.)

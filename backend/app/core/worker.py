@@ -140,7 +140,13 @@ async def process_job(db, message: dict):
                         "marker_text": f.marker_text,
                         "render_locator": f.render_locator.model_dump()
                     })
-                template.field_extraction_manifest = json.dumps(legacy_manifest)
+                
+                # Save as a rich dict containing fields and instruction_blocks for robust downstream rendering
+                rich_manifest = {
+                    "fields": legacy_manifest,
+                    "instruction_blocks": [ib.text for ib in getattr(analysis, "instruction_blocks", []) if hasattr(ib, "text")]
+                }
+                template.field_extraction_manifest = json.dumps(rich_manifest)
                 
                 db.commit()
                 logger.info(f"[Worker] Template {template_id} analyzed and persisted.")
@@ -186,8 +192,15 @@ async def run_worker():
     # Initialize DB (PostgreSQL RDS in AWS)
     from app.db.session import engine
     from app.db.models import Base
-    Base.metadata.create_all(bind=engine)
-    logger.info("Worker database initialized.")
+    from sqlalchemy.exc import ProgrammingError
+    try:
+        Base.metadata.create_all(bind=engine)
+        logger.info("Worker database initialized.")
+    except ProgrammingError as e:
+        if "already exists" in str(e) or "DuplicateTable" in str(e):
+            logger.info("Database tables already exist, skipping worker-level creation.")
+        else:
+            raise
 
     while True:
         db = SessionLocal()

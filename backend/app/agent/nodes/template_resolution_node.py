@@ -91,11 +91,13 @@ def create_template_resolve_node(llm_runtime, storage_provider, doc_parser):
             expected_sections = template_meta.expected_sections
             expected_fields = template_meta.expected_fields
             
-            # Fetch the manifest (JSON)
+            # Fetch the manifest (JSON) - Prefer field_extraction_manifest as it contains high-quality reconciled data
             if template_meta.field_extraction_manifest:
                 try:
                     if isinstance(template_meta.field_extraction_manifest, str):
                         field_manifest = json.loads(template_meta.field_extraction_manifest)
+                    elif isinstance(template_meta.field_extraction_manifest, dict):
+                        field_manifest = template_meta.field_extraction_manifest
                     else:
                         # Ensure it's a list of dicts even if it's a list of Pydantic models
                         field_manifest = [
@@ -103,8 +105,16 @@ def create_template_resolve_node(llm_runtime, storage_provider, doc_parser):
                             for m in template_meta.field_extraction_manifest
                         ]
                 except Exception as e:
-                    logger.error(f"Failed to parse manifest for {template_asset_id}: {e}")
-                    field_manifest = field_manifest or []
+                    logger.error(f"Failed to parse field_extraction_manifest for {template_asset_id}: {e}")
+                    field_manifest = []
+            elif getattr(template_meta, "analysis_json", None):
+                try:
+                    field_manifest = json.loads(template_meta.analysis_json)
+                except Exception as e:
+                    logger.error(f"Failed to parse analysis_json for {template_asset_id}: {e}")
+                    field_manifest = []
+            else:
+                field_manifest = []
 
             if field_manifest:
                 logger.info(f"Successfully resolved manifest with {len(field_manifest)} fields for template {template_asset_id}")

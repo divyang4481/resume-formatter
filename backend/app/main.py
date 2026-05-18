@@ -1,12 +1,18 @@
 import uvicorn
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi_mcp import FastApiMCP
+from sqlalchemy.exc import ProgrammingError
+
 from app.api.runtime import router as runtime_router
 from app.api.admin_endpoints import router as admin_endpoints_router
 from app.api.admin import router as admin_folder_router
 from app.api.processing import router as processing_router
 from app.api.a2a import router as a2a_router
 from app.config import settings
+from app.db.session import engine
+from app.db.models import Base
 
 
 def create_app() -> FastAPI:
@@ -14,20 +20,19 @@ def create_app() -> FastAPI:
     Bootstraps the FastAPI application.
     Integrates all API routes and core configurations.
     """
-    from contextlib import asynccontextmanager
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         # Initialize database tables (using RDS/PostgreSQL in AWS)
-        from app.db.session import engine
-        from app.db.models import Base
-
-        # Initialize DB tables
-        Base.metadata.create_all(bind=engine)
-        print("Database initialized")
+        try:
+            Base.metadata.create_all(bind=engine)
+            print("Database initialized")
+        except ProgrammingError as e:
+            if "already exists" in str(e) or "DuplicateTable" in str(e):
+                print("Database tables already exist, skipping lifespan-level creation.")
+            else:
+                raise
         yield
-
-    from fastapi.middleware.cors import CORSMiddleware
 
     app = FastAPI(
         lifespan=lifespan,
@@ -39,9 +44,13 @@ def create_app() -> FastAPI:
     )
 
     # Force DB init during module load for TestClient compat if lifespan isn't awaited natively by the test runner
-    from app.db.session import engine
-    from app.db.models import Base
-    Base.metadata.create_all(bind=engine)
+    try:
+        Base.metadata.create_all(bind=engine)
+    except ProgrammingError as e:
+        if "already exists" in str(e) or "DuplicateTable" in str(e):
+            print("Database tables already exist, skipping module-level creation.")
+        else:
+            raise
 
     # Initialize Model Context Protocol (MCP) support
     # This automatically turns FastAPI endpoints into discoverable AI tools

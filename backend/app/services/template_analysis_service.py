@@ -42,6 +42,9 @@ class TemplateAnalysisService:
         
         model_router = TemplateAnalysisModelRouter(settings)
         
+        # Extract structure to get deterministic evidence (e.g. instruction blocks, blank label value pairs)
+        structure = self.extractor.extract(docx_content, template_id + ".docx")
+
         # 1. Run the new pipeline
         manifest = await analyze_template_docx(
             content=docx_content,
@@ -89,6 +92,9 @@ class TemplateAnalysisService:
             "llm_attempt_count": manifest.llm_attempt_count,
             "human_review_required": manifest.requires_human_review
         }
+
+        # Run reconciliation to enrich the legacy model with deterministic grounding (e.g. instruction blocks)
+        self._reconcile_and_enrich(analysis, structure)
 
         return analysis
 
