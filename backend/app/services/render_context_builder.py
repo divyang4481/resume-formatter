@@ -1,4 +1,4 @@
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 def default_value_for_field_type(field_type: str) -> Any:
     if field_type in ("array_simple", "array_complex", "table_loop"):
@@ -26,6 +26,7 @@ def marker_alias(marker_text: str) -> str | None:
 def build_render_context_from_template_fill_result(
     template_fill_result: Dict[str, Any],
     manifest_fields: List[Dict[str, Any]],
+    filled_manifest_fields: Optional[List[Dict[str, Any]]] = None,
 ) -> Dict[str, Any]:
     """
     Converts strict mapping envelope into flat render context.
@@ -43,6 +44,8 @@ def build_render_context_from_template_fill_result(
       candidatefullname = "Divyang Panchasara"
     """
     render_context: Dict[str, Any] = {}
+
+    filled_by_name = {f.get("fieldname"): f for f in (filled_manifest_fields or []) if isinstance(f, dict) and f.get("fieldname")}
 
     manifest_by_field = {
         f.get("fieldname"): f
@@ -63,6 +66,9 @@ def build_render_context_from_template_fill_result(
                 value = entry["field_extraction_manifest"].get("value")
         else:
             value = entry
+
+        if value is None and isinstance(filled_by_name.get(fieldname), dict):
+            value = (filled_by_name[fieldname].get("field_extraction_manifest") or {}).get("value")
 
         if value is None:
             value = default_value_for_field_type(field_type)

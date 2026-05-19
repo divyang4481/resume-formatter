@@ -190,8 +190,11 @@ def create_missing_fields_identification_node():
             except:
                 transformed_data = {}
         
-        # The actual AI mapping result is often nested in template_fill_result
-        mapping_results = transformed_data.get("template_fill_result", {}) if isinstance(transformed_data, dict) else {}
+        precomputed_missing = []
+        mapping_results = {}
+        if isinstance(transformed_data, dict):
+            precomputed_missing = transformed_data.get("missing_fields_requiring_recruiter_or_ats_input") or []
+            mapping_results = transformed_data.get("template_fill_result", {}) or {}
         
         # 2. Get manifest
         manifest = state.get("field_extraction_manifest") or []
@@ -203,13 +206,21 @@ def create_missing_fields_identification_node():
                 manifest = []
         
         # 3. Compare
-        missing_fields = []
+        missing_fields = list(precomputed_missing) if isinstance(precomputed_missing, list) and precomputed_missing else []
         for field in manifest:
             fname = field.get("fieldname")
-            if not fname: continue
-            
-            val = mapping_results.get(fname)
-            if val is None or val == "" or val == [] or (isinstance(val, dict) and not val.get("value")):
+            if not fname or field.get("field_type") == "instruction_block":
+                continue
+            entry = mapping_results.get(fname)
+            if isinstance(entry, dict):
+                status = entry.get("status") or (entry.get("field_extraction_manifest") or {}).get("status")
+                value = entry.get("value")
+                if value is None:
+                    value = (entry.get("field_extraction_manifest") or {}).get("value")
+                is_missing = status in ("not_found", "needs_user_input") or value in (None, "", [], {})
+            else:
+                is_missing = entry in (None, "", [], {})
+            if is_missing and fname not in missing_fields:
                 missing_fields.append(fname)
         
         logger.info(f"Identified {len(missing_fields)} missing fields.")

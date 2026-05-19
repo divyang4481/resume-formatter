@@ -1072,16 +1072,9 @@ class ResumeAiService:
                 logger.info(f"[Harmonize] Cleaned response for JSON parsing (length: {len(cleaned)} chars)")
                 parsed = json.loads(cleaned)
 
-                chunk_enriched = []
-                if isinstance(parsed, dict) and "fields" in parsed:
-                    chunk_enriched = parsed["fields"]
-                elif isinstance(parsed, list):
-                    chunk_enriched = parsed
-                else:
-                    logger.warning(
-                        f"[Harmonize] Chunk {idx + 1} LLM response shape unexpected: {type(parsed)}."
-                    )
-                
+                chunk_enriched = _extract_enriched_fields_from_mapping_response(parsed)
+                if parsed and not chunk_enriched:
+                    logger.warning(f"[Harmonize] Chunk {idx + 1} parsed but no fields extracted.")
                 enriched_manifest_fields.extend(chunk_enriched)
                 logger.info(f"[Harmonize] Chunk {idx + 1} successfully added {len(chunk_enriched)} enriched fields.")
             except Exception as parse_err:
@@ -1100,43 +1093,31 @@ class ResumeAiService:
 
 
         # --- Merge: ensure every manifest field is present (LLM may omit some) ---
-        enriched_by_name: Dict[str, Dict] = {
-            f.get("fieldname"): f
-            for f in enriched_manifest_fields
-            if isinstance(f, dict) and f.get("fieldname")
-        }
+        enriched_by_name: Dict[str, Dict[str, Any]] = {}
+        for item in enriched_manifest_fields:
+            if not isinstance(item, dict):
+                continue
+            fname = item.get("fieldname")
+            if not fname:
+                continue
+            if fname in enriched_by_name:
+                logger.warning("[Harmonize] Duplicate field from LLM ignored: %s", fname)
+                continue
+            if fname not in field_by_name:
+                logger.warning("[Harmonize] Unknown field from LLM ignored: %s", fname)
+                continue
+            enriched_by_name[fname] = item
 
         filled_fields: List[Dict[str, Any]] = []
+        skipped_instruction_blocks = 0
         for base_field in field_manifest:
             fieldname = base_field.get("fieldname")
-            if not fieldname or base_field.get("field_type") == "instruction_block":
+            if not fieldname:
                 continue
-
-            # Start from original field definition so marker/locator props are always correct
-            merged = dict(base_field)
-
-            enriched = enriched_by_name.get(fieldname)
-            if enriched:
-                # Pull field_extraction_manifest from LLM output
-                fem = enriched.get("field_extraction_manifest")
-                if isinstance(fem, dict) and "status" in fem:
-                    merged["field_extraction_manifest"] = fem
-                    logger.info(
-                        f"[Harmonize] ✓ '{fieldname}' — status: {fem.get('status')} | "
-                        f"confidence: {fem.get('confidence')}"
-                    )
-                else:
-                    merged["field_extraction_manifest"] = _make_empty_fem(
-                        base_field.get("field_type", "scalar"), fieldname
-                    )
-                    logger.info(f"[Harmonize] ○ '{fieldname}' — LLM provided no value.")
-            else:
-                merged["field_extraction_manifest"] = _make_empty_fem(
-                    base_field.get("field_type", "scalar"), fieldname
-                )
-                logger.warning(f"[Harmonize] ✗ '{fieldname}' — not in LLM output; marked not_found.")
-
-            filled_fields.append(merged)
+            if base_field.get("field_type") == "instruction_block":
+                skipped_instruction_blocks += 1
+                continue
+            filled_fields.append(_normalize_enriched_field(base_field, enriched_by_name.get(fieldname)))
 
         # --- Derive template_fill_result deterministically (no LLM) ---
         template_fill_result = _build_template_fill_result(filled_fields)
@@ -1196,12 +1177,80 @@ class ResumeAiService:
 # Module-level helpers (pure Python, no LLM)
 # ---------------------------------------------------------------------------
 
+
+def _extract_enriched_fields_from_mapping_response(parsed: Any) -> List[Dict[str, Any]]:
+    if isinstance(parsed, dict):
+        if isinstance(parsed.get("fields"), list):
+            return parsed["fields"]
+        ftm = parsed.get("filled_template_manifest")
+        if isinstance(ftm, dict) and isinstance(ftm.get("fields"), list):
+            return ftm["fields"]
+        fem = parsed.get("field_extraction_manifest")
+        if isinstance(fem, list):
+            return fem
+        if isinstance(fem, dict) and isinstance(fem.get("fields"), list):
+            return fem["fields"]
+        tfr = parsed.get("template_fill_result")
+        if isinstance(tfr, dict):
+            out=[]
+            for fname, entry in tfr.items():
+                if not isinstance(entry, dict):
+                    entry={"value": entry}
+                fem_entry = entry.get("field_extraction_manifest") if isinstance(entry.get("field_extraction_manifest"), dict) else {}
+                if not fem_entry:
+                    fem_entry = {
+                        "value_type": "scalar",
+                        "value": entry.get("value"),
+                        "confidence": entry.get("confidence", 0.0),
+                        "status": entry.get("status", "not_found"),
+                        "reason": entry.get("reason", "Recovered from template_fill_result wrapper."),
+                        "source": entry.get("source", {"resume_section": None, "evidence": None}),
+                    }
+                out.append({"fieldname": fname, "field_extraction_manifest": fem_entry})
+            return out
+        logger.warning("[Harmonize] Could not extract fields. top-level keys=%s", list(parsed.keys()))
+        return []
+    if isinstance(parsed, list):
+        return parsed
+    return []
+
+def _normalize_enriched_field(base_field: Dict[str, Any], enriched: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    merged = dict(base_field)
+    fieldname = base_field.get("fieldname", "")
+    field_type = base_field.get("field_type", "scalar")
+    fem = None
+    if isinstance(enriched, dict):
+        fem = enriched.get("field_extraction_manifest")
+        if not isinstance(fem, dict):
+            if any(k in enriched for k in ("value", "status", "confidence")):
+                fem = {
+                    "value_type": "scalar",
+                    "value": enriched.get("value"),
+                    "confidence": enriched.get("confidence", 0.0),
+                    "status": enriched.get("status", "not_found"),
+                    "reason": enriched.get("reason", "Normalized from top-level value fields."),
+                    "source": enriched.get("source", {"resume_section": None, "evidence": None}),
+                }
+    if not isinstance(fem, dict):
+        fem = _make_empty_fem(field_type, fieldname)
+    value = fem.get("value")
+    valid = True
+    if field_type in ("array_simple", "table_loop", "array_complex") and not isinstance(value, list): valid=False
+    if field_type == "complex_object" and not isinstance(value, dict): valid=False
+    if field_type in ("scalar", "rich_text", "paste_zone") and isinstance(value, (list, dict)): valid=False
+    if not valid:
+        fem = _make_empty_fem(field_type, fieldname)
+    merged["field_extraction_manifest"] = fem
+    return merged
+
 def _make_empty_fem(field_type: str, fieldname: str) -> Dict[str, Any]:
     """Return an empty field_extraction_manifest for a field with no value."""
     if field_type in ("array_simple", "array_complex", "table_loop"):
         empty_val: Any = []
-    elif field_type in ("complex_object", "paste_zone"):
+    elif field_type == "complex_object":
         empty_val = {}
+    elif field_type == "paste_zone":
+        empty_val = None
     else:
         empty_val = None
 
@@ -1209,8 +1258,8 @@ def _make_empty_fem(field_type: str, fieldname: str) -> Dict[str, Any]:
         "value_type": (
             "array" if field_type in ("array_simple", "table_loop")
             else "array_complex" if field_type == "array_complex"
-            else "complex_object" if field_type in ("complex_object", "paste_zone")
-            else "rich_text" if field_type == "rich_text"
+            else "complex_object" if field_type == "complex_object"
+            else "rich_text" if field_type in ("rich_text", "paste_zone")
             else "scalar"
         ),
         "value": empty_val,
@@ -1236,7 +1285,7 @@ def _build_template_fill_result(filled_fields: List[Dict[str, Any]]) -> Dict[str
         fem = field.get("field_extraction_manifest") or {}
         result[fieldname] = {
             "value": fem.get("value"),
-            "marker_text": field.get("marker_text", f"«{fieldname}»"),
+            "marker_text": field.get("marker_text") or ((field.get("render_locator") or {}).get("marker") if isinstance(field.get("render_locator"), dict) else ""),
             "field_type": field.get("field_type", "scalar"),
             "confidence": fem.get("confidence", 0.0),
             "status": fem.get("status", "not_found"),

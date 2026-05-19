@@ -29,7 +29,8 @@ Then add or overwrite only this property:
 - field_extraction_manifest
 
 Do not output `template_fill_result`.
-Do not output `filled_template_manifest` wrapper unless the manifest starts with it. You should output exactly the shape of the TEMPLATE MANIFEST JSON provided. If the input is {"fields": [...]}, the output should be {"fields": [...]}.
+Always return one JSON object with the top-level shape: {"fields": [...]}.
+Do not output any other wrapper shape.
 Do not add duplicate fields.
 Do not remove instruction_blocks if present.
 
@@ -54,7 +55,7 @@ Value shape must match field_type:
 - table_loop => array
 - complex_object => object
 - array_complex => array of objects
-- paste_zone => complex object
+- paste_zone => rich_text/null (or object only if manifest clearly demands it)
 
 Missing values:
 - scalar/rich_text => null

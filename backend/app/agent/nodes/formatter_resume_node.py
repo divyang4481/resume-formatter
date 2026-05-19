@@ -96,9 +96,11 @@ def create_document_composition_node(
 
             # Prefer resolved candidate-specific manifest if available
             resolved_manifest = None
+            filled_manifest_fields = None
             if isinstance(template_resume_data, dict):
                 if "filled_template_manifest" in template_resume_data:
                     resolved_manifest = template_resume_data.get("filled_template_manifest", {}).get("fields")
+                    filled_manifest_fields = resolved_manifest
                 elif "fields" in template_resume_data:
                     resolved_manifest = template_resume_data.get("fields")
 
@@ -122,8 +124,14 @@ def create_document_composition_node(
             render_context = build_render_context_from_template_fill_result(
                 template_fill_result=template_fill_result,
                 manifest_fields=field_manifest,
+                filled_manifest_fields=filled_manifest_fields,
             )
             add_table_loop_aliases(render_context, field_manifest)
+
+            logger.info("[Document Composition] template_fill_result key count: %s", len(template_fill_result) if isinstance(template_fill_result, dict) else 0)
+            logger.info("[Document Composition] field_manifest count: %s", len(field_manifest))
+            logger.info("[Document Composition] render_context key count: %s", len(render_context))
+            logger.info("[Document Composition] sample render_context keys: %s", list(render_context.keys())[:10])
 
             if template_resume_data:
                 final_context = {
