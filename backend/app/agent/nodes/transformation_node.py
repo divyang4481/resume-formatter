@@ -57,7 +57,35 @@ def create_field_harmonization_node(ai_service=None):
                 field_manifest = json.loads(field_manifest)
             except Exception:
                 field_manifest = []
-        
+        if isinstance(field_manifest, dict):
+            # Handle wrapped manifest payloads like {"fields": [...], ...}
+            field_manifest = field_manifest.get("fields", [])
+
+        # Fallback: if no manifest was resolved, synthesize a minimal contract from expected_fields.
+        # This prevents empty mapping outputs ({fields: [], instruction_blocks: []}) for older templates
+        # that only store expected_fields and have no extracted manifest.
+        if not field_manifest:
+            expected_fields_raw = state.get("expected_fields") or ""
+            if isinstance(expected_fields_raw, list):
+                expected_fields_list = [str(f).strip() for f in expected_fields_raw if str(f).strip()]
+            else:
+                expected_fields_list = [f.strip() for f in str(expected_fields_raw).split(",") if f.strip()]
+
+            if expected_fields_list:
+                field_manifest = [
+                    {
+                        "fieldname": field_name,
+                        "field_type": "scalar",
+                        "required": False,
+                        "meaning": field_name.replace("_", " ").strip(),
+                    }
+                    for field_name in expected_fields_list
+                ]
+                logger.warning(
+                    "Field Harmonization Node: manifest missing; built fallback manifest from expected_fields "
+                    f"({len(field_manifest)} fields)."
+                )
+
         logger.info(f"Harmonization Node: Contract has {len(field_manifest) if isinstance(field_manifest, list) else 0} fields.")
         formatting_guidance = state.get("formatting_guidance") or ""
         summary_guidance = state.get("summary_guidance") or ""
