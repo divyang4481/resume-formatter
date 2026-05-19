@@ -10,6 +10,7 @@ from app.schemas.enums import JobStatus
 from app.agent.graph import build_resume_processing_graph, AgentState
 from app.agent.state import AgentState as TypedAgentState
 from app.dependencies import get_storage_provider
+from app.services.template_manifest_utils import normalize_template_manifest
 
 logger = logging.getLogger(__name__)
 
@@ -86,16 +87,13 @@ class ResumeWorkflowService:
                     language = template.language or "en"
                     
                     # --- FIX: Populate extraction contract fields ---
-                    manifest_raw = template.field_extraction_manifest
-                    if manifest_raw and isinstance(manifest_raw, str):
-                        try:
-                            field_extraction_manifest = json.loads(manifest_raw)
-                        except Exception:
-                            field_extraction_manifest = []
-                    else:
-                        field_extraction_manifest = manifest_raw or []
-                        
-                    expected_fields = template.expected_fields or ""
+                    manifest_obj = normalize_template_manifest(template.field_extraction_manifest)
+                    field_extraction_manifest = manifest_obj
+                    expected_fields = template.expected_fields or ",".join(
+                        f.get("fieldname", "")
+                        for f in manifest_obj.get("fields", [])
+                        if isinstance(f, dict) and f.get("fieldname")
+                    )
                     template_storage_uri = template.storage_uri
             except Exception as te:
                 print(f"Warning: Failed to fetch template guidance for {template_asset_id}: {te}")

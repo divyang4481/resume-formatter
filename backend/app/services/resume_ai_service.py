@@ -9,6 +9,7 @@ from typing import Dict, List, Any, Optional
 from app.config import settings
 from app.agent.prompt_manager import prompt_manager
 from app.agent.utils.llm_sanitizer import LlmSanitizer
+from app.services.template_manifest_utils import normalize_template_manifest
 
 logger = logging.getLogger(__name__)
 
@@ -945,22 +946,9 @@ class ResumeAiService:
             Python → filled_template_manifest (same as enriched_manifest, {"fields": [...]})
         """
         # --- Normalise manifest input ---
-        instruction_blocks = []
-        if isinstance(field_manifest, str):
-            try:
-                field_manifest = json.loads(field_manifest)
-            except Exception:
-                field_manifest = []
-
-        if isinstance(field_manifest, dict):
-            if "instruction_blocks" in field_manifest:
-                instruction_blocks = field_manifest["instruction_blocks"]
-            if "fields" in field_manifest:
-                field_manifest = field_manifest["fields"]
-            else:
-                field_manifest = list(field_manifest.values())
-
-        field_manifest = [f for f in (field_manifest or []) if isinstance(f, dict)]
+        manifest_obj = normalize_template_manifest(field_manifest)
+        instruction_blocks = manifest_obj.get("instruction_blocks", [])
+        field_manifest = manifest_obj.get("fields", [])
 
         logger.info(
             f"[Harmonize] START — Manifest has {len(field_manifest)} fields | Job: {job_id}"
@@ -1131,7 +1119,7 @@ class ResumeAiService:
             if enriched:
                 # Pull field_extraction_manifest from LLM output
                 fem = enriched.get("field_extraction_manifest")
-                if isinstance(fem, dict) and fem.get("value") is not None:
+                if isinstance(fem, dict) and "status" in fem:
                     merged["field_extraction_manifest"] = fem
                     logger.info(
                         f"[Harmonize] ✓ '{fieldname}' — status: {fem.get('status')} | "

@@ -5,6 +5,7 @@ from app.agent.utils.llm_sanitizer import LlmSanitizer
 from app.agent.prompt_manager import prompt_manager
 import json
 import logging
+from app.services.template_manifest_utils import normalize_template_manifest
 
 logger = logging.getLogger(__name__)
 
@@ -51,40 +52,14 @@ def create_field_harmonization_node(ai_service=None):
         extracted_text = state.get("extracted_text", "")
         raw_parsed_data = state.get("raw_parsed_data") or {}
         template_contract = state.get("canonical_model") or {}
-        field_manifest = state.get("field_extraction_manifest")
-        if isinstance(field_manifest, str):
-            try:
-                field_manifest = json.loads(field_manifest)
-            except Exception:
-                field_manifest = []
-        if isinstance(field_manifest, dict):
-            # Handle wrapped manifest payloads like {"fields": [...], ...}
-            field_manifest = field_manifest.get("fields", [])
-
-        # Fallback: if no manifest was resolved, synthesize a minimal contract from expected_fields.
-        # This prevents empty mapping outputs ({fields: [], instruction_blocks: []}) for older templates
-        # that only store expected_fields and have no extracted manifest.
+        manifest_obj = normalize_template_manifest(state.get("field_extraction_manifest"))
+        field_manifest = manifest_obj.get("fields", [])
         if not field_manifest:
-            expected_fields_raw = state.get("expected_fields") or ""
-            if isinstance(expected_fields_raw, list):
-                expected_fields_list = [str(f).strip() for f in expected_fields_raw if str(f).strip()]
-            else:
-                expected_fields_list = [f.strip() for f in str(expected_fields_raw).split(",") if f.strip()]
-
-            if expected_fields_list:
-                field_manifest = [
-                    {
-                        "fieldname": field_name,
-                        "field_type": "scalar",
-                        "required": False,
-                        "meaning": field_name.replace("_", " ").strip(),
-                    }
-                    for field_name in expected_fields_list
-                ]
-                logger.warning(
-                    "Field Harmonization Node: manifest missing; built fallback manifest from expected_fields "
-                    f"({len(field_manifest)} fields)."
-                )
+            template_asset_id = state.get("template_asset_id")
+            raise ValueError(
+                f"Template manifest is empty for template_asset_id={template_asset_id}. "
+                "Resume formatting cannot continue because there is no template contract."
+            )
 
         logger.info(f"Harmonization Node: Contract has {len(field_manifest) if isinstance(field_manifest, list) else 0} fields.")
         formatting_guidance = state.get("formatting_guidance") or ""
