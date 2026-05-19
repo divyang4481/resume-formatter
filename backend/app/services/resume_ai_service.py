@@ -951,69 +951,69 @@ class ResumeAiService:
         field_manifest = manifest_obj.get("fields", [])
 
         logger.info(
-            f"[Harmonize] START — Manifest has {len(field_manifest)} fields | Job: {job_id}"
+            f"[FieldMapping] START — Manifest has {len(field_manifest)} fields | Job: {job_id}"
         )
         if field_manifest:
-            logger.info(f"[Harmonize] First field sample: {list(field_manifest[0].keys())}")
+            logger.info(f"[FieldMapping] First field sample: {list(field_manifest[0].keys())}")
         else:
             logger.critical(
-                "[Harmonize] CRITICAL: field_manifest is EMPTY. "
+                "[FieldMapping] CRITICAL: field_manifest is EMPTY. "
                 "Check that template_resolution_node stores 'field_extraction_manifest' "
                 "in state and that it is not wiped by a subsequent node."
             )
 
         # --- Raw resume text for LLM evidence ---
         raw_resume_text = ""
+        raw_data_for_prompt = {}
         if isinstance(structured_data, dict):
             raw_resume_text = structured_data.get("text", "") or str(
                 structured_data.get("raw_data", "")
             )
+            raw_data_for_prompt = structured_data.get("raw_data", {})
         elif isinstance(structured_data, str):
             raw_resume_text = structured_data
 
-        # --- Field-node based extraction grouping ---
-        # Default: all fields in one LLM call.
-        # Optional: explicit node groups by fieldname.
-        field_by_name: Dict[str, Dict[str, Any]] = {
-            f.get("fieldname"): f for f in field_manifest if f.get("fieldname")
+        structured_data_for_prompt = {
+            "raw_data": raw_data_for_prompt,
+            "text_length": len(raw_resume_text),
         }
-        chunks: List[List[Dict[str, Any]]] = []
 
-        if extraction_field_groups:
-            for group in extraction_field_groups:
-                if not isinstance(group, list):
-                    continue
-                selected_fields: List[Dict[str, Any]] = []
-                for fieldname in group:
-                    if isinstance(fieldname, str) and fieldname in field_by_name:
-                        selected_fields.append(field_by_name[fieldname])
-                if selected_fields:
-                    chunks.append(selected_fields)
+        # --- Convert to FieldMappingNodes and Batch ---
+        from app.services.field_mapping_nodes import (
+    get_fieldname,
 
-            if not chunks:
-                logger.warning(
-                    "[Harmonize] extraction_field_groups provided, but no valid field nodes matched. "
-                    "Falling back to single-call extraction for all fields."
-                )
-
-        if not chunks:
-            chunks = [field_manifest] if field_manifest else []
-
-        logger.info(
-            f"[Harmonize] Prepared {len(chunks)} extraction call(s) using field-node groups."
+            fields_to_mapping_nodes,
+            batch_field_nodes,
+            compact_node_for_llm,
+            extract_mapped_nodes_from_response,
+            make_fallback_mapped_node,
+            synthesize_filled_fields_from_nodes
         )
 
-        enriched_manifest_fields: List[Dict[str, Any]] = []
+        field_nodes = fields_to_mapping_nodes(field_manifest)
+        logger.info(f"[FieldMapping] Normalized manifest fields={len(field_nodes)}")
 
-        for idx, chunk in enumerate(chunks):
-            logger.info(f"[Harmonize] Processing chunk {idx + 1}/{len(chunks)} ({len(chunk)} fields)")
+        node_batches = batch_field_nodes(field_nodes, batch_size=6)
+        logger.info(f"[FieldMapping] Prepared {len(node_batches)} node batch(es). batch_size=6 total_nodes={len(field_nodes)}")
+
+        all_mapped_nodes: List[Dict[str, Any]] = []
+
+        def _looks_truncated_json(s: str) -> bool:
+            stripped = s.rstrip()
+            if not stripped:
+                return True
+            return not (stripped.endswith("}") or stripped.endswith("]"))
+
+        for idx, node_batch in enumerate(node_batches):
+            logger.info(f"[FieldMapping] Node batch {idx + 1}/{len(node_batches)} node_ids={[n.get('node_id') for n in node_batch]}")
             
+            compact_nodes = [compact_node_for_llm(n) for n in node_batch]
+            field_mapping_nodes_json = json.dumps({"nodes": compact_nodes}, indent=2, default=str)
+
             prompt = prompt_manager.get_prompt(
                 "data_linearization.jinja2",
-                structured_data_json=json.dumps(structured_data, indent=2),
-                field_extraction_manifest_json=json.dumps(
-                    {"fields": chunk}, indent=2
-                ),
+                structured_data_json=json.dumps(structured_data_for_prompt, indent=2, default=str),
+                field_mapping_nodes_json=field_mapping_nodes_json,
                 raw_resume_text=raw_resume_text[:6000],
                 formatting_guidance=formatting_guidance,
                 summary_guidance=summary_guidance,
@@ -1022,29 +1022,17 @@ class ResumeAiService:
                 recruiter_input_json="{}",
             )
 
-            logger.info(
-                f"\n" + "=" * 80 + f"\n--- DATA LINEARIZATION SYSTEM PROMPT (CHUNK {idx + 1}/{len(chunks)}) ---\n" + "=" * 80
-            )
             try:
                 system_prompt = prompt_manager.get_prompt("data_mapping_system.jinja2")
-                logger.info(system_prompt)
             except Exception as se:
-                logger.error(f"[Harmonize] Failed to load system prompt: {se}. Using fallback.")
+                logger.error(f"[FieldMapping] Failed to load system prompt: {se}. Using fallback.")
                 system_prompt = (
-                    "You are a professional resume writer for Hays. "
-                    "Return only valid JSON. No markdown, no explanation, no code fences."
+                    "You are a strict resume-to-template FieldMappingNode mapper. "
+                    "Return only valid JSON {'nodes': [...]}. No markdown, no explanation."
                 )
-                logger.info(system_prompt)
-            logger.info("=" * 80 + "\n")
-
-            logger.info(
-                f"\n" + "=" * 80 + f"\n--- DATA LINEARIZATION USER PROMPT (CHUNK {idx + 1}/{len(chunks)}) ---\n" + "=" * 80
-            )
-            logger.info(prompt)
-            logger.info("=" * 80 + "\n")
 
             try:
-                logger.info(f"[Harmonize] Sending request for chunk {idx + 1} to AWS Bedrock LLM...")
+                logger.info(f"[FieldMapping] Sending request for batch {idx + 1} to LLM...")
                 response = self.llm.generate(
                     prompt,
                     system_prompt=system_prompt,
@@ -1052,92 +1040,59 @@ class ResumeAiService:
                     temperature=0.0,
                     max_tokens=8192,
                 )
-                logger.info(f"[Harmonize] LLM request for chunk {idx + 1} completed successfully.")
             except Exception as llm_err:
-                logger.critical(
-                    f"[Harmonize] CRITICAL FAILURE: LLM generation failed for chunk {idx + 1}: {llm_err}",
-                    exc_info=True
-                )
+                logger.critical(f"[FieldMapping] CRITICAL FAILURE: LLM generation failed for batch {idx + 1}: {llm_err}", exc_info=True)
                 raise llm_err
 
-            logger.info(
-                f"\n" + "=" * 80 + f"\n--- DATA LINEARIZATION LLM RESPONSE (CHUNK {idx + 1}/{len(chunks)}) ---\n" + "=" * 80
-            )
-            logger.info(response)
-            logger.info("=" * 80 + "\n")
-
             # Parse the response for this chunk
+            mapped_nodes_for_batch = []
             try:
                 cleaned = LlmSanitizer.clean_json(response)
-                logger.info(f"[Harmonize] Cleaned response for JSON parsing (length: {len(cleaned)} chars)")
-                parsed = json.loads(cleaned)
 
-                chunk_enriched = _extract_enriched_fields_from_mapping_response(parsed)
-                if parsed and not chunk_enriched:
-                    logger.warning(f"[Harmonize] Chunk {idx + 1} parsed but no fields extracted.")
-                enriched_manifest_fields.extend(chunk_enriched)
-                logger.info(f"[Harmonize] Chunk {idx + 1} successfully added {len(chunk_enriched)} enriched fields.")
+                if _looks_truncated_json(cleaned):
+                     raise ValueError("LLM node response appears truncated")
+
+                parsed = json.loads(cleaned)
+                mapped_nodes_for_batch = extract_mapped_nodes_from_response(parsed)
+
+                if not mapped_nodes_for_batch:
+                     raise ValueError("LLM response parsed but no mapped nodes found")
+
+                logger.info(f"[FieldMapping] Batch {idx + 1} parsed successfully. extracted {len(mapped_nodes_for_batch)} nodes.")
+
             except Exception as parse_err:
                 logger.error(
-                    f"[Harmonize] Failed to parse LLM response as JSON for chunk {idx + 1}: {parse_err}. "
-                    "Skipping this chunk from enrichment.",
+                    f"[FieldMapping] Node batch {idx + 1} failed. Creating fallback nodes. Error={parse_err}",
                     exc_info=True
                 )
-                logger.error(f"[Harmonize] Raw LLM response: {response}")
+                mapped_nodes_for_batch = [make_fallback_mapped_node(n) for n in node_batch]
 
-        if not enriched_manifest_fields:
-            logger.critical(
-                f"[Harmonize] CRITICAL: LLM returned 0 enriched fields across all {len(chunks)} chunks. "
-                f"Will use empty FEM for all {len(field_manifest)} manifest fields."
-            )
+            all_mapped_nodes.extend(mapped_nodes_for_batch)
 
+        logger.info(f"[FieldMapping] Mapped node count={len(all_mapped_nodes)}")
 
-        # --- Merge: ensure every manifest field is present (LLM may omit some) ---
-        enriched_by_name: Dict[str, Dict[str, Any]] = {}
-        for item in enriched_manifest_fields:
-            if not isinstance(item, dict):
-                continue
-            fname = item.get("fieldname")
-            if not fname:
-                continue
-            if fname in enriched_by_name:
-                logger.warning("[Harmonize] Duplicate field from LLM ignored: %s", fname)
-                continue
-            if fname not in field_by_name:
-                logger.warning("[Harmonize] Unknown field from LLM ignored: %s", fname)
-                continue
-            enriched_by_name[fname] = item
+        filled_fields = synthesize_filled_fields_from_nodes(
+            original_nodes=field_nodes,
+            mapped_nodes=all_mapped_nodes,
+        )
 
-        filled_fields: List[Dict[str, Any]] = []
-        skipped_instruction_blocks = 0
-        for base_field in field_manifest:
-            fieldname = base_field.get("fieldname")
-            if not fieldname:
-                continue
-            if base_field.get("field_type") == "instruction_block":
-                skipped_instruction_blocks += 1
-                continue
-            filled_fields.append(_normalize_enriched_field(base_field, enriched_by_name.get(fieldname)))
+        logger.info(f"[FieldMapping] Synthesized filled fields={len(filled_fields)}")
+
+        expected_non_instruction = sum(1 for f in field_manifest if f.get("field_type") != "instruction_block")
+        if expected_non_instruction > 0 and len(filled_fields) == 0:
+             logger.critical(f"[FieldMapping] CRITICAL: Synthesized 0 filled fields when {expected_non_instruction} expected. Failsafe triggered.")
+             filled_fields = synthesize_filled_fields_from_nodes(field_nodes, []) # empty fem for all
 
         # --- Derive template_fill_result deterministically (no LLM) ---
         template_fill_result = _build_template_fill_result(filled_fields)
+        logger.info(f"[FieldMapping] template_fill_result key count={len(template_fill_result)}")
+
         missing_fields = [
             f["fieldname"]
             for f in filled_fields
             if f.get("field_extraction_manifest", {}).get("status")
             in ("not_found", "needs_user_input")
         ]
-
-        # --- Log compliance report ---
-        logger.info("\n" + "=" * 80)
-        logger.info("[Harmonize] COMPLIANCE REPORT:")
-        logger.info(f"  Total fields: {len(filled_fields)}")
-        logger.info(
-            f"  Extracted / Generated: "
-            f"{sum(1 for f in filled_fields if f.get('field_extraction_manifest', {}).get('status') in ('extracted', 'inferred', 'generated_from_resume'))}"
-        )
-        logger.info(f"  Missing / Needs Input: {len(missing_fields)} → {missing_fields}")
-        logger.info("=" * 80 + "\n")
 
         result = {
             "filled_template_manifest": {
@@ -1149,15 +1104,7 @@ class ResumeAiService:
             "missing_fields_requiring_recruiter_or_ats_input": missing_fields,
         }
 
-        logger.info(
-            "\n" + "-" * 60 + "\n--- HARMONIZED RESULT (template_fill_result keys) ---\n" + "-" * 60
-        )
-        logger.info(list(template_fill_result.keys()))
-        logger.info("-" * 60 + "\n")
-
         return result
-
-
     async def linearize_data(
         self, structured_data: Dict[str, Any], template_metadata: Dict[str, Any]
     ) -> str:
@@ -1178,98 +1125,6 @@ class ResumeAiService:
 # ---------------------------------------------------------------------------
 
 
-def _extract_enriched_fields_from_mapping_response(parsed: Any) -> List[Dict[str, Any]]:
-    if isinstance(parsed, dict):
-        if isinstance(parsed.get("fields"), list):
-            return parsed["fields"]
-        ftm = parsed.get("filled_template_manifest")
-        if isinstance(ftm, dict) and isinstance(ftm.get("fields"), list):
-            return ftm["fields"]
-        fem = parsed.get("field_extraction_manifest")
-        if isinstance(fem, list):
-            return fem
-        if isinstance(fem, dict) and isinstance(fem.get("fields"), list):
-            return fem["fields"]
-        tfr = parsed.get("template_fill_result")
-        if isinstance(tfr, dict):
-            out=[]
-            for fname, entry in tfr.items():
-                if not isinstance(entry, dict):
-                    entry={"value": entry}
-                fem_entry = entry.get("field_extraction_manifest") if isinstance(entry.get("field_extraction_manifest"), dict) else {}
-                if not fem_entry:
-                    fem_entry = {
-                        "value_type": "scalar",
-                        "value": entry.get("value"),
-                        "confidence": entry.get("confidence", 0.0),
-                        "status": entry.get("status", "not_found"),
-                        "reason": entry.get("reason", "Recovered from template_fill_result wrapper."),
-                        "source": entry.get("source", {"resume_section": None, "evidence": None}),
-                    }
-                out.append({"fieldname": fname, "field_extraction_manifest": fem_entry})
-            return out
-        logger.warning("[Harmonize] Could not extract fields. top-level keys=%s", list(parsed.keys()))
-        return []
-    if isinstance(parsed, list):
-        return parsed
-    return []
-
-def _normalize_enriched_field(base_field: Dict[str, Any], enriched: Optional[Dict[str, Any]]) -> Dict[str, Any]:
-    merged = dict(base_field)
-    fieldname = base_field.get("fieldname", "")
-    field_type = base_field.get("field_type", "scalar")
-    fem = None
-    if isinstance(enriched, dict):
-        fem = enriched.get("field_extraction_manifest")
-        if not isinstance(fem, dict):
-            if any(k in enriched for k in ("value", "status", "confidence")):
-                fem = {
-                    "value_type": "scalar",
-                    "value": enriched.get("value"),
-                    "confidence": enriched.get("confidence", 0.0),
-                    "status": enriched.get("status", "not_found"),
-                    "reason": enriched.get("reason", "Normalized from top-level value fields."),
-                    "source": enriched.get("source", {"resume_section": None, "evidence": None}),
-                }
-    if not isinstance(fem, dict):
-        fem = _make_empty_fem(field_type, fieldname)
-    value = fem.get("value")
-    valid = True
-    if field_type in ("array_simple", "table_loop", "array_complex") and not isinstance(value, list): valid=False
-    if field_type == "complex_object" and not isinstance(value, dict): valid=False
-    if field_type in ("scalar", "rich_text", "paste_zone") and isinstance(value, (list, dict)): valid=False
-    if not valid:
-        fem = _make_empty_fem(field_type, fieldname)
-    merged["field_extraction_manifest"] = fem
-    return merged
-
-def _make_empty_fem(field_type: str, fieldname: str) -> Dict[str, Any]:
-    """Return an empty field_extraction_manifest for a field with no value."""
-    if field_type in ("array_simple", "array_complex", "table_loop"):
-        empty_val: Any = []
-    elif field_type == "complex_object":
-        empty_val = {}
-    elif field_type == "paste_zone":
-        empty_val = None
-    else:
-        empty_val = None
-
-    return {
-        "value_type": (
-            "array" if field_type in ("array_simple", "table_loop")
-            else "array_complex" if field_type == "array_complex"
-            else "complex_object" if field_type == "complex_object"
-            else "rich_text" if field_type in ("rich_text", "paste_zone")
-            else "scalar"
-        ),
-        "value": empty_val,
-        "confidence": 0.0,
-        "status": "not_found",
-        "reason": f"Field '{fieldname}' was not found in the candidate resume.",
-        "source": {"resume_section": None, "evidence": None},
-    }
-
-
 def _build_template_fill_result(filled_fields: List[Dict[str, Any]]) -> Dict[str, Any]:
     """
     Deterministically derive template_fill_result from the enriched manifest fields.
@@ -1278,8 +1133,9 @@ def _build_template_fill_result(filled_fields: List[Dict[str, Any]]) -> Dict[str
     Each entry: { value, marker_text, field_type, confidence, status, field_extraction_manifest }
     """
     result: Dict[str, Any] = {}
+    from app.services.field_mapping_nodes import get_fieldname
     for field in filled_fields:
-        fieldname = field.get("fieldname")
+        fieldname = get_fieldname(field)
         if not fieldname:
             continue
         fem = field.get("field_extraction_manifest") or {}

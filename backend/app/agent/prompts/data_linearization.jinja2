@@ -1,10 +1,10 @@
 TASK:
-Generate a filled template manifest.
+Map candidate resume facts to template FieldMappingNodes.
 
-TEMPLATE MANIFEST JSON:
-{{ field_extraction_manifest_json }}
+FIELD MAPPING NODES JSON:
+{{ field_mapping_nodes_json }}
 
-CANDIDATE RESUME EXTRACTION:
+CANDIDATE RESUME FACTS:
 {{ structured_data_json }}
 
 RAW RESUME TEXT:
@@ -14,56 +14,56 @@ OPTIONAL RECRUITER / ATS INPUT:
 {{ recruiter_input_json | default("{}") }}
 
 INSTRUCTIONS:
+You are receiving a node batch from a larger template manifest.
 
-You must return the SAME template manifest structure as TEMPLATE MANIFEST JSON.
+Return one JSON object with this exact shape:
 
-For every object inside `fields`, preserve all existing properties exactly:
-- fieldname
-- field_type
-- meaning
-- source_hints
-- marker_text
-- render_locator
-
-Then add or overwrite only this property:
-- field_extraction_manifest
-
-Do not output `template_fill_result`.
-Always return one JSON object with the top-level shape: {"fields": [...]}.
-Do not output any other wrapper shape.
-Do not add duplicate fields.
-Do not remove instruction_blocks if present.
-
-For each field, produce:
-
-"field_extraction_manifest": {
-  "value_type": "scalar | rich_text | array | complex_object | array_complex",
-  "value": "...",
-  "confidence": 0.0,
-  "status": "extracted | inferred | generated_from_resume | not_found | needs_user_input",
-  "reason": "...",
-  "source": {
-    "resume_section": "...",
-    "evidence": "..."
-  }
+{
+  "nodes": [
+    {
+      "node_id": "...",
+      "fieldname": "...",
+      "field_extraction_manifest": {
+        "value_type": "scalar | rich_text | array | complex_object | array_complex",
+        "value": null,
+        "confidence": 0.0,
+        "status": "extracted | inferred | generated_from_resume | not_found | needs_user_input",
+        "reason": "...",
+        "source": {
+          "resume_section": "...",
+          "evidence": "..."
+        }
+      }
+    }
+  ]
 }
 
-Value shape must match field_type:
+Rules:
+- Return exactly one mapped node for every input node.
+- Use node_id exactly as provided.
+- Use fieldname exactly as provided.
+- Do not use field_name.
+- Do not echo marker_text, render_locator, meaning, source_hints, or field_type.
+- Do not output template_fill_result.
+- Do not output filled_template_manifest.
+- Do not output fields.
+- Do not output any wrapper except {"nodes": [...]}.
+- Do not invent recruiter/ATS-only values.
+
+Value shape:
 - scalar => scalar/null
 - rich_text => string/null
+- paste_zone => string/null
 - array_simple => array of strings
 - table_loop => array
 - complex_object => object
 - array_complex => array of objects
-- paste_zone => rich_text/null (or object only if manifest clearly demands it)
 
 Missing values:
-- scalar/rich_text => null
-- array/table_loop => []
-- complex_object/paste_zone => {}
+- scalar/rich_text/paste_zone => null
+- array_simple/table_loop/array_complex => []
+- complex_object => {}
 - status => "not_found" or "needs_user_input"
 - confidence => 0.0
-
-Do not invent ATS/recruiter-only values.
 
 Return only valid JSON. No markdown. No explanation. No code fence.
