@@ -4,7 +4,7 @@ import os
 import re
 import zipfile
 import lxml.etree as ET
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
 
 from app.config import settings
 from app.agent.prompt_manager import prompt_manager
@@ -927,6 +927,10 @@ class ResumeAiService:
         detected_placeholders: List[str],
         field_manifest: List[Dict[str, Any]],
         formatting_guidance: str = "",
+        summary_guidance: str = "",
+        validation_guidance: str = "",
+        analysis_json: str = "",
+        extraction_field_groups: Optional[List[List[str]]] = None,
         job_id: str = "N/A",
     ) -> Dict[str, Any]:
         """
@@ -979,12 +983,37 @@ class ResumeAiService:
         elif isinstance(structured_data, str):
             raw_resume_text = structured_data
 
-        # --- Smart Chunked LLM Mapping ---
-        # When templates have many fields, a single massive LLM call can suffer from
-        # context loss or token limits. We process fields in smaller chunks.
-        CHUNK_SIZE = 6
-        chunks = [field_manifest[i:i + CHUNK_SIZE] for i in range(0, len(field_manifest), CHUNK_SIZE)]
-        logger.info(f"[Harmonize] Split manifest into {len(chunks)} chunks of max size {CHUNK_SIZE} for token-safe processing.")
+        # --- Field-node based extraction grouping ---
+        # Default: all fields in one LLM call.
+        # Optional: explicit node groups by fieldname.
+        field_by_name: Dict[str, Dict[str, Any]] = {
+            f.get("fieldname"): f for f in field_manifest if f.get("fieldname")
+        }
+        chunks: List[List[Dict[str, Any]]] = []
+
+        if extraction_field_groups:
+            for group in extraction_field_groups:
+                if not isinstance(group, list):
+                    continue
+                selected_fields: List[Dict[str, Any]] = []
+                for fieldname in group:
+                    if isinstance(fieldname, str) and fieldname in field_by_name:
+                        selected_fields.append(field_by_name[fieldname])
+                if selected_fields:
+                    chunks.append(selected_fields)
+
+            if not chunks:
+                logger.warning(
+                    "[Harmonize] extraction_field_groups provided, but no valid field nodes matched. "
+                    "Falling back to single-call extraction for all fields."
+                )
+
+        if not chunks:
+            chunks = [field_manifest] if field_manifest else []
+
+        logger.info(
+            f"[Harmonize] Prepared {len(chunks)} extraction call(s) using field-node groups."
+        )
 
         enriched_manifest_fields: List[Dict[str, Any]] = []
 
@@ -998,6 +1027,10 @@ class ResumeAiService:
                     {"fields": chunk}, indent=2
                 ),
                 raw_resume_text=raw_resume_text[:6000],
+                formatting_guidance=formatting_guidance,
+                summary_guidance=summary_guidance,
+                validation_guidance=validation_guidance,
+                analysis_json=analysis_json,
                 recruiter_input_json="{}",
             )
 
@@ -1140,7 +1173,8 @@ class ResumeAiService:
         result = {
             "filled_template_manifest": {
                 "fields": filled_fields,
-                "instruction_blocks": instruction_blocks
+                "instruction_blocks": instruction_blocks,
+                "missing_fields_requiring_recruiter_or_ats_input": missing_fields,
             },
             "template_fill_result": template_fill_result,
             "missing_fields_requiring_recruiter_or_ats_input": missing_fields,

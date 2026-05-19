@@ -29,6 +29,7 @@ class AgentState(TypedDict):
     summary_guidance: Optional[str]
     formatting_guidance: Optional[str]
     validation_guidance: Optional[str]
+    analysis_json: Optional[str]
     pii_guidance: Optional[str]
     
     # Governance Requirements

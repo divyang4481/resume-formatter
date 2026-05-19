@@ -65,6 +65,7 @@ class ResumeWorkflowService:
         formatting_guidance = ""
         validation_guidance = ""
         pii_guidance = ""
+        analysis_json = ""
         industry = ext_meta.get("industry_id", "General")
         language = "en"
 
@@ -80,6 +81,7 @@ class ResumeWorkflowService:
                     formatting_guidance = template.formatting_guidance or ""
                     validation_guidance = template.validation_guidance or ""
                     pii_guidance = template.pii_guidance or ""
+                    analysis_json = template.analysis_json or ""
                     industry = template.industry or industry
                     language = template.language or "en"
                     
@@ -115,6 +117,7 @@ class ResumeWorkflowService:
             "summary_guidance": summary_guidance,
             "validation_guidance": validation_guidance,
             "pii_guidance": pii_guidance,
+            "analysis_json": analysis_json,
             "industry": industry,
             "language": language,
             "transformed_document_json": None,

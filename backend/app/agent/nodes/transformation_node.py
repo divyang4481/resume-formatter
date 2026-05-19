@@ -60,7 +60,12 @@ def create_field_harmonization_node(ai_service=None):
         
         logger.info(f"Harmonization Node: Contract has {len(field_manifest) if isinstance(field_manifest, list) else 0} fields.")
         formatting_guidance = state.get("formatting_guidance") or ""
+        summary_guidance = state.get("summary_guidance") or ""
+        validation_guidance = state.get("validation_guidance") or ""
+        analysis_json = state.get("analysis_json") or ""
         template_text = state.get("template_text") or ""
+        runtime_metadata = state.get("runtime_metadata") or {}
+        extraction_field_groups = runtime_metadata.get("field_extraction_field_groups")
         
         # If ai_service is not provided, try to get it from dependencies or agent provider (fallback)
         if not ai_service:
@@ -87,6 +92,10 @@ def create_field_harmonization_node(ai_service=None):
                 detected_placeholders=detected_placeholders,
                 field_manifest=field_manifest,
                 formatting_guidance=formatting_guidance,
+                summary_guidance=summary_guidance,
+                validation_guidance=validation_guidance,
+                analysis_json=analysis_json,
+                extraction_field_groups=extraction_field_groups,
                 job_id=state.get("session_id", "default")
             )
         
