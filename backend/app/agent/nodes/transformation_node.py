@@ -6,6 +6,7 @@ from app.agent.prompt_manager import prompt_manager
 import json
 import logging
 from app.services.template_manifest_utils import normalize_template_manifest
+from app.services.field_mapping_nodes import get_fieldname
 
 logger = logging.getLogger(__name__)
 
@@ -87,7 +88,7 @@ def create_field_harmonization_node(ai_service=None):
             if isinstance(template_contract, dict):
                 detected_placeholders = list(template_contract.keys())
             elif isinstance(template_contract, list):
-                detected_placeholders = [f.get("fieldname") for f in template_contract if f.get("fieldname")]
+                detected_placeholders = [get_fieldname(f) for f in template_contract if get_fieldname(f)]
 
             mapped_data = await ai_service.harmonize_data_to_template_style(
                 structured_data={"text": extracted_text, "raw_data": raw_parsed_data},

@@ -1,4 +1,5 @@
 from typing import Any, Dict, List, Optional
+from app.services.field_mapping_nodes import get_fieldname
 
 def default_value_for_field_type(field_type: str) -> Any:
     if field_type in ("array_simple", "array_complex", "table_loop"):
@@ -45,12 +46,12 @@ def build_render_context_from_template_fill_result(
     """
     render_context: Dict[str, Any] = {}
 
-    filled_by_name = {f.get("fieldname"): f for f in (filled_manifest_fields or []) if isinstance(f, dict) and f.get("fieldname")}
+    filled_by_name = {get_fieldname(f): f for f in (filled_manifest_fields or []) if isinstance(f, dict) and get_fieldname(f)}
 
     manifest_by_field = {
-        f.get("fieldname"): f
+        get_fieldname(f): f
         for f in manifest_fields
-        if isinstance(f, dict) and f.get("fieldname")
+        if isinstance(f, dict) and get_fieldname(f)
     }
 
     for fieldname, manifest_field in manifest_by_field.items():
