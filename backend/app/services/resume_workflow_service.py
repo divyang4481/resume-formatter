@@ -158,7 +158,10 @@ class ResumeWorkflowService:
 
                             extracted_json = final_state.get("transformed_document_json")
                             if extracted_json:
-                                candidate.normalized_resume_json = json.dumps(extracted_json) if isinstance(extracted_json, dict) else str(extracted_json)
+                                if isinstance(extracted_json, dict) and "filled_template_manifest" in extracted_json:
+                                    candidate.normalized_resume_json = json.dumps(extracted_json["filled_template_manifest"])
+                                else:
+                                    candidate.normalized_resume_json = json.dumps(extracted_json) if isinstance(extracted_json, dict) else str(extracted_json)
                             session.commit()
             if final_state.get("render_docx_uri"):
                 job.render_docx_uri = final_state["render_docx_uri"]
@@ -175,7 +178,10 @@ class ResumeWorkflowService:
             if final_state.get("transformed_document_json"):
                 transformed_data = final_state["transformed_document_json"]
                 if isinstance(transformed_data, dict):
-                    job.transformed_json = json.dumps(transformed_data)
+                    if "filled_template_manifest" in transformed_data:
+                        job.transformed_json = json.dumps(transformed_data["filled_template_manifest"])
+                    else:
+                        job.transformed_json = json.dumps(transformed_data)
                 else:
                     job.transformed_json = str(transformed_data)
 

@@ -11,8 +11,19 @@ class DoclingParser(DocumentParser):
 
     async def parse(self, file_bytes: bytes, file_name: str, mime_type: str, options: Dict[str, Any] = None) -> ParsedDocument:
         if self.converter is None:
-            from docling.document_converter import DocumentConverter
-            self.converter = DocumentConverter()
+            from docling.document_converter import DocumentConverter, PdfFormatOption
+            from docling.datamodel.base_models import InputFormat
+            from docling.datamodel.pipeline_options import PdfPipelineOptions
+            
+            pipeline_options = PdfPipelineOptions()
+            pipeline_options.do_ocr = False
+            pipeline_options.do_table_structure = True
+            
+            self.converter = DocumentConverter(
+                format_options={
+                    InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)
+                }
+            )
 
         ext = os.path.splitext(file_name)[1]
         # On Windows, we must close the file before Docling can open it
@@ -98,4 +109,4 @@ class DoclingParser(DocumentParser):
         return extension.lower() in [".pdf", ".docx", ".pptx"] or mime_type in ["application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"]
 
     def capabilities(self) -> List[str]:
-        return ["tables", "sections", "markdown", "ocr"]
+        return ["tables", "sections", "markdown"]

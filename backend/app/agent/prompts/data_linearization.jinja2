@@ -1,484 +1,68 @@
-TASK: Map Candidate Data to Template-Specific Fields with Deep Reasoning and Schema Enforcement.
+TASK:
+Generate a filled template manifest.
 
-CANDIDATE DATA (Raw Extraction):
-{{ structured_data_json }}
-
-TEMPLATE CONTRACT (The Complete Manifest):
+TEMPLATE MANIFEST JSON:
 {{ field_extraction_manifest_json }}
 
-RUNTIME CONTEXT:
-- JOB ID: {{ job_id }}
+CANDIDATE RESUME EXTRACTION:
+{{ structured_data_json }}
 
-MAPPING INTELLIGENCE PROTOCOL (MANDATORY):
-1. **100% Manifest Parity & Zero Extra Fields (CRITICAL)**: 
-   - Your output `template_fill_result` and `filled_template_manifest` MUST contain **ALL** and **ONLY** the exact fields defined in the TEMPLATE CONTRACT (The Complete Manifest).
-   - If the manifest has 10 fields, your output must have precisely those same 10 fields.
-   - **NO MISSING FIELDS**: If you cannot find a value for a field in the resume, you MUST still output that field with a `value` of `null` (or `[]` / `{}` as appropriate for its type) and `status` set to `"not_found"` or `"needs_user_input"`. Do NOT omit it!
-   - **NO EXTRA FIELDS**: Do NOT add any keys or fields that are not explicitly defined in the TEMPLATE CONTRACT.
+RAW RESUME TEXT:
+{{ raw_resume_text }}
 
-2. **STRICT Fieldname Compliance**:
-   - Use ONLY the EXACT fieldnames (keys) defined in the TEMPLATE CONTRACT. Do NOT rename, alias, or alter any keys.
+OPTIONAL RECRUITER / ATS INPUT:
+{{ recruiter_input_json | default("{}") }}
 
-3. **Marker Preservation (CRITICAL)**:
-   - For every field, you MUST copy the value of `marker_text` from the TEMPLATE CONTRACT verbatim into your output.
+INSTRUCTIONS:
 
-4. **Field Type Schema Adherence**:
-   - Every field's inner value must adhere strictly to the requested structural shape:
-     * **scalar**: string, number, or boolean (e.g., `"Divyang Panchasara"` or `null`)
-     * **rich_text**: markdown/string block (e.g., `"[:B:]Senior Architect[:/B:]"` or `null`)
-     * **array_simple**: flat array of strings (e.g., `["Python", "AWS"]` or `[]`)
-     * **array_complex**: array of structured objects (e.g., `[{"company": "Google", "role": "Engineer"}]` or `[]`)
-     * **complex_object**: structured key-value object (e.g., `{"profile": "..."}` or `{}`)
-     * **paste_zone**: structured rich object or full text block
+You must return the SAME template manifest structure as TEMPLATE MANIFEST JSON.
 
-5. **Contextual Mapping & Extraction Manifest**:
-   - For every field, you MUST generate a nested `field_extraction_manifest` property containing:
-     * `value_type`: one of "scalar", "rich_text", "array", "complex_object", "array_complex"
-     * `value`: The validated candidate value (or `null`/`[]`/`{}` if not found).
-     * `confidence`: A float from 0.0 to 1.0 (set to 0.0 if not found).
-     * `status`: one of ["extracted", "inferred", "generated_from_resume", "not_found", "needs_user_input"]
-     * `reason`: optional explanation (required if status is "inferred", "not_found", or "needs_user_input").
-     * `source`: an object containing `resume_section` (or null) and `evidence` (or null).
+For every object inside `fields`, preserve all existing properties exactly:
+- fieldname
+- field_type
+- meaning
+- source_hints
+- marker_text
+- render_locator
 
----
-NEGATIVE CONSTRAINTS (STRICT):
-- NO HALLUCINATED KEYS: Only keys from the manifest allowed.
-- NO MARKER ALTERATION: The `marker_text` value must be an identical string copy of the marker provided.
+Then add or overwrite only this property:
+- field_extraction_manifest
 
----
-OUTPUT JSON STRUCTURE (STRICT):
-You must output a single valid JSON object containing BOTH:
-1. `template_fill_result`: The mapped fields envelope.
-2. `filled_template_manifest`: The complete template manifest list, where each field is enriched with its resolved `field_extraction_manifest`.
+Do not output `template_fill_result`.
+Do not output `filled_template_manifest` wrapper unless the manifest starts with it. You should output exactly the shape of the TEMPLATE MANIFEST JSON provided. If the input is {"fields": [...]}, the output should be {"fields": [...]}.
+Do not add duplicate fields.
+Do not remove instruction_blocks if present.
 
-Example Output:
-{
-  "template_fill_result": {
-    "candidate_id": {
-      "value": null,
-      "marker_text": "«CandidateID»",
-      "field_type": "scalar",
-      "mapping_category": "simple scalar replacement",
-      "confidence": 0.0,
-      "status": "not_found",
-      "field_extraction_manifest": {
-        "value_type": "scalar",
-        "value": null,
-        "confidence": 0.0,
-        "status": "not_found",
-        "reason": "Candidate ID is not available in the resume. It should come from ATS/Hays system metadata, not resume text.",
-        "source": {
-          "resume_section": null,
-          "evidence": null
-        }
-      }
-    },
-    "candidate_full_name": {
-      "value": "Divyang Panchasara",
-      "marker_text": "«CandidateFullName»",
-      "field_type": "scalar",
-      "mapping_category": "simple scalar replacement",
-      "confidence": 0.98,
-      "status": "extracted",
-      "field_extraction_manifest": {
-        "value_type": "scalar",
-        "value": "Divyang Panchasara",
-        "confidence": 0.98,
-        "status": "extracted",
-        "source": {
-          "resume_section": "Header",
-          "evidence": "Divyang Panchasara"
-        }
-      }
-    },
-    "cv_comments": {
-      "value": "Divyang Panchasara is an experienced Solution Architect with 18+ years of experience across cloud-native architecture, enterprise integration, AI/ML, GenAI, IoT, and large-scale software delivery. He has strong multi-cloud exposure across AWS, Azure, and Google Cloud, with hands-on experience in .NET, Java, Python, JavaScript, microservices, DevOps, data engineering, and AI-assisted development. His recent work includes leading GenAI initiatives using GPT models, transformer architectures, prompt engineering, Azure OpenAI, Azure Document Intelligence, AWS, and GCP.",
-      "marker_text": "«CVcomments»",
-      "field_type": "rich_text",
-      "mapping_category": "simple scalar replacement",
-      "confidence": 0.88,
-      "status": "generated_from_resume",
-      "field_extraction_manifest": {
-        "value_type": "rich_text",
-        "value": "Divyang Panchasara is an experienced Solution Architect with 18+ years of experience across cloud-native architecture, enterprise integration, AI/ML, GenAI, IoT, and large-scale software delivery. He has strong multi-cloud exposure across AWS, Azure, and Google Cloud, with hands-on experience in .NET, Java, Python, JavaScript, microservices, DevOps, data engineering, and AI-assisted development. His recent work includes leading GenAI initiatives using GPT models, transformer architectures, prompt engineering, Azure OpenAI, Azure Document Intelligence, AWS, and GCP.",
-        "confidence": 0.88,
-        "status": "generated_from_resume",
-        "source": {
-          "resume_section": "Profile / Employment History / Skills",
-          "evidence": "18+ years of experience; Solution Architect; GenAI initiatives; AWS; Microsoft Azure; Google Cloud; AI/ML"
-        }
-      }
-    },
-    "professional_qualifications": {
-      "value": [
-        "AWS Certified Solutions Architect – Associate",
-        "Google Cloud Certified Cloud Architect",
-        "Microsoft Certified in Azure Solution Architect",
-        "Google Cloud Certified Data Engineer",
-        "Microsoft Certified in Azure IoT Engineer",
-        "Certified Associate in Project Management (CAPM) from PMI",
-        "Microsoft Certified: Azure AI Engineer Associate",
-        "Microsoft Certified: Azure Data Scientist Associate"
-      ],
-      "marker_text": "«TableStart:bCheckType»",
-      "field_type": "array_simple",
-      "mapping_category": "array",
-      "confidence": 0.95,
-      "status": "extracted",
-      "field_extraction_manifest": {
-        "value_type": "array",
-        "value": [
-          "AWS Certified Solutions Architect – Associate",
-          "Google Cloud Certified Cloud Architect",
-          "Microsoft Certified in Azure Solution Architect",
-          "Google Cloud Certified Data Engineer",
-          "Microsoft Certified in Azure IoT Engineer",
-          "Certified Associate in Project Management (CAPM) from PMI",
-          "Microsoft Certified: Azure AI Engineer Associate",
-          "Microsoft Certified: Azure Data Scientist Associate"
-        ],
-        "confidence": 0.95,
-        "status": "extracted",
-        "source": {
-          "resume_section": "Certification",
-          "evidence": "Certification section lists AWS, Google Cloud, Microsoft Azure, CAPM, Azure AI Engineer, and Azure Data Scientist certifications."
-        }
-      }
-    },
-    "candidate_cv": {
-      "value": {
-        "profile": "Accomplished Solution Architect with 18+ years of experience in designing and implementing large-scale systems. Expert in business integration, service activation, cloud-native development, AI/ML, IoT, and GenAI initiatives.",
-        "skills": [
-          "AWS",
-          "Microsoft Azure",
-          "Google Cloud",
-          "Machine Learning",
-          "Python",
-          "Java",
-          "C# .NET",
-          "Microservices",
-          "Docker",
-          "Kubernetes",
-          "DevSecOps",
-          "ReactJs",
-          "Angular",
-          "NodeJs",
-          "PostgreSQL",
-          "DynamoDB",
-          "Apache Spark",
-          "Hadoop",
-          "PyTorch",
-          "Transformer Models"
-        ],
-        "employment_history": [
-          {
-            "title": "Solution Architect",
-            "company": "Cognizant",
-            "location": "Bangalore",
-            "start_date": "May 2020",
-            "end_date": "Present",
-            "highlights": [
-              "Led architecture and implementation of enterprise technology solutions.",
-              "Worked on loyalty solutions for a leading retail client.",
-              "Developed AI solutions using Azure OpenAI and Azure Document Intelligence.",
-              "Implemented LLM-based prompt engineering using GPT-3, GPT-4, BERT, and Google T5.",
-              "Worked on AI/ML projects across Azure, OpenAI, AWS, and GCP."
-            ]
-          }
-        ],
-        "education": [
-          {
-            "degree": "M.Sc.",
-            "institution": "Gujarat University Ahmedabad",
-            "location": "Ahmedabad",
-            "start_year": "2002",
-            "end_year": "2004"
-          }
-        ],
-        "certifications": [
-          "AWS Certified Solutions Architect – Associate",
-          "Google Cloud Certified Cloud Architect"
-        ],
-        "languages": [
-          "English",
-          "Hindi",
-          "Gujarati"
-        ]
-      },
-      "marker_text": "Key skills",
-      "field_type": "paste_zone",
-      "mapping_category": "complex smart object",
-      "confidence": 0.9,
-      "status": "structured_from_resume",
-      "field_extraction_manifest": {
-        "value_type": "complex_object",
-        "value": {
-          "profile": "Accomplished Solution Architect with 18+ years of experience in designing and implementing large-scale systems. Expert in business integration, service activation, cloud-native development, AI/ML, IoT, and GenAI initiatives.",
-          "skills": [
-            "AWS",
-            "Microsoft Azure",
-            "Google Cloud",
-            "Machine Learning",
-            "Python",
-            "Java",
-            "C# .NET",
-            "Microservices",
-            "Docker",
-            "Kubernetes",
-            "DevSecOps",
-            "ReactJs",
-            "Angular",
-            "NodeJs",
-            "PostgreSQL",
-            "DynamoDB",
-            "Apache Spark",
-            "Hadoop",
-            "PyTorch",
-            "Transformer Models"
-          ],
-          "employment_history": [
-            {
-              "title": "Solution Architect",
-              "company": "Cognizant",
-              "location": "Bangalore",
-              "start_date": "May 2020",
-              "end_date": "Present",
-              "highlights": [
-                "Led architecture and implementation of enterprise technology solutions.",
-                "Worked on loyalty solutions for a leading retail client.",
-                "Developed AI solutions using Azure OpenAI and Azure Document Intelligence.",
-                "Implemented LLM-based prompt engineering using GPT-3, GPT-4, BERT, and Google T5.",
-                "Worked on AI/ML projects across Azure, OpenAI, AWS, and GCP."
-              ]
-            }
-          ],
-          "education": [
-            {
-              "degree": "M.Sc.",
-              "institution": "Gujarat University Ahmedabad",
-              "location": "Ahmedabad",
-              "start_year": "2002",
-              "end_year": "2004"
-            }
-          ],
-          "certifications": [
-            "AWS Certified Solutions Architect – Associate",
-            "Google Cloud Certified Cloud Architect"
-          ],
-          "languages": [
-            "English",
-            "Hindi",
-            "Gujarati"
-          ]
-        },
-        "confidence": 0.9,
-        "status": "structured_from_resume",
-        "source": {
-          "resume_section": "Full Resume",
-          "evidence": "Profile, Employment History, Skills, Education, Certification, Courses, Languages"
-        }
-      }
-    }
-  },
-  "filled_template_manifest": {
-    "fields": [
-      {
-        "fieldname": "candidate_id",
-        "field_type": "scalar",
-        "meaning": "Unique identifier assigned to the candidate in the Hays system",
-        "source_hints": "Table labeled 'Candidate' containing a merge field",
-        "marker_text": "«CandidateID»",
-        "render_locator": {
-          "strategy": "fill_blank_cell_after_label",
-          "marker_text": "«CandidateID»",
-          "label": "Candidate",
-          "heading": ""
-        },
-        "field_extraction_manifest": {
-          "value_type": "scalar",
-          "value": null,
-          "confidence": 0.0,
-          "status": "not_found",
-          "reason": "Candidate ID is not available in the resume. It should come from ATS/Hays system metadata, not resume text.",
-          "source": {
-            "resume_section": null,
-            "evidence": null
-          }
-        }
-      },
-      {
-        "fieldname": "candidate_full_name",
-        "field_type": "scalar",
-        "meaning": "Full legal name of the candidate",
-        "source_hints": "Merge field appearing early in document body",
-        "marker_text": "«CandidateFullName»",
-        "render_locator": {
-          "strategy": "replace_marker",
-          "marker_text": "«CandidateFullName»",
-          "label": "",
-          "heading": ""
-        },
-        "field_extraction_manifest": {
-          "value_type": "scalar",
-          "value": "Divyang Panchasara",
-          "confidence": 0.98,
-          "status": "extracted",
-          "source": {
-            "resume_section": "Header",
-            "evidence": "Divyang Panchasara"
-          }
-        }
-      },
-      {
-        "fieldname": "cv_comments",
-        "field_type": "rich_text",
-        "meaning": "Recruiter's expert assessment and commentary on the candidate",
-        "source_hints": "Under section heading 'Our expert opinion' containing «CVcomments»",
-        "marker_text": "«CVcomments»",
-        "render_locator": {
-          "strategy": "replace_marker",
-          "marker_text": "«CVcomments»",
-          "label": "",
-          "heading": ""
-        },
-        "field_extraction_manifest": {
-          "value_type": "rich_text",
-          "value": "Divyang Panchasara is an experienced Solution Architect with 18+ years of experience across cloud-native architecture, enterprise integration, AI/ML, GenAI, IoT, and large-scale software delivery. He has strong multi-cloud exposure across AWS, Azure, and Google Cloud, with hands-on experience in .NET, Java, Python, JavaScript, microservices, DevOps, data engineering, and AI-assisted development. His recent work includes leading GenAI initiatives using GPT models, transformer architectures, prompt engineering, Azure OpenAI, Azure Document Intelligence, AWS, and GCP.",
-          "confidence": 0.88,
-          "status": "generated_from_resume",
-          "source": {
-            "resume_section": "Profile / Employment History / Skills",
-            "evidence": "18+ years of experience; Solution Architect; GenAI initiatives; AWS; Microsoft Azure; Google Cloud; AI/ML"
-          }
-        }
-      },
-      {
-        "fieldname": "professional_qualifications",
-        "field_type": "array_simple",
-        "meaning": "List of professional certifications or checks held by the candidate",
-        "source_hints": "Section 'Professional qualifications' containing a table loop with field «CheckType»",
-        "marker_text": "«TableStart:bCheckType»",
-        "render_locator": {
-          "strategy": "replace_table_loop",
-          "marker_text": "«TableStart:bCheckType»",
-          "label": "",
-          "heading": "Professional qualifications"
-        },
-        "field_extraction_manifest": {
-          "value_type": "array",
-          "value": [
-            "AWS Certified Solutions Architect – Associate",
-            "Google Cloud Certified Cloud Architect",
-            "Microsoft Certified in Azure Solution Architect",
-            "Google Cloud Certified Data Engineer",
-            "Microsoft Certified in Azure IoT Engineer",
-            "Certified Associate in Project Management (CAPM) from PMI",
-            "Microsoft Certified: Azure AI Engineer Associate",
-            "Microsoft Certified: Azure Data Scientist Associate"
-          ],
-          "confidence": 0.95,
-          "status": "extracted",
-          "source": {
-            "resume_section": "Certification",
-            "evidence": "Certification section lists AWS, Google Cloud, Microsoft Azure, CAPM, Azure AI Engineer, and Azure Data Scientist certifications."
-          }
-        }
-      },
-      {
-        "fieldname": "candidate_cv",
-        "field_type": "paste_zone",
-        "meaning": "Full candidate CV content to be pasted here, either from original or Hays branded template",
-        "source_hints": "Instruction block indicating to paste candidate's CV in this space",
-        "marker_text": "Key skills",
-        "render_locator": {
-          "strategy": "replace_section_body",
-          "marker_text": "Key skills",
-          "label": "",
-          "heading": "Key skills"
-        },
-        "field_extraction_manifest": {
-          "value_type": "complex_object",
-          "value": {
-            "profile": "Accomplished Solution Architect with 18+ years of experience in designing and implementing large-scale systems. Expert in business integration, service activation, cloud-native development, AI/ML, IoT, and GenAI initiatives.",
-            "skills": [
-              "AWS",
-              "Microsoft Azure",
-              "Google Cloud",
-              "Machine Learning",
-              "Python",
-              "Java",
-              "C# .NET",
-              "Microservices",
-              "Docker",
-              "Kubernetes",
-              "DevSecOps",
-              "ReactJs",
-              "Angular",
-              "NodeJs",
-              "PostgreSQL",
-              "DynamoDB",
-              "Apache Spark",
-              "Hadoop",
-              "PyTorch",
-              "Transformer Models"
-            ],
-            "employment_history": [
-              {
-                "title": "Solution Architect",
-                "company": "Cognizant",
-                "location": "Bangalore",
-                "start_date": "May 2020",
-                "end_date": "Present",
-                "highlights": [
-                  "Led architecture and implementation of enterprise technology solutions.",
-                  "Worked on loyalty solutions for a leading retail client.",
-                  "Developed AI solutions using Azure OpenAI and Azure Document Intelligence.",
-                  "Implemented LLM-based prompt engineering using GPT-3, GPT-4, BERT, and Google T5.",
-                  "Worked on AI/ML projects across Azure, OpenAI, AWS, and GCP."
-                ]
-              }
-            ],
-            "education": [
-              {
-                "degree": "M.Sc.",
-                "institution": "Gujarat University Ahmedabad",
-                "location": "Ahmedabad",
-                "start_year": "2002",
-                "end_year": "2004"
-              }
-            ],
-            "certifications": [
-              "AWS Certified Solutions Architect – Associate",
-              "Google Cloud Certified Cloud Architect"
-            ],
-            "languages": [
-              "English",
-              "Hindi",
-              "Gujarati"
-            ]
-          },
-          "confidence": 0.9,
-          "status": "structured_from_resume",
-          "source": {
-            "resume_section": "Full Resume",
-            "evidence": "Profile, Employment History, Skills, Education, Certification, Courses, Languages"
-          }
-        }
-      }
-    ]
-  },
-  "additional_resume_facts_available": {},
-  "missing_fields_requiring_recruiter_or_ats_input": []
+For each field, produce:
+
+"field_extraction_manifest": {
+  "value_type": "scalar | rich_text | array | complex_object | array_complex",
+  "value": "...",
+  "confidence": 0.0,
+  "status": "extracted | inferred | generated_from_resume | not_found | needs_user_input",
+  "reason": "...",
+  "source": {
+    "resume_section": "...",
+    "evidence": "..."
+  }
 }
 
-WRITER'S MANDATE (STRICT):
-1. ROLE: You are an Executive Resume Writer for Hays.
-2. OUTPUT FORMAT: Single valid JSON object matching the exact structure of the Example Output.
-3. KEYS: Use ONLY the EXACT fieldnames from the TEMPLATE CONTRACT in `template_fill_result` and `filled_template_manifest`.
-4. RICH TEXT: Use CVML tags — [:B:], [:L1:], [:BR:], [:PIPE:] where appropriate.
-5. FORMAT COMPLIANCE: Adhere precisely to the nested JSON structure.
+Value shape must match field_type:
+- scalar => scalar/null
+- rich_text => string/null
+- array_simple => array of strings
+- table_loop => array
+- complex_object => object
+- array_complex => array of objects
+- paste_zone => complex object
 
----
-OUTPUT PROTOCOL:
-- Return ONLY the JSON object. No conversational text.
-- Escape all quotes inside strings properly for JSON.
+Missing values:
+- scalar/rich_text => null
+- array/table_loop => []
+- complex_object/paste_zone => {}
+- status => "not_found" or "needs_user_input"
+- confidence => 0.0
+
+Do not invent ATS/recruiter-only values.
+
+Return only valid JSON. No markdown. No explanation. No code fence.

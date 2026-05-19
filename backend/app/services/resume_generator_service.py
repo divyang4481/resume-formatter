@@ -5,8 +5,9 @@ import traceback
 from typing import Any, Dict, List, Optional
 from docxtpl import DocxTemplate, RichText
 from docx import Document
-from docx.table import Table, _Cell
+from docx.table import Table, _Cell, _Row
 from docx.text.paragraph import Paragraph
+import copy
 
 # 3. Apply CVML rendering actions (recursive)
 from docxtpl import DocxTemplate
@@ -48,11 +49,20 @@ class ResumeGeneratorService:
 
             # 1.5. Un-nest the AI mapping results - this is our main guide, it must overwrite raw data
             if "template_fill_result" in resume_data:
+                logger.info("Found template_fill_result in resume_data, un-nesting mappings...")
                 mapping_results = resume_data["template_fill_result"]
                 if isinstance(mapping_results, dict):
                     for k, v in mapping_results.items():
                         # Always prioritize AI-mapped results (they are healed/validated)
-                        resume_data[k] = v
+                        if isinstance(v, dict) and "value" in v:
+                            val = v.get("value")
+                            if val is None and isinstance(v.get("field_extraction_manifest"), dict):
+                                val = v["field_extraction_manifest"].get("value")
+                            resume_data[k] = val if val is not None else ""
+                            logger.info(f"[Un-nest] Extracted '{k}': {str(resume_data[k])[:100]}")
+                        else:
+                            resume_data[k] = v if v is not None else ""
+                            logger.info(f"[Un-nest] Extracted raw '{k}': {str(resume_data[k])[:100]}")
 
             # 2. Expand array/complex fields into rendering-ready form
             expanded_data = self._expand_array_fields(resume_data, field_manifest or [])
@@ -73,7 +83,9 @@ class ResumeGeneratorService:
                     if isinstance(v, dict):
                         # It's a field info object from ResumeAiService: { "value": "...", "marker_text": "..." }
                         if "value" in v:
-                            val = v["value"]
+                            val = v.get("value")
+                            if val is None and isinstance(v.get("field_extraction_manifest"), dict):
+                                val = v["field_extraction_manifest"].get("value")
                             items.append((k, val))
                             if parent_key:
                                 items.append((new_key, val))
@@ -223,6 +235,36 @@ class ResumeGeneratorService:
             # 5. Save to bytes
             out_stream = io.BytesIO()
             doc.save(out_stream)
+            out_stream.seek(0)
+            
+            # --- POST-RENDER VALIDATION ---
+            try:
+                final_doc = Document(out_stream)
+                out_stream.seek(0)
+                
+                unresolved = []
+                check_texts = ["«", "»", "{{", "}}", "TableStart", "TableEnd", "MACROBUTTON", "[Type text]"]
+                
+                def check_text(t):
+                    if not t: return
+                    if any(m in t for m in check_texts):
+                        unresolved.append(t)
+                    elif "paste the candidate" in t.lower() and "cv" in t.lower():
+                        unresolved.append(t)
+
+                for p in final_doc.paragraphs:
+                    check_text(p.text)
+                for tbl in final_doc.tables:
+                    for row in tbl.rows:
+                        for cell in row.cells:
+                            check_text(cell.text)
+                            
+                if unresolved:
+                    logger.warning(f"POST-RENDER WARNING: Found {len(unresolved)} unresolved markers or instruction texts in final document. Sample: {unresolved[:3]}")
+                    missing_fields.append("UNRESOLVED_MARKERS_PRESENT")
+            except Exception as v_err:
+                logger.warning(f"Failed to run post-render validation: {v_err}")
+
             return out_stream.getvalue(), missing_fields
 
         except Exception as e:
@@ -336,6 +378,7 @@ class ResumeGeneratorService:
                 if raw_val is None and isinstance(value.get("field_extraction_manifest"), dict):
                     raw_val = value["field_extraction_manifest"].get("value")
                 value = raw_val
+                expanded[fieldname] = value
 
             # --- array_simple: list of strings ---
             if field_type == "array_simple" and isinstance(value, list):
@@ -364,6 +407,133 @@ class ResumeGeneratorService:
 
         return expanded
 
+    def apply_render_locators(
+        self,
+        doc: Document,
+        field_manifest: List[Dict[str, Any]],
+        render_context: Dict[str, Any]
+    ) -> None:
+        """
+        Executes explicit structural render locator strategies directly on the DOCX before docxtpl runs.
+        """
+        logger.info(f"Applying structural render locators...")
+        if not field_manifest:
+            return
+
+        fields_list = field_manifest.get("fields", []) if isinstance(field_manifest, dict) else field_manifest
+        if not fields_list:
+            return
+
+        for field_def in fields_list:
+            if not isinstance(field_def, dict):
+                continue
+            
+            fieldname = field_def.get("fieldname")
+            if not fieldname:
+                continue
+
+            locator = field_def.get("render_locator", {})
+            if not locator:
+                continue
+
+            strategy = locator.get("strategy")
+            label = locator.get("label", "").strip()
+            
+            # --- STRATEGY: fill_blank_cell_after_label ---
+            if strategy == "fill_blank_cell_after_label" and label:
+                for tbl in doc.tables:
+                    for row in tbl.rows:
+                        for i, cell in enumerate(row.cells):
+                            cell_text = cell.text.strip().lower()
+                            label_norm = label.lower()
+                            
+                            if cell_text == label_norm or (label_norm in cell_text and len(cell_text) < len(label_norm) + 10):
+                                if i + 1 < len(row.cells):
+                                    adj_cell = row.cells[i + 1]
+                                    adj_text = adj_cell.text.strip()
+                                    
+                                    is_placeholder = (
+                                        not adj_text or 
+                                        adj_text == "£" or 
+                                        adj_text == "$" or 
+                                        "type text" in adj_text.lower() or
+                                        "macrobutton" in adj_text.lower()
+                                    )
+                                    
+                                    if is_placeholder:
+                                        prefix = "£ " if "£" in adj_text else ""
+                                        prefix = "$ " if "$" in adj_text and not prefix else prefix
+                                        
+                                        for p in adj_cell.paragraphs:
+                                            p.text = ""
+                                        
+                                        adj_cell.paragraphs[0].text = f"{prefix}{{{{ _['{fieldname}'] }}}}"
+                                        logger.info(f"Structural fill: '{label}' -> field '{fieldname}'")
+
+            # --- STRATEGY: replace_table_loop ---
+            elif strategy == "replace_table_loop":
+                marker_text = field_def.get("marker_text", "")
+                if "TableStart:" in marker_text:
+                    loop_name = marker_text.split("TableStart:")[1].split("»")[0].strip("><]}[{")
+                    
+                    for tbl in doc.tables:
+                        for r_idx, row in enumerate(tbl.rows):
+                            row_text = "".join(c.text for c in row.cells)
+                            if f"TableStart:{loop_name}" in row_text or f"tablestart:{loop_name.lower()}" in row_text.lower():
+                                items = render_context.get(fieldname, [])
+                                if not isinstance(items, list):
+                                    items = render_context.get(loop_name, [])
+                                    
+                                if isinstance(items, list) and items:
+                                    logger.info(f"Replacing table loop for {loop_name} with {len(items)} items")
+                                    item_key = loop_name
+                                    match = re.search(r'(?:«|\[|<|{)(?!TableStart|TableEnd)(.*?)(?:»|\]|>|})', row_text, flags=re.IGNORECASE)
+                                    if match:
+                                        item_key = match.group(1).strip()
+                                    
+                                    row_elm = row._tr
+                                    parent = row_elm.getparent()
+                                    idx = parent.index(row_elm)
+                                    for item_val in items:
+                                        val_str = ""
+                                        if isinstance(item_val, str):
+                                            val_str = item_val
+                                        elif isinstance(item_val, dict):
+                                            val_str = str(item_val.get(item_key, item_val.get("value", "")))
+                                            
+                                        new_row_elm = copy.deepcopy(row_elm)
+                                        new_row_obj = _Row(new_row_elm, tbl)
+                                        
+                                        for cell in new_row_obj.cells:
+                                            text = cell.text
+                                            text = re.sub(r'(?:«|\[|<|{)\s*TableStart:[^»\]>}]*(?:»|\]|>|})', '', text, flags=re.IGNORECASE)
+                                            text = re.sub(r'(?:«|\[|<|{)\s*TableEnd:[^»\]>}]*(?:»|\]|>|})', '', text, flags=re.IGNORECASE)
+                                            text = re.sub(rf'(?:«|\[|<|{{)\s*{item_key}\s*(?:»|\]|>|}})', val_str, text, flags=re.IGNORECASE)
+                                            if item_key in text:
+                                                text = text.replace(item_key, val_str)
+                                                
+                                            for p in cell.paragraphs:
+                                                p.text = ""
+                                            if cell.paragraphs:
+                                                cell.paragraphs[0].text = text
+                                                
+                                        parent.insert(idx, new_row_elm)
+                                        idx += 1
+                                        
+                                    parent.remove(row_elm)
+
+            # --- STRATEGY: paste_zone ---
+            elif strategy in ("replace_section_body", "paste_zone"):
+                if fieldname in render_context and render_context[fieldname]:
+                    val = render_context[fieldname]
+                    for p in doc.paragraphs:
+                        p_text = p.text.lower()
+                        if "paste" in p_text and "cv" in p_text:
+                            p.text = f"{{{{ _['{fieldname}'] }}}}"
+                            logger.info(f"Structural fill: replaced CV paste zone with content.")
+
+        return
+
     def prepare_document_markers(
         self,
         template_stream: io.BytesIO,
@@ -385,7 +555,9 @@ class ResumeGeneratorService:
                 if isinstance(v, (str, int, float)) and v != "N/A":
                     data_lookup["".join(filter(str.isalnum, k.lower()))] = v
                 if isinstance(v, dict) and "value" in v:
-                    val = v["value"]
+                    val = v.get("value")
+                    if val is None and isinstance(v.get("field_extraction_manifest"), dict):
+                        val = v["field_extraction_manifest"].get("value")
                     if isinstance(val, (str, int, float)) and val != "N/A":
                         data_lookup["".join(filter(str.isalnum, k.lower()))] = val
             logger.info(
@@ -702,6 +874,10 @@ class ResumeGeneratorService:
         # 0. Flatten MergeFields into plain text markers
         logger.info("Starting document normalization (flattening complex fields)...")
         flatten_merge_fields(doc)
+        
+        # 0.5. Apply Structural Locators
+        if resume_data:
+            self.apply_render_locators(doc, field_manifest or [], resume_data)
 
         # 1. Process all parts of the document in a single pass
         parts = [doc]

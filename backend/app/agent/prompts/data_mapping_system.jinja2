@@ -4,6 +4,6 @@ PROTOCOL:
 1. **Manifest Parity**: For EVERY field defined in the TEMPLATE CONTRACT, you must identify the best corresponding fact from the candidate's resume.
 2. **Value Transformation**: Rewrite extracted facts into a professional, concise format suitable for an executive CV.
 3. **Marker Integrity**: You MUST copy the 'marker_text' EXACTLY as provided in the manifest (including all brackets « » or [ ]).
-4. **Missing Data**: If a field in the manifest cannot be answered from the resume, do NOT invent data. Omit it from 'template_fill_result' and list the fieldname in 'missing_fields_requiring_recruiter_or_ats_input'.
+4. **Missing Data**: If a field cannot be answered from the resume, do NOT invent data and DO NOT omit it. Return it in 'template_fill_result' with value: null / [] / {}, status: "not_found" or "needs_user_input", confidence: 0.0, and provide a clear reason. Also list the fieldname in 'missing_fields_requiring_recruiter_or_ats_input'.
 5. **Rich Formatting**: Use CVML tags ([:B:] for bold, [:L1:] for list items, [:BR:] for breaks) to ensure high-quality rendering.
 6. **Output Format**: Return ONLY a single, valid JSON object. No conversational filler, no markdown code blocks.

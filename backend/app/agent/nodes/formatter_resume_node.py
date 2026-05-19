@@ -22,7 +22,7 @@ def create_document_composition_node(
         session_id = state.get("job_id") or state.get("session_id", "unknown-session")
         summary_text = state.get("summary_text", "")
         summary_uri = state.get("summary_uri", "")
-        resume_data = state.get("transformed_document_json") or {}
+        template_resume_data = state.get("transformed_document_json") or {}
         template_asset_id = state.get("template_asset_id")
         
         if not template_asset_id:
@@ -95,11 +95,13 @@ def create_document_composition_node(
             field_manifest = field_manifest or []
 
             # Prefer resolved candidate-specific manifest if available
-            resolved_manifest = (
-                resume_data.get("filled_template_manifest", {}).get("fields")
-                if isinstance(resume_data, dict)
-                else None
-            )
+            resolved_manifest = None
+            if isinstance(template_resume_data, dict):
+                if "filled_template_manifest" in template_resume_data:
+                    resolved_manifest = template_resume_data.get("filled_template_manifest", {}).get("fields")
+                elif "fields" in template_resume_data:
+                    resolved_manifest = template_resume_data.get("fields")
+
             if resolved_manifest:
                 field_manifest = resolved_manifest
 
@@ -109,16 +111,23 @@ def create_document_composition_node(
                 add_table_loop_aliases,
             )
 
-            template_fill_result = resume_data.get("template_fill_result", {}) if isinstance(resume_data, dict) else {}
+            template_fill_result = {}
+            if isinstance(template_resume_data, dict):
+                if "template_fill_result" in template_resume_data:
+                    template_fill_result = template_resume_data.get("template_fill_result", {})
+                elif "fields" in template_resume_data:
+                    from app.services.resume_ai_service import _build_template_fill_result
+                    template_fill_result = _build_template_fill_result(template_resume_data.get("fields", []))
+
             render_context = build_render_context_from_template_fill_result(
                 template_fill_result=template_fill_result,
                 manifest_fields=field_manifest,
             )
             add_table_loop_aliases(render_context, field_manifest)
 
-            if resume_data:
+            if template_resume_data:
                 final_context = {
-                    **resume_data,
+                    **template_resume_data,
                     **render_context,
                     "summary": summary_text,
                     "job_id": session_id,
@@ -182,7 +191,7 @@ def create_document_composition_node(
             "summary_text": clean_ui_summary,
             "summary_uri": summary_uri,
             "render_docx_uri": render_docx_uri,
-            "transformed_document_json": final_context,
+            "transformed_document_json": template_resume_data,
             "missing_fields": all_missing_fields,
             "status": final_status,
         }

@@ -32,7 +32,14 @@ class ResumeAiService:
         logger.info(prompt)
         logger.info("=" * 60 + "\n")
 
-        summary = self.llm.generate(prompt)
+        try:
+            summary = self.llm.generate(prompt)
+        except Exception as e:
+            logger.critical(
+                f"[Summary] CRITICAL FAILURE: LLM summary generation failed: {e}",
+                exc_info=True
+            )
+            raise e
 
         logger.info(
             "\n" + "=" * 60 + "\n--- GENERATE SUMMARY RESPONSE ---\n" + "=" * 60
@@ -535,13 +542,22 @@ class ResumeAiService:
         logger.info(prompt)
         logger.info("=" * 60 + "\n")
 
-        response = self.llm.generate(
-            prompt,
-            system_prompt=SYSTEM_PROMPT,
-            task_name="template_analysis",
-            temperature=settings.bedrock_temperature_template_analysis,
-            max_tokens=settings.bedrock_max_output_tokens_template_analysis,
-        )
+        try:
+            logger.info("[TemplateAnalysis] Sending request to AWS Bedrock LLM...")
+            response = self.llm.generate(
+                prompt,
+                system_prompt=SYSTEM_PROMPT,
+                task_name="template_analysis",
+                temperature=settings.bedrock_temperature_template_analysis,
+                max_tokens=settings.bedrock_max_output_tokens_template_analysis,
+            )
+            logger.info("[TemplateAnalysis] LLM request completed successfully.")
+        except Exception as llm_err:
+            logger.critical(
+                f"[TemplateAnalysis] CRITICAL FAILURE: LLM generation failed: {llm_err}",
+                exc_info=True
+            )
+            raise llm_err
 
         logger.info(
             "\n" + "=" * 60 + "\n--- TEMPLATE ANALYSIS RESPONSE ---\n" + "=" * 60
@@ -553,7 +569,11 @@ class ResumeAiService:
             cleaned_json = LlmSanitizer.clean_json(response)
             data = json.loads(cleaned_json)
         except Exception as e:
-            logger.error(f"[TemplateAnalysis] Failed to parse LLM JSON response: {e}")
+            logger.error(
+                f"[TemplateAnalysis] Failed to parse LLM JSON response: {e}",
+                exc_info=True
+            )
+            logger.error(f"[TemplateAnalysis] Raw response: {response}")
             data = {}
 
         manifest: List[Dict[str, Any]] = data.get("field_extraction_manifest", [])
@@ -793,13 +813,22 @@ class ResumeAiService:
             f_type = "scalar"
             m_norm = normalize_marker_name(m)
             # STRIP LOOP PREFIXES for alias matching (e.g. "table start certifications" -> "certifications")
-            m_norm_clean = m_norm.replace("table start ", "").replace("table end ", "").replace("tablestart", "").replace("tableend", "").strip()
-            
+            m_norm_clean = (
+                m_norm.replace("table start ", "")
+                .replace("table end ", "")
+                .replace("tablestart", "")
+                .replace("tableend", "")
+                .strip()
+            )
+
             for fn_alias, info in FIELD_ALIAS_MAP.items():
                 if not isinstance(info, dict):
                     continue
                 alias_list = [normalize_marker_name(a) for a in info.get("aliases", [])]
-                if m_norm_clean in alias_list or normalize_marker_name(fn_alias) == m_norm_clean:
+                if (
+                    m_norm_clean in alias_list
+                    or normalize_marker_name(fn_alias) == m_norm_clean
+                ):
                     fn_for_marker = fn_alias
                     f_type = info.get("type", "scalar")
                     break
@@ -900,7 +929,19 @@ class ResumeAiService:
         formatting_guidance: str = "",
         job_id: str = "N/A",
     ) -> Dict[str, Any]:
-        """Restored method to map resume data to the template contract."""
+        """
+        NEW SIMPLIFIED APPROACH:
+        1. LLM receives the template manifest + resume facts.
+        2. LLM returns the SAME manifest enriched with field_extraction_manifest per field.
+        3. Python derives template_fill_result deterministically (no second LLM call).
+
+        Flow:
+            LLM → enriched_manifest (fields with field_extraction_manifest)
+            Python → template_fill_result (from enriched_manifest)
+            Python → filled_template_manifest (same as enriched_manifest, {"fields": [...]})
+        """
+        # --- Normalise manifest input ---
+        instruction_blocks = []
         if isinstance(field_manifest, str):
             try:
                 field_manifest = json.loads(field_manifest)
@@ -908,499 +949,211 @@ class ResumeAiService:
                 field_manifest = []
 
         if isinstance(field_manifest, dict):
+            if "instruction_blocks" in field_manifest:
+                instruction_blocks = field_manifest["instruction_blocks"]
             if "fields" in field_manifest:
                 field_manifest = field_manifest["fields"]
             else:
                 field_manifest = list(field_manifest.values())
 
-        logger.info(f"Harmonize Request: Manifest has {len(field_manifest) if field_manifest else 'None'} fields.")
-        
-        prompt = prompt_manager.get_prompt(
-            "data_linearization.jinja2",
-            structured_data_json=json.dumps(structured_data, indent=2),
-            field_extraction_manifest=field_manifest,
-            field_extraction_manifest_json=json.dumps(field_manifest, indent=2),
-            detected_placeholders_list=detected_placeholders,
-            formatting_guidance=formatting_guidance,
-            template_text=template_text[:4000],
-            job_id=job_id,
-        )
-
-        system_prompt = prompt_manager.get_prompt("data_mapping_system.jinja2")
-
-        response = self.llm.generate(
-            prompt,
-            system_prompt=system_prompt,
-            task_name="data_mapping",
-            temperature=0.0,  # Deterministic mapping
-            max_tokens=4096,
-        )
-
-        try:
-            cleaned_json = LlmSanitizer.clean_json(response)
-            logger.info("\n" + "=" * 60 + "\n--- CLEANED JSON ---\n" + "=" * 60)
-            logger.info(cleaned_json)
-            data = json.loads(cleaned_json)
-
-            # --- MANIFEST-FIRST RECONSTRUCTION ---
-            data = self._enforce_manifest_compliance(
-                ai_output=data,
-                field_manifest=field_manifest,
-                detected_placeholders=detected_placeholders,
-            )
-
-            logger.info(
-                "\n"
-                + "=" * 60
-                + "\n--- FINAL HARMONIZED DATA (HEALED) ---\n"
-                + "=" * 60
-            )
-            logger.info(json.dumps(data, indent=2))
-            logger.info("=" * 60 + "\n")
-
-            return data
-        except Exception as e:
-            logger.error(f"Failed to parse harmonized data JSON: {e}")
-            # Fallback: Return a skeleton dictionary based on the manifest instead of raw data
-            # This ensures downstream nodes don't crash or process raw text as if it were mapped.
-            fallback = {}
-            if field_manifest:
-                for f in field_manifest:
-                    fn = f.get("fieldname")
-                    if fn:
-                        fallback[fn] = (
-                            "" if f.get("field_type") != "array_complex" else []
-                        )
-            return fallback if fallback else structured_data
-
-    def _enforce_manifest_compliance(
-        self, 
-        ai_output: Dict[str, Any], 
-        field_manifest: List[Dict[str, Any]], 
-        detected_placeholders: List[str] = None
-    ) -> Dict[str, Any]:
-        """
-        Enforces strict schema validation, type checking, and mapping compliance on the AI output.
-        Fills the structured `field_extraction_manifest` property for every field in the template manifest,
-        generates the final `filled_template_manifest` candidate-specific resolved contract,
-        and populates the detailed `template_fill_result` mapping for down-stream document generation.
-        """
-        ALLOWED_STATUSES = {
-            "extracted",
-            "inferred",
-            "generated_from_resume",
-            "not_found",
-            "needs_user_input",
-        }
-
-        STATUS_NORMALIZATION = {
-            "structured_from_resume": "generated_from_resume",
-            "generated": "generated_from_resume",
-            "missing": "not_found",
-            "empty": "not_found",
-        }
-
-        def normalize_status(status: str, is_empty: bool) -> str:
-            if is_empty:
-                return "not_found"
-            if not status:
-                return "extracted"
-            status = STATUS_NORMALIZATION.get(status, status)
-            if status not in ALLOWED_STATUSES:
-                return "extracted"
-            return status
-
-        logger.info("\n" + "=" * 80 + "\n[ManifestCompliance] STARTING HIGH-FIDELITY COMPLIANCE PROTOCOL\n" + "=" * 80)
-        
-        if isinstance(field_manifest, str):
-            try:
-                field_manifest = json.loads(field_manifest)
-            except Exception:
-                field_manifest = []
-
-        if isinstance(field_manifest, dict):
-            if "fields" in field_manifest:
-                field_manifest = field_manifest["fields"]
-            else:
-                field_manifest = list(field_manifest.values())
-
-        # 1. Gather all potential source data (flatten root and nested result)
-        raw_nested = ai_output.get("template_fill_result", {})
-        if not isinstance(raw_nested, dict): raw_nested = {}
-        
-        # Combined pool of candidate answers from the AI
-        pool = {**ai_output, **raw_nested}
-        
-        # Remove metadata/control keys from the pool so they aren't treated as "data"
-        control_keys = {
-            "template_fill_result", "additional_resume_facts_available", 
-            "missing_fields_requiring_recruiter_or_ats_input", "summary", 
-            "job_id", "status", "_manifest", "filled_template_manifest"
-        }
-        for ck in control_keys:
-            pool.pop(ck, None)
-
-        final_fill_result = {}
-        missing_fields = []
-        filled_fields_list = []
-        from app.services.template_structure_extractor import FIELD_ALIAS_MAP
-
-        # 2. Determine ground truth manifest
-        effective_manifest = field_manifest
-        if effective_manifest is None and detected_placeholders:
-            logger.info("[ManifestCompliance] No manifest provided. Using detected placeholders.")
-            effective_manifest = [
-                {
-                    "fieldname": p.strip("«»[] ").replace(" ", "_"),
-                    "marker_text": p,
-                    "field_type": "scalar",
-                    "meaning": f"Auto-detected placeholder: {p}",
-                    "source_hints": "",
-                    "render_locator": {
-                        "strategy": "replace_marker",
-                        "marker_text": p,
-                        "label": "",
-                        "heading": ""
-                    }
-                }
-                for p in detected_placeholders
-            ]
-
-        # 3. Iterate Manifest and pull from Pool
-        if effective_manifest:
-            for field in effective_manifest:
-                # Make a deep-ish copy of the field definition to avoid mutating the master template record
-                field_def = dict(field)
-                fieldname = field_def.get("fieldname")
-                if not fieldname or field_def.get("field_type") == "instruction_block":
-                    continue
-                
-                ftype = field_def.get("field_type", "scalar")
-                marker = field_def.get("marker_text", f"«{fieldname}»")
-                meaning = field_def.get("meaning", "")
-                source_hints = field_def.get("source_hints", "")
-                render_locator = field_def.get("render_locator") or {
-                    "strategy": "replace_marker",
-                    "marker_text": marker,
-                    "label": "",
-                    "heading": ""
-                }
-                required = field_def.get("required", False)
-
-                logger.info(f"[ManifestCompliance] Processing field: '{fieldname}' | Type: {ftype} | Required: {required}")
-
-                # Attempt to find the value in the pool
-                ai_entry = None
-                found_key = None
-                
-                # Try Exact Match
-                if fieldname in pool:
-                    ai_entry = pool.pop(fieldname)
-                    found_key = fieldname
-                else:
-                    # Try Alias Match
-                    fname_norm = fieldname.lower().replace("_", "")
-                    aliases = [a.lower().replace("_", "") for a in FIELD_ALIAS_MAP.get(fieldname, {}).get("aliases", [])]
-                    
-                    for pool_key in list(pool.keys()):
-                        pool_key_norm = pool_key.lower().replace("_", "").replace("tablestart", "").replace("tableend", "")
-                        if pool_key_norm == fname_norm or pool_key_norm in aliases:
-                            logger.info(f"[ManifestCompliance] Mapping pool key '{pool_key}' to manifest field '{fieldname}' via alias")
-                            ai_entry = pool.pop(pool_key)
-                            found_key = pool_key
-                            break
-
-                # Extract raw value, confidence, and source information from the AI entry
-                raw_val = None
-                confidence = 1.0
-                source_sec = None
-                evidence = None
-                ai_status = None
-
-                if ai_entry is not None:
-                    if isinstance(ai_entry, dict):
-                        # Check nested structure
-                        if "field_extraction_manifest" in ai_entry:
-                            fem = ai_entry["field_extraction_manifest"]
-                            if isinstance(fem, dict):
-                                raw_val = fem.get("value")
-                                confidence = fem.get("confidence", 1.0)
-                                ai_status = fem.get("status")
-                                src = fem.get("source") or {}
-                                if isinstance(src, dict):
-                                    source_sec = src.get("resume_section")
-                                    evidence = src.get("evidence")
-                        
-                        if raw_val is None:
-                            raw_val = ai_entry.get("value")
-                        if "confidence" in ai_entry and confidence == 1.0:
-                            try:
-                                confidence = float(ai_entry["confidence"])
-                            except Exception:
-                                pass
-                        if "source" in ai_entry and source_sec is None:
-                            src_val = ai_entry["source"]
-                            if isinstance(src_val, dict):
-                                source_sec = src_val.get("resume_section")
-                                evidence = src_val.get("evidence")
-                            else:
-                                source_sec = str(src_val)
-                        if "note" in ai_entry and evidence is None:
-                            evidence = str(ai_entry["note"])
-                        if "status" in ai_entry and ai_status is None:
-                            ai_status = ai_entry["status"]
-                    else:
-                        # AI returned raw scalar value
-                        raw_val = ai_entry
-
-                # Validate and coerce values based on expected type
-                validated_val = None
-                val_type = "scalar"
-                validation_warning = None
-
-                if ftype == "scalar":
-                    val_type = "scalar"
-                    if raw_val is None or raw_val == "":
-                        validated_val = None
-                    elif isinstance(raw_val, (list, dict)):
-                        validation_warning = f"Type mismatch: expected scalar, got {type(raw_val).__name__}."
-                        validated_val = json.dumps(raw_val)
-                    else:
-                        validated_val = raw_val
-                
-                elif ftype == "rich_text":
-                    val_type = "rich_text"
-                    if raw_val is None or raw_val == "":
-                        validated_val = None
-                    elif isinstance(raw_val, (list, dict)):
-                        validation_warning = f"Type mismatch: expected rich_text, got {type(raw_val).__name__}."
-                        validated_val = json.dumps(raw_val)
-                    else:
-                        validated_val = str(raw_val)
-
-                elif ftype == "array_simple":
-                    val_type = "array"
-                    if raw_val is None or raw_val == "" or raw_val == []:
-                        validated_val = []
-                    elif isinstance(raw_val, str):
-                        validation_warning = "Coerced simple string to array."
-                        if "\n" in raw_val:
-                            validated_val = [line.strip().strip("•-* ").strip() for line in raw_val.split("\n") if line.strip()]
-                        elif "," in raw_val:
-                            validated_val = [item.strip() for item in raw_val.split(",") if item.strip()]
-                        else:
-                            validated_val = [raw_val.strip()]
-                    elif isinstance(raw_val, list):
-                        validated_val = [str(x) for x in raw_val if x is not None]
-                    else:
-                        validation_warning = f"Type mismatch: expected array_simple, got {type(raw_val).__name__}."
-                        validated_val = [str(raw_val)]
-
-                elif ftype == "complex_object":
-                    val_type = "complex_object"
-                    if raw_val is None or raw_val == "" or raw_val == {}:
-                        validated_val = {}
-                    elif isinstance(raw_val, dict):
-                        validated_val = raw_val
-                    else:
-                        validation_warning = f"Type mismatch: expected complex_object (dict), got {type(raw_val).__name__}."
-                        try:
-                            validated_val = json.loads(str(raw_val))
-                            if not isinstance(validated_val, dict):
-                                validated_val = {"raw_value": str(raw_val)}
-                        except Exception:
-                            validated_val = {"raw_value": str(raw_val)}
-
-                elif ftype == "array_complex":
-                    val_type = "array_complex"
-                    if raw_val is None or raw_val == "" or raw_val == []:
-                        validated_val = []
-                    elif isinstance(raw_val, list):
-                        validated_val = []
-                        for idx, x in enumerate(raw_val):
-                            if isinstance(x, dict):
-                                validated_val.append(x)
-                            else:
-                                validation_warning = f"Item at index {idx} in array_complex is not an object."
-                                validated_val.append({"raw_value": str(x)})
-                    else:
-                        validation_warning = f"Type mismatch: expected array_complex, got {type(raw_val).__name__}."
-                        validated_val = []
-
-                elif ftype == "paste_zone":
-                    if isinstance(raw_val, dict):
-                        val_type = "complex_object"
-                        validated_val = raw_val
-                    else:
-                        val_type = "rich_text"
-                        validated_val = str(raw_val) if raw_val is not None else None
-
-                if validation_warning:
-                    logger.warning(f"[ManifestCompliance] [VALIDATION WARNING] Field '{fieldname}': {validation_warning}")
-
-                # Determine Extraction Status
-                status = "not_found"
-                reason = None
-
-                is_empty = (
-                    validated_val is None or 
-                    validated_val == "" or 
-                    validated_val == [] or 
-                    validated_val == {}
-                )
-
-                if is_empty:
-                    confidence = 0.0
-                    normalized_ai_status = normalize_status(ai_status, is_empty=True)
-                    if required:
-                        status = "needs_user_input"
-                        reason = f"Required field '{fieldname}' was not found in candidate's resume."
-                    else:
-                        status = normalized_ai_status
-                        reason = f"Field '{fieldname}' could not be located in candidate's resume."
-                    
-                    missing_fields.append(fieldname)
-                    logger.info(f"[ManifestCompliance] Field '{fieldname}' is EMPTY. Status set to: {status}")
-                else:
-                    # Value is present, determine status
-                    normalized_ai_status = normalize_status(ai_status, is_empty=False) if ai_status else None
-                    if normalized_ai_status:
-                        status = normalized_ai_status
-                    else:
-                        # Automatically categorize based on field and confidence
-                        if fieldname == "cv_comments":
-                            status = "generated_from_resume"
-                        elif confidence >= 0.85:
-                            status = "extracted"
-                        else:
-                            status = "inferred"
-                            reason = f"Value was mapped from section with lower confidence ({confidence})."
-
-                    logger.info(f"[ManifestCompliance] Field '{fieldname}' is RESOLVED. Status: {status} | Confidence: {confidence}")
-
-                # Build the structured field_extraction_manifest object
-                source_obj = {
-                    "resume_section": source_sec if source_sec else ("Full Resume" if not is_empty else None),
-                    "evidence": evidence if evidence else (f"Extracted content for {fieldname}" if not is_empty else None)
-                }
-
-                field_extraction_manifest = {
-                    "value_type": val_type,
-                    "value": validated_val,
-                    "confidence": confidence,
-                    "status": status,
-                    "source": source_obj
-                }
-
-                if reason:
-                    field_extraction_manifest["reason"] = reason
-
-                # 4. Save the candidate-specific resolved contract fields
-                field_def["field_extraction_manifest"] = field_extraction_manifest
-                filled_fields_list.append(field_def)
-
-                # 5. Populate final_fill_result in strict schema format for document generator compatibility
-                mapping_category = "simple scalar replacement"
-                if ftype in ("array_complex", "table_loop"):
-                    mapping_category = "complex smart object"
-                elif ftype == "array_simple":
-                    mapping_category = "array"
-
-                final_fill_result[fieldname] = {
-                    "value": validated_val,
-                    "marker_text": marker,
-                    "field_type": ftype,
-                    "mapping_category": mapping_category,
-                    "source": source_sec if source_sec else "extracted",
-                    "confidence": confidence,
-                    "status": status,
-                    "note": evidence if evidence else f"Resolved field {fieldname}",
-                    "field_extraction_manifest": field_extraction_manifest
-                }
-
-        # 6. Cleanup remaining pool elements (Move them to additional facts)
-        if pool:
-            if "additional_resume_facts_available" not in ai_output:
-                ai_output["additional_resume_facts_available"] = {}
-            ai_output["additional_resume_facts_available"].update(pool)
-            
-            # Remove keys from root if they were moved
-            for pk in pool.keys():
-                ai_output.pop(pk, None)
-
-        # 7. Assemble the final candidate-specific filled_template_manifest contract!
-        filled_template_manifest = {
-            "fields": filled_fields_list
-        }
-
-        ai_output["template_fill_result"] = final_fill_result
-        ai_output["missing_fields_requiring_recruiter_or_ats_input"] = list(set(missing_fields))
-        ai_output["filled_template_manifest"] = filled_template_manifest
-
-        if field_manifest:
-            ai_output["_source_template_manifest"] = field_manifest
-
-        # Print detailed logger report at the end
-        logger.info("\n" + "=" * 80)
-        logger.info("[ManifestCompliance] COMPLIANCE REPORT SUMMARY:")
-        logger.info(f"  - Total Manifest Fields: {len(filled_fields_list)}")
-        logger.info(f"  - Successfully Extracted: {sum(1 for f in filled_fields_list if f['field_extraction_manifest']['status'] == 'extracted')}")
-        logger.info(f"  - Inferred / Generated: {sum(1 for f in filled_fields_list if f['field_extraction_manifest']['status'] in ['inferred', 'generated_from_resume'])}")
-        logger.info(f"  - Missing / Not Found: {sum(1 for f in filled_fields_list if f['field_extraction_manifest']['status'] in ['not_found', 'needs_user_input'])}")
-        logger.info("=" * 80 + "\n")
-
-        return ai_output
-
-    async def apply_composition_logic(
-        self,
-        harmonized_data: Dict[str, Any],
-        template_text: str,
-        manifest: List[Dict[str, Any]] = None,
-        formatting_guidance: str = "",
-    ) -> Dict[str, Any]:
-        """Performs a secondary formatting and professional phrasing pass."""
-
-        prompt = prompt_manager.get_prompt(
-            "composition_logic.jinja2",
-            harmonized_json=json.dumps(harmonized_data, indent=2),
-            manifest_json=json.dumps(manifest, indent=2) if manifest else "None",
-            formatting_guidance=formatting_guidance,
-            template_text=template_text[:3000],
-        )
-
-        logger.info("\n" + "=" * 60 + "\n--- COMPOSITION LOGIC PROMPT ---\n" + "=" * 60)
-        logger.info(prompt)
-        logger.info("=" * 60 + "\n")
-
-        response = self.llm.generate(prompt)
+        field_manifest = [f for f in (field_manifest or []) if isinstance(f, dict)]
 
         logger.info(
-            "\n" + "=" * 60 + "\n--- COMPOSITION LOGIC LLM RESPONSE ---\n" + "=" * 60
+            f"[Harmonize] START — Manifest has {len(field_manifest)} fields | Job: {job_id}"
         )
-        logger.info(response)
-        logger.info("=" * 60 + "\n")
+        if field_manifest:
+            logger.info(f"[Harmonize] First field sample: {list(field_manifest[0].keys())}")
+        else:
+            logger.critical(
+                "[Harmonize] CRITICAL: field_manifest is EMPTY. "
+                "Check that template_resolution_node stores 'field_extraction_manifest' "
+                "in state and that it is not wiped by a subsequent node."
+            )
 
-        try:
-            cleaned_json = LlmSanitizer.clean_json(response)
-            data = json.loads(cleaned_json)
+        # --- Raw resume text for LLM evidence ---
+        raw_resume_text = ""
+        if isinstance(structured_data, dict):
+            raw_resume_text = structured_data.get("text", "") or str(
+                structured_data.get("raw_data", "")
+            )
+        elif isinstance(structured_data, str):
+            raw_resume_text = structured_data
+
+        # --- Smart Chunked LLM Mapping ---
+        # When templates have many fields, a single massive LLM call can suffer from
+        # context loss or token limits. We process fields in smaller chunks.
+        CHUNK_SIZE = 6
+        chunks = [field_manifest[i:i + CHUNK_SIZE] for i in range(0, len(field_manifest), CHUNK_SIZE)]
+        logger.info(f"[Harmonize] Split manifest into {len(chunks)} chunks of max size {CHUNK_SIZE} for token-safe processing.")
+
+        enriched_manifest_fields: List[Dict[str, Any]] = []
+
+        for idx, chunk in enumerate(chunks):
+            logger.info(f"[Harmonize] Processing chunk {idx + 1}/{len(chunks)} ({len(chunk)} fields)")
+            
+            prompt = prompt_manager.get_prompt(
+                "data_linearization.jinja2",
+                structured_data_json=json.dumps(structured_data, indent=2),
+                field_extraction_manifest_json=json.dumps(
+                    {"fields": chunk}, indent=2
+                ),
+                raw_resume_text=raw_resume_text[:6000],
+                recruiter_input_json="{}",
+            )
 
             logger.info(
-                "\n" + "=" * 60 + "\n--- FINAL COMPOSITION DATA ---\n" + "=" * 60
+                f"\n" + "=" * 80 + f"\n--- DATA LINEARIZATION SYSTEM PROMPT (CHUNK {idx + 1}/{len(chunks)}) ---\n" + "=" * 80
             )
-            logger.info(data)
-            logger.info("=" * 60 + "\n")
-        except Exception as e:
-            logger.error(f"Failed to parse composition logic JSON: {e}")
-            data = harmonized_data
-
-        if manifest:
             try:
-                logger.info("[CompositionLogic] Enforcing programmatic manifest compliance and schema shape post-composition...")
-                data = self._enforce_manifest_compliance(data, manifest)
-            except Exception as ce:
-                logger.error(f"Failed to enforce manifest compliance after composition logic: {ce}")
+                system_prompt = prompt_manager.get_prompt("data_mapping_system.jinja2")
+                logger.info(system_prompt)
+            except Exception as se:
+                logger.error(f"[Harmonize] Failed to load system prompt: {se}. Using fallback.")
+                system_prompt = (
+                    "You are a professional resume writer for Hays. "
+                    "Return only valid JSON. No markdown, no explanation, no code fences."
+                )
+                logger.info(system_prompt)
+            logger.info("=" * 80 + "\n")
 
-        return data
+            logger.info(
+                f"\n" + "=" * 80 + f"\n--- DATA LINEARIZATION USER PROMPT (CHUNK {idx + 1}/{len(chunks)}) ---\n" + "=" * 80
+            )
+            logger.info(prompt)
+            logger.info("=" * 80 + "\n")
+
+            try:
+                logger.info(f"[Harmonize] Sending request for chunk {idx + 1} to AWS Bedrock LLM...")
+                response = self.llm.generate(
+                    prompt,
+                    system_prompt=system_prompt,
+                    task_name="data_mapping",
+                    temperature=0.0,
+                    max_tokens=8192,
+                )
+                logger.info(f"[Harmonize] LLM request for chunk {idx + 1} completed successfully.")
+            except Exception as llm_err:
+                logger.critical(
+                    f"[Harmonize] CRITICAL FAILURE: LLM generation failed for chunk {idx + 1}: {llm_err}",
+                    exc_info=True
+                )
+                raise llm_err
+
+            logger.info(
+                f"\n" + "=" * 80 + f"\n--- DATA LINEARIZATION LLM RESPONSE (CHUNK {idx + 1}/{len(chunks)}) ---\n" + "=" * 80
+            )
+            logger.info(response)
+            logger.info("=" * 80 + "\n")
+
+            # Parse the response for this chunk
+            try:
+                cleaned = LlmSanitizer.clean_json(response)
+                logger.info(f"[Harmonize] Cleaned response for JSON parsing (length: {len(cleaned)} chars)")
+                parsed = json.loads(cleaned)
+
+                chunk_enriched = []
+                if isinstance(parsed, dict) and "fields" in parsed:
+                    chunk_enriched = parsed["fields"]
+                elif isinstance(parsed, list):
+                    chunk_enriched = parsed
+                else:
+                    logger.warning(
+                        f"[Harmonize] Chunk {idx + 1} LLM response shape unexpected: {type(parsed)}."
+                    )
+                
+                enriched_manifest_fields.extend(chunk_enriched)
+                logger.info(f"[Harmonize] Chunk {idx + 1} successfully added {len(chunk_enriched)} enriched fields.")
+            except Exception as parse_err:
+                logger.error(
+                    f"[Harmonize] Failed to parse LLM response as JSON for chunk {idx + 1}: {parse_err}. "
+                    "Skipping this chunk from enrichment.",
+                    exc_info=True
+                )
+                logger.error(f"[Harmonize] Raw LLM response: {response}")
+
+        if not enriched_manifest_fields:
+            logger.critical(
+                f"[Harmonize] CRITICAL: LLM returned 0 enriched fields across all {len(chunks)} chunks. "
+                f"Will use empty FEM for all {len(field_manifest)} manifest fields."
+            )
+
+
+        # --- Merge: ensure every manifest field is present (LLM may omit some) ---
+        enriched_by_name: Dict[str, Dict] = {
+            f.get("fieldname"): f
+            for f in enriched_manifest_fields
+            if isinstance(f, dict) and f.get("fieldname")
+        }
+
+        filled_fields: List[Dict[str, Any]] = []
+        for base_field in field_manifest:
+            fieldname = base_field.get("fieldname")
+            if not fieldname or base_field.get("field_type") == "instruction_block":
+                continue
+
+            # Start from original field definition so marker/locator props are always correct
+            merged = dict(base_field)
+
+            enriched = enriched_by_name.get(fieldname)
+            if enriched:
+                # Pull field_extraction_manifest from LLM output
+                fem = enriched.get("field_extraction_manifest")
+                if isinstance(fem, dict) and fem.get("value") is not None:
+                    merged["field_extraction_manifest"] = fem
+                    logger.info(
+                        f"[Harmonize] ✓ '{fieldname}' — status: {fem.get('status')} | "
+                        f"confidence: {fem.get('confidence')}"
+                    )
+                else:
+                    merged["field_extraction_manifest"] = _make_empty_fem(
+                        base_field.get("field_type", "scalar"), fieldname
+                    )
+                    logger.info(f"[Harmonize] ○ '{fieldname}' — LLM provided no value.")
+            else:
+                merged["field_extraction_manifest"] = _make_empty_fem(
+                    base_field.get("field_type", "scalar"), fieldname
+                )
+                logger.warning(f"[Harmonize] ✗ '{fieldname}' — not in LLM output; marked not_found.")
+
+            filled_fields.append(merged)
+
+        # --- Derive template_fill_result deterministically (no LLM) ---
+        template_fill_result = _build_template_fill_result(filled_fields)
+        missing_fields = [
+            f["fieldname"]
+            for f in filled_fields
+            if f.get("field_extraction_manifest", {}).get("status")
+            in ("not_found", "needs_user_input")
+        ]
+
+        # --- Log compliance report ---
+        logger.info("\n" + "=" * 80)
+        logger.info("[Harmonize] COMPLIANCE REPORT:")
+        logger.info(f"  Total fields: {len(filled_fields)}")
+        logger.info(
+            f"  Extracted / Generated: "
+            f"{sum(1 for f in filled_fields if f.get('field_extraction_manifest', {}).get('status') in ('extracted', 'inferred', 'generated_from_resume'))}"
+        )
+        logger.info(f"  Missing / Needs Input: {len(missing_fields)} → {missing_fields}")
+        logger.info("=" * 80 + "\n")
+
+        result = {
+            "filled_template_manifest": {
+                "fields": filled_fields,
+                "instruction_blocks": instruction_blocks
+            },
+            "template_fill_result": template_fill_result,
+            "missing_fields_requiring_recruiter_or_ats_input": missing_fields,
+        }
+
+        logger.info(
+            "\n" + "-" * 60 + "\n--- HARMONIZED RESULT (template_fill_result keys) ---\n" + "-" * 60
+        )
+        logger.info(list(template_fill_result.keys()))
+        logger.info("-" * 60 + "\n")
+
+        return result
+
 
     async def linearize_data(
         self, structured_data: Dict[str, Any], template_metadata: Dict[str, Any]
@@ -1415,3 +1168,56 @@ class ResumeAiService:
             field_manifest=template_metadata.get("field_extraction_manifest", []),
         )
         return json.dumps(result)
+
+
+# ---------------------------------------------------------------------------
+# Module-level helpers (pure Python, no LLM)
+# ---------------------------------------------------------------------------
+
+def _make_empty_fem(field_type: str, fieldname: str) -> Dict[str, Any]:
+    """Return an empty field_extraction_manifest for a field with no value."""
+    if field_type in ("array_simple", "array_complex", "table_loop"):
+        empty_val: Any = []
+    elif field_type in ("complex_object", "paste_zone"):
+        empty_val = {}
+    else:
+        empty_val = None
+
+    return {
+        "value_type": (
+            "array" if field_type in ("array_simple", "table_loop")
+            else "array_complex" if field_type == "array_complex"
+            else "complex_object" if field_type in ("complex_object", "paste_zone")
+            else "rich_text" if field_type == "rich_text"
+            else "scalar"
+        ),
+        "value": empty_val,
+        "confidence": 0.0,
+        "status": "not_found",
+        "reason": f"Field '{fieldname}' was not found in the candidate resume.",
+        "source": {"resume_section": None, "evidence": None},
+    }
+
+
+def _build_template_fill_result(filled_fields: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """
+    Deterministically derive template_fill_result from the enriched manifest fields.
+    No LLM call — pure Python projection.
+
+    Each entry: { value, marker_text, field_type, confidence, status, field_extraction_manifest }
+    """
+    result: Dict[str, Any] = {}
+    for field in filled_fields:
+        fieldname = field.get("fieldname")
+        if not fieldname:
+            continue
+        fem = field.get("field_extraction_manifest") or {}
+        result[fieldname] = {
+            "value": fem.get("value"),
+            "marker_text": field.get("marker_text", f"«{fieldname}»"),
+            "field_type": field.get("field_type", "scalar"),
+            "confidence": fem.get("confidence", 0.0),
+            "status": fem.get("status", "not_found"),
+            "field_extraction_manifest": fem,
+        }
+    return result

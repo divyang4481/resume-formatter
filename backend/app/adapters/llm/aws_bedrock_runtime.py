@@ -84,7 +84,17 @@ class AwsBedrockLlmRuntime(LlmRuntimeAdapter):
             # Set the environment variable that newer botocore/boto3 versions expect
             os.environ["AWS_BEDROCK_API_KEY"] = bearer_token
             
-        self.client = boto3.client(service_name="bedrock-runtime", region_name=self.region_name)
+        from botocore.config import Config
+        boto_config = Config(
+            read_timeout=300,
+            connect_timeout=60,
+            retries={"max_attempts": 3}
+        )
+        self.client = boto3.client(
+            service_name="bedrock-runtime",
+            region_name=self.region_name,
+            config=boto_config
+        )
 
     # ------------------------------------------------------------------
     # Public interface

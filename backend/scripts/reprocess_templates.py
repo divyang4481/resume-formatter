@@ -22,28 +22,29 @@ TEMPLATE_DIR = r"C:\workspace\CCCTTNS\Hays_Resume_formater\real_template"
 
 async def reprocess_templates():
     from app.db.session import SessionLocal
-    from app.adapters.repositories.template_repository import SqlAlchemyTemplateRepository
-    from app.adapters.storage.s3_object_storage import S3ObjectStorage
-    from app.adapters.messaging.sqs_event_bus import SqsEventBus
-    from app.adapters.extraction.docling_extraction import DoclingExtractionService
-    from app.adapters.llm.aws_bedrock_runtime import AwsBedrockLlmRuntime
+    from app.dependencies import (
+        get_storage_provider,
+        get_template_repository,
+        get_message_queue,
+        get_document_extraction_service,
+        get_llm_runtime,
+        get_template_analysis_service
+    )
     
     db = SessionLocal()
-    storage = S3ObjectStorage()
-    repo = SqlAlchemyTemplateRepository(db)
-    queue = SqsEventBus()
-    extractor = DoclingExtractionService()
-    llm = AwsBedrockLlmRuntime()
-    
-    ai_service = ResumeAiService(llm, extractor)
-    analysis_service = TemplateAnalysisService() 
+    storage = get_storage_provider()
+    repo = get_template_repository(db)
+    queue = get_message_queue()
+    extractor = get_document_extraction_service()
+    llm = get_llm_runtime()
+    analysis_service = get_template_analysis_service()
     
     tpl_service = TemplateService(
         storage_provider=storage,
         template_repository=repo,
         event_bus=queue,
         extraction_service=extractor,
-        template_analysis_service=analysis_service 
+        template_analysis_service=analysis_service
     )
 
     if not os.path.exists(TEMPLATE_DIR):
