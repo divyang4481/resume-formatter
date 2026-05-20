@@ -16,6 +16,10 @@ INPUTS:
 {% endif %}
 
 INSTRUCTIONS:
+- WORK EXPERIENCE and EDUCATION are examples only; do not hardcode section names.
+- Detect repeatable structured sections generically across any language/industry labels.
+- If unsure, output simple fields and let deterministic Python post-processing consolidate repeats.
+- Never output field_type="repeat_block"; use "array_complex".
 - Use DOCUMENT TEXT FLOW (Docling markdown) heavily as a visual and layout map to understand the exact visual context, quoting, relative positioning, and complex structures.
 - Use RAW EVIDENCE as the primary source of truth for exact marker strings.
 - Identify all placeholders and map them to canonical field names.

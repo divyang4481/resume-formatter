@@ -11,6 +11,7 @@ from .llm_manifest_generator import generate_manifest_with_llm
 from .manifest_repair import repair_manifest_with_model
 from .manifest_validator import validate_manifest_against_evidence
 from .manifest_enricher import enrich_manifest_from_evidence
+from .repeatable_section_builder import build_repeatable_sections_from_evidence
 from .manifest_critic import review_manifest_with_critic
 from .model_roles import TemplateAnalysisModelRole
 from .models import TemplateManifest
@@ -80,6 +81,7 @@ async def analyze_template_docx(
     manifest.template_id = template_id or "template-" + hashlib.sha256((file_path or "template.docx").encode()).hexdigest()[:8]
     manifest.complexity_score = complexity_score
     manifest = enrich_manifest_from_evidence(manifest, evidence)
+    manifest = build_repeatable_sections_from_evidence(manifest, evidence)
     
     model_usage.append({
         "role": TemplateAnalysisModelRole.manifest_generator.value,
@@ -118,6 +120,7 @@ async def analyze_template_docx(
         repair_attempts += 1
 
         manifest = enrich_manifest_from_evidence(repaired_manifest, evidence)
+        manifest = build_repeatable_sections_from_evidence(manifest, evidence)
         errors, warnings = validate_manifest_against_evidence(manifest, evidence)
 
     # 5. Optional Critic Review (Stage 5)
@@ -157,6 +160,8 @@ async def analyze_template_docx(
     
     # Calculate average confidence
     manifest = enrich_manifest_from_evidence(manifest, evidence)
+    manifest = build_repeatable_sections_from_evidence(manifest, evidence)
+    manifest.field_count = len(manifest.fields)
     confidences = [f.confidence for f in manifest.fields if f.confidence > 0]
     if confidences:
         manifest.average_confidence = sum(confidences) / len(confidences)
