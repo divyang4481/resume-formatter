@@ -3,9 +3,9 @@ from pydantic import BaseModel, Field
 
 class RenderLocator(BaseModel):
     strategy: str = Field(..., description="replace_marker, fill_blank_cell_after_label, replace_section_body, replace_bullets_under_heading, clear_instruction_block")
-    marker_text: str = ""
-    label: str = ""
-    heading: str = ""
+    marker_text: Optional[str] = ""
+    label: Optional[str] = ""
+    heading: Optional[str] = ""
 
 class TemplateField(BaseModel):
     field_name: str = Field(..., alias="fieldname")
@@ -81,6 +81,7 @@ class TemplateAnalysis(BaseModel):
 
     # Deterministic ground truth from extractor
     raw_structure: Optional[Dict[str, Any]] = None
+    docling_markdown: Optional[str] = None
     
     # Flat field list for easier iteration in renderer
     # Alias matches the prompt's key

@@ -108,6 +108,11 @@ class TemplateAnalysisService:
                 else:
                     locator_data = {}
 
+            # Sanitize None/null values in locator_data to empty string to prevent validation errors
+            locator_data = {k: (v if v is not None else "") for k, v in locator_data.items()}
+            if not locator_data.get("strategy"):
+                locator_data["strategy"] = "replace_marker"
+
             # Ensure source_hints is string or list of strings as expected by legacy schema
             if isinstance(source_hints, list):
                 source_hints = ", ".join(source_hints) if source_hints else ""
@@ -149,7 +154,8 @@ class TemplateAnalysisService:
             injection_contract=manifest.injection_contract,
             llm_attempt_count=manifest.llm_attempt_count,
             human_review_required=manifest.requires_human_review,
-            raw_structure=structure.to_dict()
+            raw_structure=structure.to_dict(),
+            docling_markdown=manifest.docling_markdown
         )
         
         # Store metadata in raw_structure for audit

@@ -87,3 +87,4 @@ class TemplateManifest(BaseModel):
     complexity_score: Optional[float] = None
     llm_attempt_count: int = 1
     repair_attempt_count: int = 0
+    docling_markdown: Optional[str] = None

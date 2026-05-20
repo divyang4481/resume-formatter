@@ -1,7 +1,6 @@
 from typing import List, Optional
 from sqlalchemy.orm import Session
 from app.db.models import TemplateTestRun as TemplateTestRunModel
-from app.schemas.template import TemplateTestRun # assuming we add a schema for this
 from datetime import datetime
 
 class SqlAlchemyTemplateGovernanceRepository:

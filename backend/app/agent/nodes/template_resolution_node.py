@@ -137,24 +137,37 @@ def create_template_resolve_node(llm_runtime, storage_provider, doc_parser):
 
             # Phase 3: Extract Text & Analyze On-the-fly if needed
             content = None
+            cached_markdown = None
+            if template_meta and getattr(template_meta, "analysis_json", None):
+                try:
+                    analysis_data = json.loads(template_meta.analysis_json)
+                    if isinstance(analysis_data, dict) and analysis_data.get("docling_markdown"):
+                        cached_markdown = analysis_data["docling_markdown"]
+                        logger.info(f"Found cached docling_markdown in template analysis_json for {template_asset_id}. Bypassing Docling parser extraction.")
+                except Exception as parse_err:
+                    logger.warning(f"Could not load analysis_json for checking docling_markdown: {parse_err}")
+
             if storage_uri:
                 try:
-                    storage_key = storage_uri.replace("local://", "")
-                    # Strip s3:// prefix if present
-                    if storage_key.startswith("s3://"):
-                        from app.config import settings
-                        storage_key = storage_key.replace(f"s3://{settings.s3_bucket_output}/", "")
+                    if cached_markdown:
+                        template_text = cached_markdown
+                    else:
+                        storage_key = storage_uri.replace("local://", "")
+                        # Strip s3:// prefix if present
+                        if storage_key.startswith("s3://"):
+                            from app.config import settings
+                            storage_key = storage_key.replace(f"s3://{settings.s3_bucket_output}/", "")
 
-                    content = storage_provider.get_bytes(storage_key)
-                    
-                    context = ExtractionContext(intent="template_context_extraction", actor_role="system")
-                    extracted_doc = await doc_parser.extract(
-                        file_bytes=content,
-                        filename="template.docx",
-                        content_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                        context=context
-                    )
-                    template_text = extracted_doc.extracted_text
+                        content = storage_provider.get_bytes(storage_key)
+                        
+                        context = ExtractionContext(intent="template_context_extraction", actor_role="system")
+                        extracted_doc = await doc_parser.extract(
+                            file_bytes=content,
+                            filename="template.docx",
+                            content_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                            context=context
+                        )
+                        template_text = extracted_doc.extracted_text
                     
                     # --- AUTO-DISCOVERY: If DB is missing fields, find them in the docx text ---
                     if not expected_fields and template_text:
@@ -167,7 +180,14 @@ def create_template_resolve_node(llm_runtime, storage_provider, doc_parser):
                             expected_fields = ",".join(list(set(flat_placeholders)))
 
                     # --- ON-THE-FLY ANALYSIS: If manifest is missing, generate it now ---
-                    if not field_manifest and content:
+                    if not field_manifest and (content or cached_markdown):
+                        if not content:
+                            storage_key = storage_uri.replace("local://", "")
+                            if storage_key.startswith("s3://"):
+                                from app.config import settings
+                                storage_key = storage_key.replace(f"s3://{settings.s3_bucket_output}/", "")
+                            content = storage_provider.get_bytes(storage_key)
+
                         logger.info(f"Manifest missing for template {template_asset_id}. Triggering on-the-fly analysis...")
                         try:
                             ai_service = ResumeAiService(llm_runtime, doc_parser)

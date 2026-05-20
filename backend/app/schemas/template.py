@@ -81,3 +81,25 @@ class TemplateAsset(BaseModel):
 
     # Extension for provider-specific details
     extension_metadata: Dict[str, Any] = Field(default_factory=dict)
+
+
+class TemplateTestRun(BaseModel):
+    id: str
+    template_id: str
+    sample_resume_asset_id: Optional[str] = None
+    processing_job_id: str
+    decision: Optional[str] = None
+    review_notes: Optional[str] = None
+    generated_summary: Optional[str] = None
+    output_doc_path: Optional[str] = None
+    output_pdf_path: Optional[str] = None
+    extracted_json_path: Optional[str] = None
+    validation_result_json: Optional[str] = None
+    created_by: str
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    reviewed_at: Optional[datetime] = None
+
+    model_config = {
+        "from_attributes": True
+    }
+

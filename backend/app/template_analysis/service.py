@@ -164,5 +164,8 @@ async def analyze_template_docx(
         if manifest.average_confidence and manifest.average_confidence < 0.75:
             manifest.review_reasons.append(f"Average confidence ({manifest.average_confidence:.2f}) is below threshold.")
 
+    # Cache docling markdown extract of template
+    manifest.docling_markdown = evidence.docling_markdown
+
     logger.info(f"[TemplateAnalysis] Completed in {time.time() - start_time:.2f}s. Status: {manifest.analysis_status}")
     return manifest
