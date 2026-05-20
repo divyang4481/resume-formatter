@@ -45,18 +45,18 @@ class Settings(BaseSettings):
 
     # LLM Settings — default / global
     llm_backend: str = "aws_bedrock"
-    llm_model_name: str = "qwen.qwen3-235b-a22b-2507-v1:0"
+    llm_model_name: str = "amazon.nova-pro-v1:0"
     ollama_endpoint: str = "http://localhost:11434/api/generate"
 
     # ---------------------------------------------------------------------------
     # Bedrock per-task model routing
     # ---------------------------------------------------------------------------
     # Primary model for tasks requiring precise structured JSON output
-    bedrock_default_model_id: str = "qwen.qwen3-235b-a22b-2507-v1:0"
+    bedrock_default_model_id: str = "amazon.nova-pro-v1:0"
 
     # Template analysis uses Claude Sonnet for superior instruction-following
     # and deterministic JSON generation. Set to empty string to fall back to default.
-    bedrock_template_analysis_model_id: str = "qwen.qwen3-235b-a22b-2507-v1:0"
+    bedrock_template_analysis_model_id: str = "amazon.nova-pro-v1:0"
 
     # Resume summary generation — Qwen is fine for narrative tasks
     bedrock_resume_summary_model_id: str = ""  # falls back to default
@@ -65,18 +65,18 @@ class Settings(BaseSettings):
     bedrock_data_mapping_model_id: str = ""  # falls back to default
 
     # Fallback model if primary model fails (access error / throttle exhaust)
-    bedrock_fallback_model_id: str = "meta.llama3-70b-instruct-v1:0"
+    bedrock_fallback_model_id: str = "qwen.qwen3-235b-a22b-2507-v1:0"
 
     # Template analysis quality controls
-    bedrock_max_output_tokens_template_analysis: int = 8192
+    bedrock_max_output_tokens_template_analysis: int = 12000
     bedrock_temperature_template_analysis: float = 0.0   # Deterministic JSON
 
     # Data mapping quality controls (resume extraction/mapping)
-    bedrock_max_output_tokens_data_mapping: int = 8192
+    bedrock_max_output_tokens_data_mapping: int = 12000
     bedrock_temperature_data_mapping: float = 0.0   # Deterministic JSON
 
     # General output token limits
-    bedrock_max_output_tokens_default: int = 8192
+    bedrock_max_output_tokens_default: int = 12000
     bedrock_temperature_default: float = 0.1
     # ---------------------------------------------------------------------------
 
@@ -85,19 +85,19 @@ class Settings(BaseSettings):
     template_analysis_models: dict = {
         "evidence_normalizer": {
             "provider": "aws_bedrock",
-            "model_id": "qwen.qwen3-235b-a22b-2507-v1:0",
+            "model_id": "amazon.nova-pro-v1:0",
             "temperature": 0.0,
             "max_tokens": 8192
         },
         "manifest_generator": {
             "provider": "aws_bedrock",
-            "model_id": "qwen.qwen3-235b-a22b-2507-v1:0",
+            "model_id": "amazon.nova-pro-v1:0",
             "temperature": 0.0,
             "max_tokens": 12000
         },
         "manifest_repair": {
             "provider": "aws_bedrock",
-            "model_id": "qwen.qwen3-235b-a22b-2507-v1:0",
+            "model_id": "amazon.nova-pro-v1:0",
             "temperature": 0.0,
             "max_tokens": 12000
         },
