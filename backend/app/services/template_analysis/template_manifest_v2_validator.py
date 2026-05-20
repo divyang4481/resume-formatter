@@ -40,6 +40,14 @@ class TemplateManifestV2Validator:
             if re.search(r"_\d+$", fid) or re.search(r"_\d+$", fname):
                 errors.append(f"Field ends with numbered suffix: {fid} or {fname}")
                 status = "FAIL"
+            if f.get("source_kind") == "raw_resume_passthrough":
+                if f.get("field_type") != "paste_zone":
+                    errors.append(f"Field {fid} uses raw_resume_passthrough but is not paste_zone.")
+                    status = "FAIL"
+                semantic_like_names = {"skills", "education", "work_experience", "professional_qualifications", "certifications"}
+                if fname in semantic_like_names:
+                    errors.append(f"Field {fid} uses raw_resume_passthrough with semantic fieldname '{fname}'.")
+                    status = "FAIL"
 
         for s in slots:
             sid = s.get("slot_id", "")

@@ -19,6 +19,7 @@ class TemplateFieldV2(BaseModel):
         "recruiter_input",
         "generated",
         "static",
+        "raw_resume_passthrough",
     ]
     required: bool = False
     meaning: str = ""

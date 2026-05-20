@@ -43,3 +43,16 @@ def test_build_template_fill_result_complete():
     out=_build_template_fill_result(filled)
     assert set(out.keys())=={"candidate_name","notice_period"}
     assert out["notice_period"]["status"]=="not_found"
+
+@pytest.mark.asyncio
+async def test_harmonize_injects_candidate_own_cv_passthrough():
+    llm=DummyLLM(['{"nodes":[{"node_id":"skills","fieldname":"skills","field_extraction_manifest":{"value_type":"array_simple","value":["AWS"],"status":"extracted","confidence":0.9,"reason":"x","source":{"resume_section":"Skills","evidence":"AWS"}}}]}'])
+    svc=ResumeAiService(llm)
+    manifest=[
+        {"fieldname":"skills","field_type":"array_simple","source_kind":"resume_fact"},
+        {"fieldname":"candidate_own_cv","field_type":"paste_zone","source_kind":"raw_resume_passthrough"},
+    ]
+    out=await svc.harmonize_data_to_template_style({"text":"Skills:\nAWS\nPython"},"",[],manifest)
+    assert out["template_fill_result"]["skills"]["value"]==["AWS"]
+    assert out["template_fill_result"]["candidate_own_cv"]["status"]=="passthrough"
+    assert "Skills:\nAWS\nPython" in out["template_fill_result"]["candidate_own_cv"]["value"]

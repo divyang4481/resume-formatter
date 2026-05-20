@@ -60,6 +60,8 @@ def fields_to_mapping_nodes(fields: List[Dict[str, Any]]) -> List[Dict[str, Any]
 
         if field.get("field_type") == "instruction_block":
             continue
+        if field.get("field_type") == "paste_zone" and field.get("source_kind") == "raw_resume_passthrough":
+            continue
 
         nodes.append(field_to_mapping_node(field))
 

@@ -31,6 +31,13 @@ Rules:
 16. If a section is explicit copy/paste content (e.g. heading like "CANDIDATE’S OWN CV" with instructions such as "Paste ... in this space"), model it as one paste_zone field with one section_body/paste_zone slot using replace_section_body.
 17. For copy/paste sections, keep the heading as anchor metadata in slot locator and put instructional red text in instructions[] with action=remove.
 18. Never model copy/paste instruction text itself as scalar resume_fact fields.
+19. For any section that is clearly an "original document paste area" (signals include instructions like paste/insert/full resume/CV/profile text, large free-text body zone, and non-semantic instruction text), create exactly one passthrough field:
+   - fieldname=candidate_own_cv
+   - field_type=paste_zone
+   - source_kind=raw_resume_passthrough
+   - slot.render_mode=replace_section_body with locator.heading_text equal to the exact detected heading text
+20. This passthrough field is only for original resume text injection. Never use it as semantic extraction output.
+21. Keep semantic sections (skills, qualifications, experience, education, etc.) independent from the passthrough section even if headings or instructions are nearby.
 
 PAYLOAD:
 {{ payload | tojson(indent=2) }}

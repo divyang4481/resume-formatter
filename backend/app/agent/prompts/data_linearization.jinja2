@@ -53,12 +53,18 @@ Rules:
 - For array_simple output, return a JSON array of clean strings (not newline-delimited text).
 - For array_complex output, return a JSON array of objects aligned to node.sub_fields.
 - Keep section semantics separate: skills = tools/technologies; professional_qualifications = certifications/licenses/degrees/courses; work_experience = role/employer/dates/responsibilities; education = degree/institution/date/grade.
+- For fieldname=skills:
+  - Extract from Skills / Technical Skills / Key Skills / Core Competencies / Tools / Technologies sections.
+  - Return array_simple JSON array of clean strings.
+  - If skills appear anywhere in the resume, do not return null.
+  - candidate_own_cv is never a substitute for skills.
 - If a field is recruiter/ATS-only and missing from recruiter input, return needs_user_input.
 - For paste_zone fields (copy/paste sections such as "Candidate's own CV"), do not synthesize from unrelated fields:
   - Use recruiter_input_json value when explicitly provided for that field.
   - Otherwise return null with status "needs_user_input".
   - Do not copy instruction text from template into value.
   - Keep value as plain string (no JSON object/list wrapper).
+  - Do not place skills content into candidate_own_cv for semantic-field fallback.
 
 Value shape:
 - scalar => scalar/null
