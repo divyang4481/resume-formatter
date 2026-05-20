@@ -29,7 +29,11 @@ INSTRUCTIONS:
   - Classify each field precisely as one of: `scalar`, `array_simple`, `array_complex`, `table_loop`, `rich_text`, or `paste_zone`.
   - **Scalar**: Single data fields (e.g. Candidate Name, Location, Notice Period, Current Salary).
   - **Array Simple**: Flat list of items (e.g., flat list of bulleted skills under a "Key Skills" heading).
-  - **Array Complex (Structure with Array / List of Nested Objects)**: Repeating sections with multiple sub-fields (e.g., WORK EXPERIENCE containing nested sub-fields like Job Title, Organisation, bulleted responsibilities; or EDUCATION containing Degree, Institution, Dates). Group these into ONE `array_complex` field, with the repeating pattern identified precisely in `sub_fields`.
+  - **Array Complex**: Represents repeating sections or nested object structures. Use this for blocks like "WORK EXPERIENCE" or "EDUCATION". You MUST:
+    1. Identify the repeating block bounds (start/end indicators or section container).
+    2. Define `sub_fields` as an array of objects, capturing every internal component (e.g., [Job Title], [Company], [Date], [Description]).
+    3. Ensure sub_fields have `field_type` values of `scalar`, `array_simple` (for bulleted lists within an entry), or `rich_text`.
+    4. Set `render_locator.strategy` to `replace_complex_block` and reference the section `heading` or relevant markers.
   - **Table Loop**: Specifically when mail-merge start/end loop markers (`TableStart:X` / `TableEnd:X`) are present.
 - IMPORTANT: Markers starting with "Employee" (e.g. «EmployeeName», «EmployeeEmail», «EmployeeJobTitle») ALWAYS refer to the Hays Recruiter/Consultant who is presenting the profile. Do NOT map these to candidate fields.
 - "Consultant comments" or "CVcomments" markers ALWAYS map to 'cv_comments'.
@@ -62,7 +66,12 @@ CRITICAL: You MUST return a JSON object matching this schema exactly:
            "fieldname": "string",
            "marker_text": "string (e.g. '[Organisation]' or '\"[Bullet point responsibilities]\"')",
            "meaning": "string",
-           "field_type": "scalar | array_simple | rich_text"
+           "field_type": "scalar | array_simple | rich_text",
+           "sub_fields": [],
+           "extraction_hints": {
+              "resume_sections": ["string"],
+              "labels": ["string"]
+           }
         }
       ],
       "resume_fillable": boolean,
