@@ -16,3 +16,4 @@ def test_build_payload():
     assert isinstance(payload["output_schema"], dict)
     assert payload["output_schema"].get("title") == "TemplateManifestV2"
     assert len(payload["rules"]) >= 11
+    assert any("paste_zone" in rule for rule in payload["rules"])

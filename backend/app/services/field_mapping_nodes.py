@@ -76,6 +76,9 @@ def batch_field_nodes(
 
 
 def compact_node_for_llm(node: Dict[str, Any]) -> Dict[str, Any]:
+    original_field = node.get("original_field") or {}
+    extract = original_field.get("extract", {}) if isinstance(original_field, dict) else {}
+    render = original_field.get("render", {}) if isinstance(original_field, dict) else {}
     return {
         "node_id": node.get("node_id") or node.get("fieldname"),
         "fieldname": node.get("fieldname"),
@@ -85,6 +88,12 @@ def compact_node_for_llm(node: Dict[str, Any]) -> Dict[str, Any]:
         "source_hints": node.get("source_hints", ""),
         "marker_text": node.get("marker_text", ""),
         "render_locator": node.get("render_locator", {}),
+        "extract": extract,
+        "render": render,
+        "slots": original_field.get("slots", []) if isinstance(original_field, dict) else [],
+        "blocks": original_field.get("blocks", []) if isinstance(original_field, dict) else [],
+        "expected_value_shape": extract.get("expected_value_shape"),
+        "sub_fields": extract.get("sub_fields", []),
     }
 
 

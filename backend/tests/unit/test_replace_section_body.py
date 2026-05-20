@@ -1,4 +1,5 @@
 import pytest
+import io
 from docx import Document
 from app.services.docx_template_renderer import DocxTemplateRenderer
 from app.services.resume_generator_service import ResumeGeneratorService
@@ -71,3 +72,39 @@ def test_resume_generator_service_replace_section_body():
     assert "[Responsibilities]" not in paragraphs
     assert len(doc.tables) == 1
     assert doc.tables[0].cell(0, 0).text == "Table Cell Content"
+
+def test_resume_generator_service_replace_bullet_list_under_heading():
+    doc = Document()
+    doc.add_heading("Key skills", level=1)
+    doc.add_paragraph("[Type text]")
+    doc.add_paragraph("«Type text»")
+    field_manifest = [{
+        "fieldname": "skills",
+        "render_locator": {"strategy": "replace_bullet_list_under_heading", "heading": "Key skills"}
+    }]
+    render_context = {"skills": ["PyTorch", "OpenAI API"]}
+    service = ResumeGeneratorService()
+    service.apply_render_locators(doc, field_manifest, render_context)
+    paragraphs = [p.text for p in doc.paragraphs]
+    assert "[Type text]" not in paragraphs
+    assert "«Type text»" not in paragraphs
+    assert "• PyTorch" in paragraphs
+    assert "• OpenAI API" in paragraphs
+
+def test_prepare_document_markers_preserves_unresolved_marker_when_value_empty():
+    doc = Document()
+    doc.add_paragraph("Recruiting experts in «EmployeeJobTitle»")
+    stream = io.BytesIO()
+    doc.save(stream)
+    stream.seek(0)
+
+    service = ResumeGeneratorService()
+    out = service.prepare_document_markers(
+        stream,
+        field_list=["employee_job_title"],
+        field_manifest=[],
+        resume_data={"employee_job_title": ""},
+    )
+    out_doc = Document(out)
+    texts = [p.text for p in out_doc.paragraphs]
+    assert any("«EmployeeJobTitle»" in t for t in texts)

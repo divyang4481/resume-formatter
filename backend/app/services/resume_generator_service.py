@@ -389,6 +389,7 @@ class ResumeGeneratorService:
             # --- array_complex: list of sub-field dicts ---
             elif field_type == "array_complex" and isinstance(value, list):
                 expanded[fieldname] = value
+                expanded[f"{fieldname}_str"] = self.format_array_complex_value(entry, value)
                 for i, item in enumerate(value, start=1):
                     if isinstance(item, dict):
                         for sub_key, sub_val in item.items():
@@ -406,6 +407,34 @@ class ResumeGeneratorService:
                     expanded[fieldname] = loop_items
 
         return expanded
+
+    def format_array_complex_value(self, field_def: Dict[str, Any], value: Any) -> str:
+        if not isinstance(value, list):
+            return ""
+        sub_fields = ((field_def or {}).get("extract", {}) or {}).get("sub_fields", []) or []
+        ordered_names = [sf.get("name") for sf in sub_fields if isinstance(sf, dict) and sf.get("name")]
+        chunks: List[str] = []
+        for item in value:
+            if not isinstance(item, dict):
+                continue
+            names = ordered_names or list(item.keys())
+            header_parts: List[str] = []
+            for name in names:
+                v = item.get(name)
+                if isinstance(v, list):
+                    continue
+                if v:
+                    header_parts.append(str(v))
+            if header_parts:
+                chunks.append(" [:PIPE:] ".join(header_parts))
+            for name in names:
+                v = item.get(name)
+                if isinstance(v, list):
+                    for line in v:
+                        if line:
+                            chunks.append(f"[:L1:]{line}")
+            chunks.append("[:BR:]")
+        return "\n".join(c for c in chunks if c).strip()
 
     def apply_render_locators(
         self,
@@ -523,6 +552,40 @@ class ResumeGeneratorService:
                                     parent.remove(row_elm)
 
             # --- STRATEGY: replace_section_body or paste_zone ---
+            elif strategy in ("replace_bullet_list_under_heading", "replace_bullets_under_heading"):
+                heading = (locator.get("heading") or locator.get("heading_text") or "").strip()
+                values = render_context.get(fieldname)
+                if not heading or not isinstance(values, list):
+                    continue
+                heading_idx = None
+                for i, p in enumerate(doc.paragraphs):
+                    if re.sub(r"\s+", " ", p.text.strip()).lower() == re.sub(r"\s+", " ", heading).lower():
+                        heading_idx = i
+                        break
+                if heading_idx is None:
+                    continue
+                placeholder_re = re.compile(r"^\s*(?:\[type text\]|«type text»|type text)?\s*$", re.IGNORECASE)
+                anchor_p = doc.paragraphs[heading_idx]
+                next_elm = anchor_p._element.getnext()
+                removed = 0
+                while next_elm is not None and next_elm.tag.endswith("p"):
+                    p_obj = Paragraph(next_elm, doc)
+                    txt = p_obj.text.strip()
+                    if txt and not placeholder_re.match(txt) and removed > 0:
+                        break
+                    if placeholder_re.match(txt):
+                        to_remove = next_elm
+                        next_elm = next_elm.getnext()
+                        to_remove.getparent().remove(to_remove)
+                        removed += 1
+                        continue
+                    next_elm = next_elm.getnext()
+                for item in reversed([str(v) for v in values if str(v).strip()]):
+                    p = doc.add_paragraph(f"• {item}")
+                    anchor_p._element.addnext(p._element)
+                logger.info(f"Structural fill: replaced bullet section '{heading}' with {len(values)} item(s)")
+
+            # --- STRATEGY: replace_section_body or paste_zone ---
             elif strategy in ("replace_section_body", "paste_zone"):
                 def is_heading_match(p_text: str, target_heading: str) -> bool:
                     if not p_text or not target_heading:
@@ -614,13 +677,13 @@ class ResumeGeneratorService:
         if resume_data:
             # Flatten/standardize for easier lookup
             for k, v in resume_data.items():
-                if isinstance(v, (str, int, float)) and v != "N/A":
+                if isinstance(v, (str, int, float)) and str(v).strip() and v != "N/A":
                     data_lookup["".join(filter(str.isalnum, k.lower()))] = v
                 if isinstance(v, dict) and "value" in v:
                     val = v.get("value")
                     if val is None and isinstance(v.get("field_extraction_manifest"), dict):
                         val = v["field_extraction_manifest"].get("value")
-                    if isinstance(val, (str, int, float)) and val != "N/A":
+                    if isinstance(val, (str, int, float)) and str(val).strip() and val != "N/A":
                         data_lookup["".join(filter(str.isalnum, k.lower()))] = val
             logger.info(
                 f"[Lookup] Created data_lookup with {len(data_lookup)} keys: {list(data_lookup.keys())[:20]}..."
@@ -750,6 +813,18 @@ class ResumeGeneratorService:
                             ):
                                 target_key = field
                                 break
+                    
+                    # 2.5 Alias mapping fallback via canonical taxonomy map
+                    if not target_key:
+                        norm_marker = normalize_key(raw_marker_text)
+                        for canonical, info in FIELD_ALIAS_MAP.items():
+                            candidates = [canonical] + list((info or {}).get("aliases", []))
+                            for alias in candidates:
+                                if normalize_key(alias) == norm_marker:
+                                    target_key = canonical
+                                    break
+                            if target_key:
+                                break
 
                     # 3. Fallback
                     if not target_key:
@@ -759,6 +834,13 @@ class ResumeGeneratorService:
                     # This allows docxtpl to handle formatting tags like [:B:] and [:L1:] correctly
                     # while our smart context provides the values.
                     norm_target = normalize_key(target_key)
+                    # If no concrete value exists, preserve original marker text.
+                    # This avoids blanking unresolved placeholders such as EmployeeJobTitle.
+                    if norm_target not in data_lookup:
+                        logger.info(
+                            f"Preserving unresolved marker '{original}' (mapped='{target_key}') due to empty/missing value."
+                        )
+                        continue
 
                     # If we are inside a loop, we might need 'item.'
                     subfields = {

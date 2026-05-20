@@ -20,6 +20,8 @@ class TemplateLlmPayloadBuilder:
                 "If TableStart/TableEnd exists, create one table_loop slot and one semantic array field.",
                 "If a heading has bullet placeholders or empty bullets, create one array_simple field and one bullet_list slot.",
                 "If a placeholder pattern repeats under one heading, create one array_complex field and one repeat_block slot.",
+                "Repeated generic placeholders must become multiple slots under one canonical field, not *_2 or *_3 fields.",
+                "Copy/paste sections (e.g. candidate own CV instructions) must be represented as paste_zone with replace_section_body and instruction cleanup.",
                 "Instruction text must go into instructions[], not fields[].",
                 "Every slot must have exactly one owner_field_id.",
                 "Every field render.target_slot_ids must reference existing slots.",

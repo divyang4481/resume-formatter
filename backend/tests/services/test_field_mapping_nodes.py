@@ -1,6 +1,7 @@
 from app.services.field_mapping_nodes import (
     fields_to_mapping_nodes,
     batch_field_nodes,
+    compact_node_for_llm,
     extract_mapped_nodes_from_response,
     synthesize_filled_fields_from_nodes
 )
@@ -59,3 +60,19 @@ def test_synthesize_filled_fields_from_nodes_preserves_manifest_properties():
     assert field["marker_text"] == "<<ID>>"
     assert field["render_locator"] == {"x": 10}
     assert field["field_extraction_manifest"]["value"] == "123"
+
+def test_compact_node_for_llm_includes_extract_and_slots():
+    node = {
+        "node_id": "skills",
+        "fieldname": "skills",
+        "field_type": "array_simple",
+        "original_field": {
+            "extract": {"expected_value_shape": "array[string]", "sub_fields": []},
+            "render": {"target_slot_ids": ["slot_skills"]},
+            "slots": [{"slot_id": "slot_skills"}],
+            "blocks": [],
+        },
+    }
+    compact = compact_node_for_llm(node)
+    assert compact["extract"]["expected_value_shape"] == "array[string]"
+    assert compact["slots"][0]["slot_id"] == "slot_skills"

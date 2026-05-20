@@ -31,3 +31,17 @@ def test_validation_failure_on_numbered_suffix():
 
     assert result["status"] == "FAIL"
     assert any("numbered suffix" in err for err in result["errors"])
+
+def test_warning_on_unscoped_generic_placeholder_slot():
+    manifest = {
+        "fields": [{"field_id": "skills", "fieldname": "skills"}],
+        "slots": [{
+            "slot_id": "slot_skills_1",
+            "owner_field_id": "skills",
+            "locator": {"marker_text": "[Type text]"}
+        }],
+        "instructions": []
+    }
+    validator = TemplateManifestV2Validator()
+    result = validator.validate(manifest, {})
+    assert any("generic placeholder" in w for w in result["warnings"])
