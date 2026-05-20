@@ -47,6 +47,7 @@ def enrich_manifest_from_evidence(manifest: TemplateManifest, evidence: Template
 
         marker_occurrences[field.marker_text] += 1
         _enrich_field(field, evidence, table_lookup, marker_occurrences[field.marker_text])
+        _ensure_array_complex_sub_fields(field, evidence)
         enriched_fields.append(field)
 
     for ph in evidence.placeholder_candidates:
@@ -60,6 +61,7 @@ def enrich_manifest_from_evidence(manifest: TemplateManifest, evidence: Template
         existing_fieldnames.add(field.fieldname)
         marker_occurrences[field.marker_text] += 1
         _enrich_field(field, evidence, table_lookup, marker_occurrences[field.marker_text])
+        _ensure_array_complex_sub_fields(field, evidence)
         enriched_fields.append(field)
         existing_markers.add(marker_key)
 
@@ -185,6 +187,71 @@ def _enrich_field(
         field.source_hints = [field.source_hints]
 
 
+
+
+def _ensure_array_complex_sub_fields(field: TemplateField, evidence: TemplateEvidence) -> None:
+    """Deterministically backfill sub_fields for array_complex when LLM omitted them."""
+    if field.field_type != "array_complex" or field.sub_fields:
+        return
+
+    heading = (field.render_locator or {}).get("heading") or field.original_label
+    marker_candidates: List[str] = []
+    if heading and heading in evidence.object_patterns:
+        marker_candidates.extend(evidence.object_patterns.get(heading, []))
+
+    if not marker_candidates and evidence.raw_text_summary:
+        marker_candidates = _extract_markers_near_heading(evidence.raw_text_summary, heading, field.marker_text)
+
+    # fallback: repeated markers that are likely section children
+    if not marker_candidates and evidence.repeated_markers:
+        marker_candidates = [m for m in evidence.repeated_markers if m != field.marker_text]
+
+    deduped = []
+    seen = set()
+    for marker in marker_candidates:
+        key = _norm_marker(marker)
+        if not marker or key in seen or key == _norm_marker(field.marker_text):
+            continue
+        seen.add(key)
+        label = _label_from_marker(marker)
+        canonical = _canonical_from_text(label)
+        low = label.lower()
+        subtype = "array_simple" if any(t in low for t in ("bullet", "responsibil", "achiev", "task", "duty", "grade", "list")) else "scalar"
+        deduped.append(TemplateField(
+            fieldname=canonical or _slug(label),
+            canonical_fieldname=canonical,
+            original_label=label,
+            marker_text=marker,
+            field_type=subtype,
+            meaning=f"Field '{label}' within repeatable section '{heading or field.fieldname}'.",
+            source_kind=RESUME_SOURCE_KIND,
+            resume_fillable=True,
+            confidence=0.72,
+        ))
+
+    if deduped:
+        field.sub_fields = deduped
+
+
+def _extract_markers_near_heading(text: str, heading: Optional[str], fallback_marker: str) -> List[str]:
+    lines = text.splitlines()
+    markers_re = re.compile(r'("?\[[^\]]+\]"?|«[^»]+»)')
+    if heading:
+        idx = next((i for i, line in enumerate(lines) if line.strip() == heading.strip()), None)
+    else:
+        idx = None
+    if idx is None:
+        idx = next((i for i, line in enumerate(lines) if fallback_marker and fallback_marker in line), None)
+    if idx is None:
+        return []
+
+    out: List[str] = []
+    for line in lines[idx + 1:]:
+        if line.strip().isupper() and not markers_re.search(line):
+            break
+        for m in markers_re.findall(line):
+            out.append(m)
+    return out
 def _field_from_placeholder(
     ph: PlaceholderCandidate,
     evidence: TemplateEvidence,
@@ -313,19 +380,33 @@ def _field_context(marker: str, evidence: TemplateEvidence, table: Optional[Tabl
 
 
 def _build_extraction_contract(fields: List[TemplateField]) -> Dict[str, Any]:
+    field_hints = {}
+    for f in fields:
+        hint = {
+            "meaning": f.meaning,
+            "source_hints": f.source_hints,
+            "extraction_hints": f.extraction_hints,
+            "field_type": f.field_type,
+        }
+        if f.field_type == "array_complex":
+            sub_meta = {}
+            paths = []
+            for sf in f.sub_fields:
+                sub_meta[sf.fieldname] = {
+                    "field_type": sf.field_type,
+                    "marker_text": sf.marker_text,
+                    "meaning": sf.meaning,
+                }
+                suffix = "[]" if sf.field_type == "array_simple" else ""
+                paths.append(f"{f.fieldname}[].{sf.fieldname}{suffix}")
+            hint["sub_fields"] = sub_meta
+            hint["paths"] = paths
+        field_hints[f.fieldname] = hint
     return {
         "resume_fields": [f.fieldname for f in fields if f.source_kind == RESUME_SOURCE_KIND],
         "recruiter_fields": [f.fieldname for f in fields if f.source_kind == RECRUITER_SOURCE_KIND],
         "required_fields": [f.fieldname for f in fields if f.required],
-        "field_hints": {
-            f.fieldname: {
-                "meaning": f.meaning,
-                "source_hints": f.source_hints,
-                "extraction_hints": f.extraction_hints,
-                "field_type": f.field_type,
-            }
-            for f in fields
-        },
+        "field_hints": field_hints,
     }
 
 
@@ -337,6 +418,7 @@ def _build_injection_contract(fields: List[TemplateField]) -> Dict[str, Any]:
                 "marker_text": f.marker_text,
                 "field_type": f.field_type,
                 "render_locator": f.render_locator or f.injection_hints,
+                "repeat_template_strategy": (f.injection_hints or {}).get("repeat_template_strategy") if f.field_type == "array_complex" else None,
                 "sub_fields": [sf.model_dump(mode="json") for sf in f.sub_fields],
             }
             for f in fields

@@ -147,6 +147,18 @@ async def process_job(db, message: dict):
                     "instruction_blocks": [ib.text for ib in getattr(analysis, "instruction_blocks", []) if hasattr(ib, "text")]
                 }
                 template.field_extraction_manifest = json.dumps(rich_manifest)
+
+                # Persist Docling extraction/markdown for downstream debug and retrieval.
+                docling_extraction = getattr(analysis, "docling_markdown", None)
+                if docling_extraction:
+                    template.docling_extraction = docling_extraction
+                elif not template.docling_extraction:
+                    # Fallback: attempt to read from analysis_json payload.
+                    try:
+                        payload = analysis.model_dump() if hasattr(analysis, "model_dump") else {}
+                        template.docling_extraction = payload.get("docling_markdown")
+                    except Exception:
+                        pass
                 
                 db.commit()
                 logger.info(f"[Worker] Template {template_id} analyzed and persisted.")

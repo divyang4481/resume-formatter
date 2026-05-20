@@ -1,6 +1,7 @@
 from typing import List, Optional, Dict, Any, Union
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator, model_validator
 
+from .field_types import normalize_field_type, normalize_render_strategy
 
 class PlaceholderCandidate(BaseModel):
     marker: str
@@ -63,6 +64,30 @@ class TemplateField(BaseModel):
     render_locator: Dict[str, Any] = Field(default_factory=dict)
     provenance: Dict[str, Any] = Field(default_factory=dict)
     sub_fields: List["TemplateField"] = Field(default_factory=list)
+
+    @field_validator("field_type", mode="before")
+    @classmethod
+    def _normalize_field_type(cls, value: str) -> str:
+        return normalize_field_type(value)
+
+    @model_validator(mode="after")
+    def _normalize_strategies(self) -> "TemplateField":
+        if self.injection_hints is None:
+            self.injection_hints = {}
+        if self.render_locator is None:
+            self.render_locator = {}
+
+        if isinstance(self.injection_hints, dict):
+            strategy = self.injection_hints.get("strategy")
+            self.injection_hints["strategy"] = normalize_render_strategy(strategy)
+
+        if isinstance(self.render_locator, dict):
+            strategy = self.render_locator.get("strategy")
+            self.render_locator["strategy"] = normalize_render_strategy(strategy)
+
+        self.field_type = normalize_field_type(self.field_type)
+        self.sub_fields = [TemplateField.model_validate(sf) for sf in (self.sub_fields or [])]
+        return self
 
 
 TemplateField.model_rebuild()
