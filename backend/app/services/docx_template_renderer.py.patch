@@ -1,0 +1,27 @@
+--- backend/app/services/docx_template_renderer.py
++++ backend/app/services/docx_template_renderer.py
+@@ -107,6 +107,24 @@
+                         for elm in to_delete:
+                             elm.getparent().remove(elm)
+                     return
++
++    def _replace_complex_block(self, doc, start_marker, replacement, context_heading=None):
++        """Replaces a multiline complex block bounded by specific markers."""
++        # Simple naive implementation: try to find start marker, replace its text,
++        # and prune the rest of the block if possible, or just inject directly.
++        for p in doc.paragraphs:
++            if start_marker and start_marker in p.text:
++                self._replace_in_paragraph(p, start_marker, replacement)
++                logger.info(f"[Renderer] Replaced complex block starting with '{start_marker}'")
++                return
++        for tbl in doc.tables:
++            for row in tbl.rows:
++                for cell in row.cells:
++                    for p in cell.paragraphs:
++                        if start_marker and start_marker in p.text:
++                            self._replace_in_paragraph(p, start_marker, replacement)
++                            logger.info(f"[Renderer] Replaced complex block in table starting with '{start_marker}'")
++                            return
+
+     def _prepare_render_context(self, fields: Dict[str, Any]) -> Dict[str, Any]:
+         """Converts raw data into docxtpl-friendly RichText or formatted strings."""
