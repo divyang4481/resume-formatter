@@ -208,6 +208,12 @@ def _para_text(para: ET._Element) -> str:
             char = el.get(f"{W}char") or ""
             if char.upper() == "AB": parts.append("«")
             elif char.upper() == "BB": parts.append("»")
+        elif el.tag == f"{W}instrText":
+            instr_text = el.text or ""
+            if "macrobutton" in instr_text.lower():
+                match = re.search(r"macrobutton\s+\S+\s+(.+)", instr_text, re.IGNORECASE)
+                if match:
+                    parts.append(match.group(1).strip())
     
     return "".join(parts).strip()
 
