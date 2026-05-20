@@ -24,6 +24,13 @@ Rules:
 9. Every slot must have exactly one owner_field_id.
 10. Every field render.target_slot_ids must reference existing slots.
 11. Every marker must be covered either by slot locator, item_schema, block_schema, or instruction.
+12. If the same placeholder text appears multiple times (e.g. [Type text], «Type text», MACROBUTTON), create one semantic field and multiple physical slots with unique slot_id values.
+13. For duplicate placeholders, locator must include disambiguation metadata (nearest heading/table label + occurrence index + path if available).
+14. For work experience / education style sections, prefer array_complex with explicit sub_fields instead of scalar duplication.
+15. Do not create canonical fieldname variants like *_2, *_3 for repeated placeholders; repetition belongs in slots/blocks.
+16. If a section is explicit copy/paste content (e.g. heading like "CANDIDATE’S OWN CV" with instructions such as "Paste ... in this space"), model it as one paste_zone field with one section_body/paste_zone slot using replace_section_body.
+17. For copy/paste sections, keep the heading as anchor metadata in slot locator and put instructional red text in instructions[] with action=remove.
+18. Never model copy/paste instruction text itself as scalar resume_fact fields.
 
 PAYLOAD:
 {{ payload | tojson(indent=2) }}

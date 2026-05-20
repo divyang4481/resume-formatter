@@ -41,8 +41,10 @@ class TemplateSlotV2(BaseModel):
         "replace_marker",
         "fill_after_label",
         "replace_bullets_under_heading",
+        "replace_bullet_list_under_heading",
         "replace_section_body",
         "replace_repeat_block",
+        "replace_repeat_block_under_heading",
         "replace_table_loop",
     ]
     locator: Dict[str, Any] = {}

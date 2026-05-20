@@ -52,6 +52,17 @@ class TemplateManifestV2Validator:
             if owner and owner not in field_ids:
                 errors.append(f"Slot {sid} references missing owner_field_id: {owner}")
                 status = "FAIL"
+            loc = s.get("locator", {}) or {}
+            marker_text = (loc.get("marker_text") or loc.get("placeholder_text") or "").strip().lower()
+            if marker_text in {"[type text]", "«type text»", "type text"}:
+                has_scope = bool(loc.get("heading") or loc.get("heading_text")) and (
+                    loc.get("occurrence_index_under_heading") is not None
+                    or loc.get("occurrence_index") is not None
+                    or loc.get("paragraph_or_cell_path")
+                    or loc.get("path")
+                )
+                if not has_scope:
+                    warnings.append(f"Slot {sid} uses generic placeholder without location metadata.")
 
         # Check instruction actions
         for inst in instructions:
