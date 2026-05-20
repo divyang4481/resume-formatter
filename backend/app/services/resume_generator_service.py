@@ -625,6 +625,15 @@ class ResumeGeneratorService:
             # Sort matches in reverse order to replace without messing up indices
             for match in sorted(matches, key=lambda x: x.start(), reverse=True):
                 original = match.group(0)
+                start, end = match.span()
+
+                # Skip if this match is part of an already injected Jinja tag
+                # Our injected tags look like {{ _['fieldname'] }} or {{ item['fieldname'] }}
+                if original.startswith("['") and original.endswith("']"):
+                    prefix = text[max(0, start-5):start]
+                    if prefix.endswith("_") or prefix.endswith("item"):
+                        continue
+
                 raw_marker_text = match.group(1).strip()
                 target_key = None
                 # --- HAYS SPECIAL: TableStart / TableEnd (Must be checked first) ---
