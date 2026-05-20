@@ -1,3 +1,4 @@
+from typing import List, Dict, Any
 from fastapi import APIRouter, UploadFile, File, Form, Depends, HTTPException, status
 from pydantic import ValidationError
 import json
@@ -59,9 +60,7 @@ async def upload_asset(
     content = await file.read()
 
     # Run the template service
-    from app.services.resume_ai_service import ResumeAiService
     from app.services.template_analysis_service import TemplateAnalysisService
-    ai_service = ResumeAiService(llm, extraction_service)
 
     template_service = TemplateService(
         storage_provider=storage_provider,
@@ -69,7 +68,7 @@ async def upload_asset(
         event_bus=event_bus,
         extraction_service=extraction_service,
         knowledge_index=knowledge_index,
-        template_analysis_service=TemplateAnalysisService(ai_service)
+        template_analysis_service=TemplateAnalysisService(llm=llm, extraction_service=extraction_service)
     )
 
     asset_id = await template_service.upload_asset(
@@ -110,6 +109,7 @@ class TemplateUpdateRequest(BaseModel):
     purpose: Optional[str] = None
     expected_sections: Optional[str] = None
     expected_fields: Optional[str] = None
+    field_extraction_manifest: Optional[List[Dict[str, Any]]] = None
 
     summary_guidance: Optional[str] = None
     formatting_guidance: Optional[str] = None
@@ -132,7 +132,10 @@ async def update_template(
 
         update_data = payload.model_dump(exclude_unset=True)
         for key, value in update_data.items():
-            setattr(template, key, value)
+            if key == "field_extraction_manifest" and value is not None:
+                setattr(template, key, json.dumps(value))
+            else:
+                setattr(template, key, value)
 
         db.commit()
         return {"message": "Template updated successfully"}
@@ -162,9 +165,7 @@ async def analyze_template(
         template_key = template.storage_uri.replace("local://", "")
         template_bytes = storage_provider.get_bytes(template_key)
 
-        from app.services.resume_ai_service import ResumeAiService
-        ai_service = ResumeAiService(llm, extraction_service)
-        analyzer = TemplateAnalysisService(ai_service=ai_service)
+        analyzer = TemplateAnalysisService(llm=llm, extraction_service=extraction_service)
         suggestions = await analyzer.analyze_template(template_bytes, template.file_name or "template.docx")
 
         return {
@@ -204,6 +205,7 @@ async def get_template_detail(
                 "purpose": template.purpose,
                 "expected_sections": template.expected_sections,
                 "expected_fields": template.expected_fields,
+                "field_extraction_manifest": json.loads(template.field_extraction_manifest) if template.field_extraction_manifest else [],
                 "summary_guidance": template.summary_guidance,
                 "formatting_guidance": template.formatting_guidance,
                 "validation_guidance": template.validation_guidance,

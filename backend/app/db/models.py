@@ -75,6 +75,7 @@ class ProcessingJob(Base):
     generated_summary = Column(Text, nullable=True)
     render_docx_uri = Column(String, nullable=True)
     error_message = Column(Text, nullable=True)
+    transform_json = Column(Text, nullable=True)
 
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

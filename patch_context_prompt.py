@@ -1,4 +1,5 @@
-TASK: Extract specific data from the resume for a target field.
+def update_context_prompt():
+    content = """TASK: Extract specific data from the resume for a target field.
 
 FIELD NAME:
 {{ field_name }}
@@ -31,3 +32,9 @@ CRITICAL RULES:
 4. Prioritize accuracy for names, dates, and companies.
 5. Maintain original technical terminology.
 6. Output ONLY valid JSON.
+"""
+    with open('backend/app/agent/prompts/context_aware_extraction.jinja2', 'w') as f:
+        f.write(content)
+    print("Updated context_aware_extraction.jinja2")
+
+update_context_prompt()

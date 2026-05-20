@@ -1,4 +1,7 @@
-from typing import Dict, Any
+import os
+
+def update_template_analysis_service():
+    content = """from typing import Dict, Any
 from app.agent.utils.llm_sanitizer import LlmSanitizer
 from app.domain.interfaces import LlmRuntimeAdapter, DocumentExtractionService
 import json
@@ -12,7 +15,7 @@ class TemplateAnalysisService:
         self.extraction_service = extraction_service
 
     async def analyze_template(self, content: bytes, filename: str) -> Dict[str, Any]:
-        """Analyzes a .docx template to suggest metadata and generate a field manifest."""
+        \"\"\"Analyzes a .docx template to suggest metadata and generate a field manifest.\"\"\"
         if not self.extraction_service: return {}
 
         from app.domain.interfaces import ExtractionContext
@@ -34,7 +37,7 @@ class TemplateAnalysisService:
         )
 
         response = self.llm.generate(prompt)
-        print(f"\n--- [LLM RAW RESPONSE: TEMPLATE ANALYSIS] ---\n{response[:1000]}...\n")
+        print(f"\\n--- [LLM RAW RESPONSE: TEMPLATE ANALYSIS] ---\\n{response[:1000]}...\\n")
 
         # Use clean_json to robustly parse the JSON since the prompt asks for a JSON object
         cleaned_json_str = LlmSanitizer.clean_json(response)
@@ -58,3 +61,9 @@ class TemplateAnalysisService:
                 "expected_fields": ",".join(detected_placeholders),
                 "field_extraction_manifest": []
             }
+"""
+    with open('backend/app/services/template_analysis_service.py', 'w') as f:
+        f.write(content)
+    print("Updated template_analysis_service.py")
+
+update_template_analysis_service()

@@ -41,6 +41,7 @@ class ProcessingJob(BaseModel):
     # Generated Outputs
     summary_uri: Optional[str] = None
     render_docx_uri: Optional[str] = None
+    transform_json: Optional[str] = None
 
     # Template and Context selection
     selected_template_id: Optional[str] = None

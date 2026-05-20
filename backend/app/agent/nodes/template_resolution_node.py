@@ -46,6 +46,7 @@ def create_template_resolve_node(llm_runtime, storage_provider, doc_parser):
             template_text = None
 
             if template_meta:
+                import json
                 storage_uri = template_meta.original_file_ref
                 summary_guidance = template_meta.summary_guidance
                 formatting_guidance = template_meta.formatting_guidance
@@ -53,6 +54,17 @@ def create_template_resolve_node(llm_runtime, storage_provider, doc_parser):
                 pii_guidance = template_meta.pii_guidance
                 expected_sections = template_meta.expected_sections
                 expected_fields = template_meta.expected_fields
+
+                field_extraction_manifest = []
+                if hasattr(template_meta, 'field_extraction_manifest') and template_meta.field_extraction_manifest:
+                    try:
+                        if isinstance(template_meta.field_extraction_manifest, str):
+                            field_extraction_manifest = json.loads(template_meta.field_extraction_manifest)
+                        else:
+                            field_extraction_manifest = template_meta.field_extraction_manifest
+                    except Exception as e:
+                        print(f"Warning: Could not parse field_extraction_manifest: {e}")
+
                 print(f"Found template storage URI: {storage_uri}")
                 
                 # Fetch and extract raw text from template for smarter extraction context
@@ -76,6 +88,7 @@ def create_template_resolve_node(llm_runtime, storage_provider, doc_parser):
                 print(f"Warning: Template ID {chosen_template_id} not found in database.")
                 expected_sections = None
                 expected_fields = None
+                field_extraction_manifest = []
 
 
             return {
@@ -88,6 +101,7 @@ def create_template_resolve_node(llm_runtime, storage_provider, doc_parser):
                 "pii_guidance": pii_guidance,
                 "expected_sections": expected_sections,
                 "expected_fields": expected_fields,
+                "field_extraction_manifest": field_extraction_manifest,
                 "status": "template_resolved"
             }
 

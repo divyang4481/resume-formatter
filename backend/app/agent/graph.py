@@ -5,7 +5,7 @@ from app.agent.state import AgentState
 
 from app.domain.interfaces import LlmRuntimeAdapter
 from app.domain.interfaces import DocumentExtractionService, ExtractionContext
-from app.agent.nodes.transformation_node import create_schema_builder_node, create_context_aware_extraction_node
+from app.agent.nodes.transformation_node import create_context_aware_extraction_node
 from app.services.resume_parsing_service import ResumeParsingService
 from app.dependencies import get_storage_provider
 
@@ -47,16 +47,13 @@ def create_parse_node(doc_parser: DocumentExtractionService, storage):
 def create_transformation_subgraph(llm_runtime: LlmRuntimeAdapter) -> Any:
     """
     Constructs a granular subgraph for the transformation phase.
-    Ensures that schema preparation and context-aware extraction are separate steps.
     """
     from langgraph.graph import StateGraph, END
     subgraph = StateGraph(AgentState)
     
-    subgraph.add_node("prepare_schema", create_schema_builder_node())
     subgraph.add_node("extract_map", create_context_aware_extraction_node(llm_runtime))
     
-    subgraph.set_entry_point("prepare_schema")
-    subgraph.add_edge("prepare_schema", "extract_map")
+    subgraph.set_entry_point("extract_map")
     subgraph.add_edge("extract_map", END)
     
     return subgraph.compile()
@@ -94,16 +91,26 @@ def build_workflow_graph(llm_runtime: LlmRuntimeAdapter, doc_parser: DocumentExt
                 except Exception as e:
                     print(f"Non-critical: Failed to update job progress: {e}")
             
-            # If the node is a compiled subgraph (Runnable), use ainvoke
+            # Execute node
+            result = None
             if hasattr(node_func, "ainvoke"):
-                return await node_func.ainvoke(state)
-            
-            # If it's a coroutine function, await it
-            if asyncio.iscoroutinefunction(node_func):
-                return await node_func(state)
-            
-            # Otherwise, call it directly
-            return node_func(state)
+                result = await node_func.ainvoke(state)
+            elif asyncio.iscoroutinefunction(node_func):
+                result = await node_func(state)
+            else:
+                result = node_func(state)
+
+            # If transform step finished, save the json
+            if node_name == "transform" and job_repo and job_id and result and "transformed_document_json" in result:
+                try:
+                    job = job_repo.get_job(job_id)
+                    if job:
+                        job.transform_json = result["transformed_document_json"]
+                        job_repo.save_job(job)
+                except Exception as e:
+                    print(f"Non-critical: Failed to save transform_json: {e}")
+
+            return result
         return wrapped_node
 
     workflow.add_node("ingest", with_progress("ingest", lambda state: {"status": "ingested"}))
