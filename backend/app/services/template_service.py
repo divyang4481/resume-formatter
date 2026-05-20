@@ -171,6 +171,7 @@ class TemplateService:
             formatting_guidance=ensure_str(getattr(suggestions, "formatting_guidance", None)),
             validation_guidance=ensure_str(getattr(suggestions, "validation_guidance", None)),
             pii_guidance=ensure_str(getattr(suggestions, "pii_guidance", None)),
+            docling_extraction=ensure_str(extracted_text) if extracted_text else None,
             complexity_score=getattr(suggestions, "complexity_score", 0.0),
             model_usage_json=getattr(suggestions, "model_usage_json", {}),
             llm_attempt_count=getattr(suggestions, "llm_attempt_count", 0),

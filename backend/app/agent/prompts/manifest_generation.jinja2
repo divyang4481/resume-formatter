@@ -16,18 +16,28 @@ INPUTS:
 {% endif %}
 
 INSTRUCTIONS:
-- Use DOCUMENT TEXT FLOW (Docling markdown) heavily to understand the visual layout, exact quoting, and repeating blocks, especially for UK-style resumes.
+- Use DOCUMENT TEXT FLOW (Docling markdown) heavily as a visual and layout map to understand the exact visual context, quoting, relative positioning, and complex structures.
 - Use RAW EVIDENCE as the primary source of truth for exact marker strings.
 - Identify all placeholders and map them to canonical field names.
+- ANALYZE FIELD RELATIVE POSITIONING & LABELS:
+  - Inspect the Docling markdown to see where the placeholder sits relative to field labels or headings.
+  - Determine if the placeholder has a label immediately to the left (side-by-side) or above it. For example, in tables like `| Living in | |` or `| Living in | [Type text] |`, the label "Living in" is side-by-side to the blank cell / placeholder.
+  - In such side-by-side or table-label structures, map the field with `render_locator.strategy = fill_blank_cell_after_label` and provide the exact visual label in `render_locator.label`.
+  - If a placeholder is embedded in a paragraph or line, map it with `render_locator.strategy = replace_marker`.
+  - If a placeholder represents a block or list under a section heading, map it with `render_locator.strategy = replace_section_body` or `replace_complex_block` and supply `render_locator.heading`.
+- IDENTIFY COMPLEX STRUCTURES & TYPES:
+  - Classify each field precisely as one of: `scalar`, `array_simple`, `array_complex`, `table_loop`, `rich_text`, or `paste_zone`.
+  - **Scalar**: Single data fields (e.g. Candidate Name, Location, Notice Period, Current Salary).
+  - **Array Simple**: Flat list of items (e.g., flat list of bulleted skills under a "Key Skills" heading).
+  - **Array Complex (Structure with Array / List of Nested Objects)**: Repeating sections with multiple sub-fields (e.g., WORK EXPERIENCE containing nested sub-fields like Job Title, Organisation, bulleted responsibilities; or EDUCATION containing Degree, Institution, Dates). Group these into ONE `array_complex` field, with the repeating pattern identified precisely in `sub_fields`.
+  - **Table Loop**: Specifically when mail-merge start/end loop markers (`TableStart:X` / `TableEnd:X`) are present.
 - IMPORTANT: Markers starting with "Employee" (e.g. «EmployeeName», «EmployeeEmail», «EmployeeJobTitle») ALWAYS refer to the Hays Recruiter/Consultant who is presenting the profile. Do NOT map these to candidate fields.
 - "Consultant comments" or "CVcomments" markers ALWAYS map to 'cv_comments'.
 - Markers labeled as `context_placeholder` (like "[Type text]" or "[Consultant comments]" or "\"[Job description, Date]\"") are HIGH-PRIORITY targets. Map them to fields based on their surrounding section headings (e.g. if under "Skills", map to 'skills'). Include exact quotes if they exist in the text.
 - If the same marker (e.g., "[Type text]") appears multiple times in different contexts, create a unique field for each instance.
 - Sections in `bullet_slots` (like "Key Skills" or "Professional qualifications") contain bulleted placeholders; ensure each bullet is captured as a UNIQUE field in the manifest, or grouped correctly if it's part of a list.
 - Identify "Paste Zones" or instruction blocks (often in red text) that indicate where the candidate's own CV content should be placed; map these to a field (e.g. 'work_experience' or 'candidate_cv') with field_type='paste_zone' and use the exact section heading as the marker_text.
-- Determine the field type (scalar, array_simple, array_complex, table_loop, rich_text, paste_zone).
-  - For complex repeating structures like "WORK EXPERIENCE" or "EDUCATION" that have multiple placeholders (e.g. "[Job description, Date]", "[Organisation]", "\"[Bullet point responsibilities]\""), group them into ONE `array_complex` field, with the repeating pattern identified precisely in `sub_fields`.
-  - Ensure exact quotation marks (e.g. "\"[Institution, Date]\"") are captured in `marker_text` if they appear in the source text.
+- Ensure exact quotation marks (e.g. "\"[Institution, Date]\"") are captured in `marker_text` if they appear in the source text.
 - Infer the semantic meaning and provide source hints for resume data extraction.
 - For every field include explicit injection_hints and render_locator.
 - Mark recruiter/employee/consultant fields as source_kind="recruiter_input" and resume_fillable=false. Candidate fields must be source_kind="resume_fact".
@@ -82,6 +92,11 @@ CRITICAL: You MUST return a JSON object matching this schema exactly:
 }
 
 REINFORCEMENT:
+- LEVERAGE DOCLING CLUES FOR LAYOUT GROUNDING:
+  - If the Docling markdown shows a table with clear headers or key-value labels (e.g. `| Notice period | |` or `| Living in | [Type text] |`), this is a strong indication that the cell next to it is a visual blank slot or placeholder in a table. Map it as a field with `strategy="fill_blank_cell_after_label"`, using the exact visual label (e.g. "Notice period" or "Living in") in `render_locator.label`.
+  - Pay close attention to visual hierarchy: Section headers like "Our expert opinion", "Professional qualifications", "Key skills", "WORK EXPERIENCE" in Docling markdown define the boundaries of expected fields.
+  - If a placeholder resides inside a table row/cell under a header, use that context to determine its semantic meaning and correct locator coordinates.
+  - For complex structures (like structure with array), trace the exact layout pattern in the Docling markdown to map the nested sub_fields in their correct visual sequence (e.g., `[Organisation]` -> `[Job title]` -> bullet points).
 - For `array_complex` sections like "WORK EXPERIENCE" or "EDUCATION":
   - Use `marker_text` for the primary repeat block marker if it exists. If there is no single wrap marker, use the first marker of the repeating block as `marker_text` (e.g., '\"[Job description, Date]\"').
   - Use `sub_fields` to list EVERY internal placeholder (e.g. "[Organisation]", "\"[Job description, Date]\"", "\"[Bullet point responsibilities]\"").

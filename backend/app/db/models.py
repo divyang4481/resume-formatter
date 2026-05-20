@@ -6,29 +6,6 @@ from datetime import datetime
 Base = declarative_base()
 
 class TemplateAsset(Base):
-    notes = Column(Text, nullable=True)
-    purpose = Column(Text, nullable=True)
-    expected_sections = Column(Text, nullable=True)
-    expected_fields = Column(Text, nullable=True) # Comma-separated list of identified placeholders
-    # Logical Relationships:
-    # - Master record for a resume template shell.
-    # - Linked to 'processing_jobs' via template_asset_id.
-    # - Defines the 'contract' (expected_fields/manifest) for data mapping.
-    # - status can be DRAFT, ACTIVE, ARCHIVED.
-    field_extraction_manifest = Column(Text, nullable=True) # Rich JSON mapping of fieldname, meaning, source_hints
-    summary_guidance = Column(Text, nullable=True)
-
-    formatting_guidance = Column(Text, nullable=True)
-    validation_guidance = Column(Text, nullable=True)
-    pii_guidance = Column(Text, nullable=True)
-    selection_weight = Column(Integer, default=50)
-    is_default_for_industry = Column(Boolean, default=False)
-    analysis_json = Column(Text, nullable=True) # Full TemplateAnalysis model
-    requires_human_review = Column(Boolean, default=False)
-    review_reasons = Column(Text, nullable=True) # JSON list of reasons
-    model_usage_json = Column(Text, nullable=True)
-    complexity_score = Column(Float, nullable=True)
-    llm_attempt_count = Column(Integer, default=0)
 
     __tablename__ = "template_assets"
 
@@ -41,6 +18,34 @@ class TemplateAsset(Base):
     region = Column(String, nullable=True)
     language = Column(String, default="en")
     file_name = Column(String, nullable=True)
+
+    notes = Column(Text, nullable=True)
+    purpose = Column(Text, nullable=True)
+    expected_sections = Column(Text, nullable=True)
+    expected_fields = Column(Text, nullable=True) # Comma-separated list of identified placeholders
+    # Logical Relationships:
+    # - Master record for a resume template shell.
+    # - Linked to 'processing_jobs' via template_asset_id.
+    # - Defines the 'contract' (expected_fields/manifest) for data mapping.
+    # - status can be DRAFT, ACTIVE, ARCHIVED.
+    field_extraction_manifest = Column(Text, nullable=True) # Rich JSON mapping of fieldname, meaning, source_hints
+    summary_guidance = Column(Text, nullable=True)
+    docling_extraction = Column(Text, nullable=True)  # Raw Docling extraction output
+
+    formatting_guidance = Column(Text, nullable=True)
+    validation_guidance = Column(Text, nullable=True)
+    pii_guidance = Column(Text, nullable=True)
+    selection_weight = Column(Integer, default=50)
+    is_default_for_industry = Column(Boolean, default=False)
+    analysis_json = Column(Text, nullable=True) # Full TemplateAnalysis model
+    requires_human_review = Column(Boolean, default=False)
+    review_reasons = Column(Text, nullable=True) # JSON list of reasons
+    model_usage_json = Column(Text, nullable=True)
+    complexity_score = Column(Float, nullable=True)
+    llm_attempt_count = Column(Integer, default=1)
+
+
+
     storage_uri = Column(String, nullable=True)
     extraction_uri = Column(String, nullable=True)
     checksum_sha256 = Column(String, nullable=True)
@@ -104,7 +109,7 @@ class ProcessingJob(Base):
     # Improved Audit Metadata for Template Analysis / LLM stages
     model_usage_json = Column(Text, nullable=True) # Audit log of models used
     complexity_score = Column(Float, nullable=True)
-    llm_attempt_count = Column(Integer, default=0)
+    llm_attempt_count = Column(Integer, default=1)
     repair_attempt_count = Column(Integer, default=0)
 
     created_at = Column(DateTime, default=datetime.utcnow)

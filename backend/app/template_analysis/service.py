@@ -34,6 +34,11 @@ async def analyze_template_docx(
     evidence = decompose_docx(file_path=file_path, content=content, docling_text=docling_text)
     complexity_score = compute_template_complexity(evidence)
     logger.info(f"[TemplateAnalysis] Complexity score: {complexity_score:.2f}")
+    if evidence.docling_markdown:
+        logger.info(f"[TemplateAnalysis] Docling markdown length: {len(evidence.docling_markdown)} characters.")
+        logger.info(f"[TemplateAnalysis] Docling Markdown Clues:\n{evidence.docling_markdown}")
+    else:
+        logger.info("[TemplateAnalysis] No Docling markdown clues available.")
 
     model_usage = []
     llm_attempts = 0

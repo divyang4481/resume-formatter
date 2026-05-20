@@ -60,6 +60,7 @@ class TemplateAsset(BaseModel):
     field_extraction_manifest: Optional[List[FieldExtractionManifestItem]] = None
 
     summary_guidance: Optional[str] = None
+    docling_extraction: Optional[str] = None  # Raw Docling extraction output
     formatting_guidance: Optional[str] = None
     validation_guidance: Optional[str] = None
     pii_guidance: Optional[str] = None

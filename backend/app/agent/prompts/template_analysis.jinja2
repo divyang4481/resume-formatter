@@ -32,22 +32,34 @@ Specifically:
 - PASTE_ZONES: ONLY create field_type="paste_zone" if the heading is explicitly listed here.
 
 ---
-STEP 2 — FIELD TYPE + SOURCE KIND RULES:
+STEP 2 — FIELD TYPE + SOURCE KIND RULES (Visual Positioning & Layout Clues):
 
-Every manifest entry MUST have field_type AND source_kind.
+Every manifest entry MUST have field_type AND source_kind, heavily guided by the Docling layout analysis and sequential flow.
 
-field_type options: scalar | rich_text | array_simple | array_complex | table_loop | paste_zone | instruction_block
-source_kind options: merge_marker | visual_blank_slot | bullet_slots | table_loop | paste_zone | section_body | instruction_block
+1. ANALYZE FIELD RELATIVE POSITIONING & LABELS:
+   - Identify if the placeholder/blank has a label immediately to the left (side-by-side) or above it. For example, in a table row/cell like `| Living in | [Type text] |`, the label "Living in" is side-by-side to the placeholder.
+   - For side-by-side or table-label structures, map the field with `render_locator.strategy = fill_blank_cell_after_label` and provide the exact label in `render_locator.label`.
+   - If a placeholder is embedded inside a paragraph or line, map it with `render_locator.strategy = replace_marker`.
+   - If a placeholder/block is under a section heading, map it with `render_locator.strategy = replace_section_body` or `replace_complex_block` and supply `render_locator.heading`.
 
-Rules by source_kind:
+2. IDENTIFY COMPLEX STRUCTURES & TYPES:
+   - Classify each field precisely as one of: `scalar`, `rich_text`, `array_simple`, `array_complex`, `table_loop`, `paste_zone`, or `instruction_block`.
+   - **Scalar**: Single data fields (e.g. Candidate Name, Location, Notice Period, Current Salary).
+   - **Array Simple**: Flat list of items (e.g., flat list of bulleted skills under "Key Skills" heading).
+   - **Array Complex (Structure with Array / List of Nested Objects)**: Repeating sections with multiple sub-fields (e.g., WORK EXPERIENCE containing nested sub-fields like Job Title, Organisation, and bulleted responsibilities; or EDUCATION containing Degree, Institution, and Dates). Group these into ONE `array_complex` field, with the repeating pattern identified precisely in `sub_fields`.
+   - **Table Loop**: Specifically when mail-merge start/end loop markers (`TableStart:X` / `TableEnd:X`) are present.
+   - **Rich Text**: Free-form text block or expert opinion paragraph.
+   - **Paste Zone**: Large section indicating where the candidate's own CV content should be placed (e.g., work_experience or candidate_cv).
+
+3. DETAILED SOURCE KIND RULES:
 
 merge_marker
   → marker_text = exact string from DETECTED MARKERS (guillemet «...» or bracket [...])
   → render_locator.strategy = replace_marker
 
 visual_blank_slot
-  → table row: bold label cell, value cell is blank or says "Type text" — NO guillemet marker
-  → marker_text = ""  (DO NOT invent one)
+  → table row/cell with bold label cell: value cell is blank or says "Type text" — NO guillemet marker
+  → marker_text = "" (DO NOT invent one)
   → render_locator.strategy = fill_blank_cell_after_label
   → render_locator.label = EXACT bold label text
 
@@ -97,6 +109,11 @@ STEP 3 — ANTI-HALLUCINATION RULES (MANDATORY):
 5. REPEATED MARKER RESTRICTION: If a marker like [Type text] or [...] appears multiple times (listed in REPEATED_MARKERS), you MUST provide "label" or "heading" context in render_locator. Failure to do so will result in rendering errors.
 
 6. confidence: 1.0 for exact marker match, 0.7 for visual_blank_slot with confirmed label, 0.5 for inferred.
+
+7. LEVERAGE DOCLING CLUES FOR LAYOUT GROUNDING:
+   - If the Docling markdown shows a table with clear headers or key-value labels (e.g. `Notice period | |` or `| Living in | [Type text] |`), this is a strong indication that the cell next to it is a visual blank slot/placeholder in a table. Map it with `strategy="fill_blank_cell_after_label"`, using the exact visual label (e.g. "Notice period" or "Living in") in `render_locator.label`.
+   - For complex structures like `array_complex` (WORK EXPERIENCE or EDUCATION), trace the exact layout pattern in the Docling markdown to map the nested `sub_fields` in their correct visual sequence (e.g., `[Organisation]` -> `[Job title]` -> bullet points).
+   - Recognize repeated blocks under a heading as one `array_complex` rather than multiple duplicate fields. Do not create duplicate top-level fields for these; instead, map them as one `array_complex` with `sub_fields` listing every internal placeholder.
 
 ---
 DYNAMIC EXAMPLES FROM THIS TEMPLATE:
@@ -155,11 +172,11 @@ OUTPUT JSON SCHEMA (return this structure exactly, populated for THIS template):
   "field_extraction_manifest": [
     {
       "fieldname": "snake_case_name",
-      "field_type": "scalar | array_simple | table_loop | paste_zone | instruction_block",
+      "field_type": "scalar | rich_text | array_simple | array_complex | table_loop | paste_zone | instruction_block",
       "source_kind": "merge_marker | visual_blank_slot | bullet_slots | table_loop | paste_zone | section_body | instruction_block",
       "marker_text": "exact string from DETECTED MARKERS, or empty string",
       "render_locator": {
-        "strategy": "replace_marker | fill_blank_cell_after_label | replace_bullets_under_heading | replace_section_body | clear_instruction_block",
+        "strategy": "replace_marker | fill_blank_cell_after_label | replace_bullets_under_heading | replace_section_body | clear_instruction_block | replace_complex_block",
         "marker_text": "marker string if strategy=replace_marker",
         "label": "label text if strategy=fill_blank_cell_after_label",
         "heading": "heading text if strategy involves a heading"
@@ -169,7 +186,15 @@ OUTPUT JSON SCHEMA (return this structure exactly, populated for THIS template):
       "formatting_hints": "Describe the visual pattern (e.g. 'Bold Title on line 1, Italics Org on line 2, followed by bullets')",
       "source_hints": "where to find this data in the candidate's resume",
       "required": false,
-      "confidence": 0.9
+      "confidence": 0.9,
+      "sub_fields": [
+        {
+          "fieldname": "string",
+          "marker_text": "string (e.g. '[Organisation]' or '\"[Bullet point responsibilities]\"')",
+          "meaning": "string",
+          "field_type": "scalar | array_simple | rich_text"
+        }
+      ]
     }
   ]
 }
