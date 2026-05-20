@@ -31,10 +31,10 @@ _TASK_TEMPERATURE_MAP = {
 # Model-specific hard caps on output tokens
 _MODEL_TOKEN_CAPS = {
     "llama3": 2048,
-    "qwen3-235b": 8192,
-    "qwen": 8192,
+    "qwen3-235b": 12000,
+    "qwen": 12000,
     "gemma-3": 8192,
-    "nova": 10000,
+    "nova": 12000,
     "claude": 8192,   # Claude 3.5+ supports up to 8192 output tokens
     "anthropic": 8192,
 }
