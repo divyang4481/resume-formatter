@@ -151,7 +151,7 @@ async def process_job(db, message: dict):
                 db.commit()
                 logger.info(f"[Worker] Template {template_id} analyzed and persisted.")
 
-        elif job_type == "RESUME_FORMATTING":
+        elif job_type in ("RESUME_FORMATTING", "TEMPLATE_TEST_RUN"):
             from app.services.resume_workflow_service import ResumeWorkflowService
             from app.adapters.repositories.template_repository import SqlAlchemyTemplateRepository
             

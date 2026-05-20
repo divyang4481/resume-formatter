@@ -15,3 +15,10 @@ Return valid JSON only.
 
 Input evidence:
 {{ evidence_json }}
+
+Document Layout & Text Flow:
+{% if docling_markdown %}
+{{ docling_markdown }}
+{% else %}
+{{ raw_text_summary }}
+{% endif %}

@@ -8,6 +8,13 @@ INPUTS:
 2. NORMALIZED EVIDENCE (Helper Summary):
 {{ normalized_evidence }}
 
+3. DOCUMENT TEXT FLOW (Layout & Sequential Flow):
+{% if docling_markdown %}
+{{ docling_markdown }}
+{% else %}
+{{ raw_text_summary }}
+{% endif %}
+
 INSTRUCTIONS:
 - Use RAW EVIDENCE as the primary source of truth.
 - Identify all placeholders and map them to canonical field names.

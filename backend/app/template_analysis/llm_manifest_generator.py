@@ -40,10 +40,17 @@ async def generate_manifest_with_llm(
     llm_runtime,
     model_config,
 ) -> TemplateManifest:
+    evidence_dict = evidence.model_dump(mode="json")
+    evidence_dict.pop("raw_structure", None)
+    evidence_dict.pop("raw_text_summary", None)
+    evidence_dict.pop("docling_markdown", None)
+
     prompt = prompt_manager.get_prompt(
         "manifest_generation.jinja2",
-        evidence_json=json.dumps(evidence.model_dump(mode="json"), ensure_ascii=False, indent=2),
-        normalized_evidence=json.dumps(normalized_evidence, ensure_ascii=False, indent=2)
+        evidence_json=json.dumps(evidence_dict, ensure_ascii=False, indent=2),
+        normalized_evidence=json.dumps(normalized_evidence, ensure_ascii=False, indent=2),
+        raw_text_summary=evidence.raw_text_summary or "",
+        docling_markdown=evidence.docling_markdown or ""
     )
 
     response_text = await llm_runtime.generate_text(

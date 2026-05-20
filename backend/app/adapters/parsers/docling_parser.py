@@ -4,39 +4,42 @@ import tempfile
 from typing import Any, Dict, List
 from app.domain.interfaces.document_parser import DocumentParser
 from app.schemas.parsed_document import ParsedDocument, ParsedSection, ParsedTable
+import logging
+
+logger = logging.getLogger(__name__)
 
 class DoclingParser(DocumentParser):
     def __init__(self):
         self.converter = None
 
     async def parse(self, file_bytes: bytes, file_name: str, mime_type: str, options: Dict[str, Any] = None) -> ParsedDocument:
-        if self.converter is None:
-            from docling.document_converter import DocumentConverter, PdfFormatOption
-            from docling.datamodel.base_models import InputFormat
-            from docling.datamodel.pipeline_options import PdfPipelineOptions
-            
-            pipeline_options = PdfPipelineOptions()
-            pipeline_options.do_ocr = False
-            pipeline_options.do_table_structure = True
-            
-            self.converter = DocumentConverter(
-                format_options={
-                    InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)
-                }
-            )
-
-        ext = os.path.splitext(file_name)[1]
-        # On Windows, we must close the file before Docling can open it
-        with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tmp:
-            tmp.write(file_bytes)
-            tmp.flush()
-            tmp_path = tmp.name
         
-        import logging
-        logger = logging.getLogger(__name__)
         logger.info(f"Docling parsing file: {file_name}, size: {len(file_bytes)} bytes")
 
+        tmp_path = None
         try:
+            if self.converter is None:
+                from docling.document_converter import DocumentConverter, PdfFormatOption
+                from docling.datamodel.base_models import InputFormat
+                from docling.datamodel.pipeline_options import PdfPipelineOptions
+                
+                pipeline_options = PdfPipelineOptions()
+                pipeline_options.do_ocr = False
+                pipeline_options.do_table_structure = True
+                
+                self.converter = DocumentConverter(
+                    format_options={
+                        InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)
+                    }
+                )
+
+            ext = os.path.splitext(file_name)[1]
+            # On Windows, we must close the file before Docling can open it
+            with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tmp:
+                tmp.write(file_bytes)
+                tmp.flush()
+                tmp_path = tmp.name
+
             # Note: Docling processing is CPU bound, might want to run in an executor in real production
             result = self.converter.convert(tmp_path)
             doc = result.document
@@ -98,9 +101,32 @@ class DoclingParser(DocumentParser):
                 parser_used="docling",
                 raw_structured_payload={"docling_version": "native"} # Optional full dump
             )
+        except Exception as e:
+            logger.warning(f"Docling parsing failed for {file_name}: {e}. Falling back to plain text decoding.", exc_info=True)
+            try:
+                fallback_text = file_bytes.decode("utf-8", errors="ignore").strip()
+            except Exception:
+                fallback_text = file_bytes.decode("latin-1", errors="ignore").strip()
+            
+            fallback_section = ParsedSection(
+                title="Extracted Content",
+                level=1,
+                content=fallback_text
+            )
+            return ParsedDocument(
+                text=fallback_text,
+                sections=[fallback_section],
+                tables=[],
+                metadata={"parsing_error": str(e)},
+                parser_used="docling-fallback-text",
+                raw_structured_payload={}
+            )
         finally:
-            if os.path.exists(tmp_path):
-                os.remove(tmp_path)
+            if tmp_path and os.path.exists(tmp_path):
+                try:
+                    os.remove(tmp_path)
+                except Exception:
+                    pass
 
     async def healthcheck(self) -> bool:
         return True

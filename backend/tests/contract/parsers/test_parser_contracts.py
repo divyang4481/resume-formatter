@@ -35,3 +35,18 @@ async def test_docling_parser_contract(monkeypatch):
         assert isinstance(doc, ParsedDocument)
         assert doc.parser_used == "docling"
         assert "Hello from docling markdown" in doc.text
+
+@pytest.mark.asyncio
+async def test_docling_parser_graceful_fallback():
+    parser = DoclingParser()
+    
+    # Passing invalid dummy bytes triggers the native exception and plain text fallback
+    doc = await parser.parse(b"dummy pdf bytes containing some clear text content", "test.pdf", "application/pdf")
+    
+    assert isinstance(doc, ParsedDocument)
+    assert doc.parser_used == "docling-fallback-text"
+    assert "dummy pdf bytes containing some clear text content" in doc.text
+    assert "parsing_error" in doc.metadata
+    assert len(doc.sections) == 1
+    assert doc.sections[0].title == "Extracted Content"
+    assert doc.sections[0].content == "dummy pdf bytes containing some clear text content"

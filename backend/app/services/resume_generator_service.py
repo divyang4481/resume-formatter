@@ -522,15 +522,77 @@ class ResumeGeneratorService:
                                         
                                     parent.remove(row_elm)
 
-            # --- STRATEGY: paste_zone ---
+            # --- STRATEGY: replace_section_body or paste_zone ---
             elif strategy in ("replace_section_body", "paste_zone"):
+                def is_heading_match(p_text: str, target_heading: str) -> bool:
+                    if not p_text or not target_heading:
+                        return False
+                    norm_p = re.sub(r'[^a-zA-Z0-9]', '', p_text).lower()
+                    norm_t = re.sub(r'[^a-zA-Z0-9]', '', target_heading).lower()
+                    return norm_p == norm_t
+
+                def is_heading_boundary(p) -> bool:
+                    text = p.text.strip()
+                    if not text:
+                        return False
+                    style_name = p.style.name.lower() if p.style and p.style.name else ""
+                    if "heading" in style_name or style_name.startswith("h") and any(style_name.endswith(str(i)) for i in range(1, 7)):
+                        return True
+                    is_bold = any(run.bold for run in p.runs)
+                    if is_bold and len(text) < 60 and not text.startswith("["):
+                        return True
+                    if text.isupper() and len(text) < 60:
+                        return True
+                    return False
+
                 if fieldname in render_context and render_context[fieldname]:
-                    val = render_context[fieldname]
-                    for p in doc.paragraphs:
-                        p_text = p.text.lower()
-                        if "paste" in p_text and "cv" in p_text:
-                            p.text = f"{{{{ _['{fieldname}'] }}}}"
-                            logger.info(f"Structural fill: replaced CV paste zone with content.")
+                    target_heading = locator.get("heading") or field_def.get("marker_text") or fieldname
+                    found_heading = False
+                    
+                    for idx, p in enumerate(doc.paragraphs):
+                        p_text = p.text.strip()
+                        if is_heading_match(p_text, target_heading):
+                            # Find first non-empty paragraph immediately following
+                            target_p = None
+                            for next_idx in range(idx + 1, len(doc.paragraphs)):
+                                next_p = doc.paragraphs[next_idx]
+                                if next_p.text.strip():
+                                    target_p = next_p
+                                    break
+                            
+                            if target_p:
+                                logger.info(f"[Locator] Found heading '{p_text}' for field '{fieldname}'. Replacing section body...")
+                                target_p.text = f"{{{{ _['{fieldname}'] }}}}"
+                                
+                                # Prune subsequent paragraphs in this section until next heading or table
+                                curr = target_p._element.getnext()
+                                to_delete = []
+                                while curr is not None:
+                                    tag = curr.tag
+                                    if tag.endswith("tbl"):
+                                        break
+                                    elif tag.endswith("p"):
+                                        p_obj = Paragraph(curr, doc)
+                                        if is_heading_boundary(p_obj):
+                                            break
+                                        to_delete.append(curr)
+                                    curr = curr.getnext()
+                                
+                                if to_delete:
+                                    logger.info(f"[Locator] Pruning {len(to_delete)} placeholder paragraphs from section '{p_text}'")
+                                    for elm in to_delete:
+                                        elm.getparent().remove(elm)
+                                
+                                found_heading = True
+                                break
+                    
+                    # Fallback to simple paragraph content check
+                    if not found_heading:
+                        for p in doc.paragraphs:
+                            p_text = p.text.lower()
+                            if "paste" in p_text and "cv" in p_text:
+                                p.text = f"{{{{ _['{fieldname}'] }}}}"
+                                logger.info(f"[Locator] Fallback structural fill: replaced CV paste zone.")
 
         return
 
@@ -755,6 +817,11 @@ class ResumeGeneratorService:
                         return current_counter
 
                     if field_type == "paste_zone" and anchor.lower() in full_text.lower():
+                        strategy = item.get("render_locator", {}).get("strategy") or item.get("injection_hints", {}).get("strategy")
+                        if strategy == "replace_section_body":
+                            logger.info(f"Skipping heading '{full_text}' for field '{fieldname}' since it is handled by replace_section_body strategy.")
+                            return current_counter
+                            
                         logger.info(f"Paste Zone Replace: '{anchor}' -> '{fieldname}'")
                         # If the anchor is just a heading (e.g., 'Work Experience'), append the content. 
                         # If it's an instruction (e.g., 'Paste CV here'), replace it entirely.

@@ -22,7 +22,8 @@ async def analyze_template_docx(
     content: Optional[bytes] = None,
     llm_runtime: Any = None, 
     model_router: Any = None,
-    template_id: Optional[str] = None
+    template_id: Optional[str] = None,
+    docling_text: Optional[str] = None
 ) -> TemplateManifest:
     """
     Main entry point for the multi-stage, model-routed template analysis pipeline.
@@ -30,7 +31,7 @@ async def analyze_template_docx(
     start_time = time.time()
     
     # 1. Decomposition
-    evidence = decompose_docx(file_path=file_path, content=content)
+    evidence = decompose_docx(file_path=file_path, content=content, docling_text=docling_text)
     complexity_score = compute_template_complexity(evidence)
     logger.info(f"[TemplateAnalysis] Complexity score: {complexity_score:.2f}")
 

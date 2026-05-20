@@ -10,6 +10,10 @@ def build_manifest_repair_prompt(
     errors: List[str],
     warnings: List[str],
 ) -> str:
+    evidence_dict = evidence.model_dump(mode="json")
+    evidence_dict.pop("raw_structure", None)
+    evidence_dict.pop("raw_text_summary", None)
+    evidence_dict.pop("docling_markdown", None)
     return f"""
 You are a Template Manifest Repair Engine.
 
@@ -31,7 +35,7 @@ Validation warnings:
 {json.dumps(warnings, ensure_ascii=False, indent=2)}
 
 Original evidence:
-{json.dumps(evidence.model_dump(mode="json"), ensure_ascii=False, indent=2)}
+{json.dumps(evidence_dict, ensure_ascii=False, indent=2)}
 
 Invalid manifest:
 {json.dumps(manifest.model_dump(mode="json"), ensure_ascii=False, indent=2)}
@@ -48,12 +52,19 @@ async def repair_manifest_with_model(
     llm_runtime,
     model_config,
 ) -> TemplateManifest:
+    evidence_dict = evidence.model_dump(mode="json")
+    evidence_dict.pop("raw_structure", None)
+    evidence_dict.pop("raw_text_summary", None)
+    evidence_dict.pop("docling_markdown", None)
+
     prompt = prompt_manager.get_prompt(
         "manifest_repair.jinja2",
         errors_json=json.dumps(errors, ensure_ascii=False, indent=2),
         warnings_json=json.dumps(warnings, ensure_ascii=False, indent=2),
-        evidence_json=json.dumps(evidence.model_dump(mode="json"), ensure_ascii=False, indent=2),
-        manifest_json=json.dumps(manifest.model_dump(mode="json"), ensure_ascii=False, indent=2)
+        evidence_json=json.dumps(evidence_dict, ensure_ascii=False, indent=2),
+        manifest_json=json.dumps(manifest.model_dump(mode="json"), ensure_ascii=False, indent=2),
+        raw_text_summary=evidence.raw_text_summary or "",
+        docling_markdown=evidence.docling_markdown or ""
     )
 
     response_text = await llm_runtime.generate_text(

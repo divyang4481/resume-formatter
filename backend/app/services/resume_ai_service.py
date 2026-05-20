@@ -683,10 +683,10 @@ class ResumeAiService:
                         entry["marker_text"] = found_marker
                         entry["source_kind"] = "merge_marker"
                         entry["field_type"] = info.get("type", "scalar")
-                        entry.setdefault("render_locator", {})[
-                            "strategy"
-                        ] = "replace_marker"
-                        entry.setdefault("render_locator", {})["marker"] = found_marker
+                        if entry.get("render_locator") is None:
+                            entry["render_locator"] = {}
+                        entry["render_locator"]["strategy"] = "replace_marker"
+                        entry["render_locator"]["marker"] = found_marker
                         used_markers.add(found_marker)
                         logger.info(
                             f"[Reconcile] Alias matched: '{fn}' → '{found_marker}' (Upgraded from {sk}, type={entry['field_type']})"
@@ -856,7 +856,9 @@ class ResumeAiService:
 
         # ── Phase 3c: Ensure visual_blank_slots from structure are in manifest ─
         manifest_labels = {
-            (e.get("render_locator") or {}).get("label", "").lower() for e in manifest
+            (e.get("render_locator") or {}).get("label", "").lower() 
+            for e in manifest 
+            if isinstance(e, dict)
         }
         for slot in structure.table_label_value_pairs:
             if (

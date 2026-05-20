@@ -5,6 +5,7 @@ import traceback
 from typing import Any, Dict, List, Optional
 from docxtpl import DocxTemplate, RichText
 from docx import Document
+from docx.text.paragraph import Paragraph
 
 from app.schemas.template_analysis import TemplateAnalysis, TemplateFillPlan
 
@@ -303,11 +304,60 @@ class DocxTemplateRenderer:
                             return
 
     def _replace_section_content(self, doc, heading, replacement):
-        """Finds a heading and replaces the paragraph immediately following it."""
+        """Finds a heading, replaces the first following non-empty paragraph, and prunes all subsequent section paragraphs."""
+        def is_heading_match(p_text: str, target_heading: str) -> bool:
+            if not p_text or not target_heading:
+                return False
+            norm_p = re.sub(r'[^a-zA-Z0-9]', '', p_text).lower()
+            norm_t = re.sub(r'[^a-zA-Z0-9]', '', target_heading).lower()
+            return norm_p == norm_t
+
+        def is_heading_boundary(p) -> bool:
+            text = p.text.strip()
+            if not text:
+                return False
+            style_name = p.style.name.lower() if p.style and p.style.name else ""
+            if "heading" in style_name or style_name.startswith("h") and any(style_name.endswith(str(i)) for i in range(1, 7)):
+                return True
+            is_bold = any(run.bold for run in p.runs)
+            if is_bold and len(text) < 60 and not text.startswith("["):
+                return True
+            if text.isupper() and len(text) < 60:
+                return True
+            return False
+
         for i, p in enumerate(doc.paragraphs):
-            if heading.lower() in p.text.lower():
-                if i + 1 < len(doc.paragraphs):
-                    doc.paragraphs[i + 1].text = replacement
+            if is_heading_match(p.text, heading):
+                # Find the first non-empty paragraph immediately following
+                target_p = None
+                for next_idx in range(i + 1, len(doc.paragraphs)):
+                    next_p = doc.paragraphs[next_idx]
+                    if next_p.text.strip():
+                        target_p = next_p
+                        break
+                
+                if target_p:
+                    target_p.text = replacement
+                    logger.info(f"[Renderer] Replaced first section body paragraph under heading '{p.text}'")
+                    
+                    # Scan and physically remove subsequent placeholder paragraphs in that section
+                    curr = target_p._element.getnext()
+                    to_delete = []
+                    while curr is not None:
+                        tag = curr.tag
+                        if tag.endswith("tbl"):
+                            break
+                        elif tag.endswith("p"):
+                            p_obj = Paragraph(curr, doc)
+                            if is_heading_boundary(p_obj):
+                                break
+                            to_delete.append(curr)
+                        curr = curr.getnext()
+                    
+                    if to_delete:
+                        logger.info(f"[Renderer] Pruned {len(to_delete)} placeholder paragraphs from section '{p.text}'")
+                        for elm in to_delete:
+                            elm.getparent().remove(elm)
                     return
 
     def _prepare_render_context(self, fields: Dict[str, Any]) -> Dict[str, Any]:

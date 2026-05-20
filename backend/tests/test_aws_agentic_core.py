@@ -6,7 +6,7 @@ client = TestClient(app)
 
 def test_upload_creates_waiting_job():
     response = client.post(
-        "/runtime/resumes/upload",
+        "/api/runtime/resumes/upload",
         files={"file": ("test_resume.pdf", b"dummy content", "application/pdf")}
     )
     assert response.status_code == 200
@@ -18,19 +18,19 @@ def test_upload_creates_waiting_job():
 def test_confirm_publishes_queue_message():
     # 1. Upload
     res = client.post(
-        "/runtime/resumes/upload",
+        "/api/runtime/resumes/upload",
         files={"file": ("test_resume.pdf", b"dummy content", "application/pdf")}
     )
     job_id = res.json()["job_id"]
 
     # 2. Confirm
-    confirm_res = client.post(f"/runtime/resumes/{job_id}/confirm")
+    confirm_res = client.post(f"/api/runtime/resumes/{job_id}/confirm")
     assert confirm_res.status_code == 200
     assert confirm_res.json()["status"] == "QUEUED"
 
 def test_admin_create_draft_template():
     response = client.post(
-        "/admin/templates",
+        "/api/admin/templates",
         data={"name": "Test Template", "industry": "Tech"},
         headers={"X-Admin-Token": "secret-admin-token"}
     )
@@ -42,7 +42,7 @@ def test_admin_create_draft_template():
 def test_admin_test_run():
     # 1. Create draft
     draft_res = client.post(
-        "/admin/templates",
+        "/api/admin/templates",
         data={"name": "Test Template", "industry": "Tech"},
         headers={"X-Admin-Token": "secret-admin-token"}
     )
@@ -51,14 +51,14 @@ def test_admin_test_run():
 
     # 2. Upload template to generate contract
     client.post(
-        f"/admin/templates/{template_id}/versions/{version_id}/upload-template",
+        f"/api/admin/templates/{template_id}/versions/{version_id}/upload-template",
         files={"file": ("template.docx", b"dummy", "application/vnd.openxmlformats-officedocument.wordprocessingml.document")},
         headers={"X-Admin-Token": "secret-admin-token"}
     )
 
     # 3. Create test run
     test_run_res = client.post(
-        f"/admin/templates/{template_id}/versions/{version_id}/test-runs",
+        f"/api/admin/templates/{template_id}/versions/{version_id}/test-runs",
         files={"file": ("sample_cv.pdf", b"dummy pdf", "application/pdf")},
         headers={"X-Admin-Token": "secret-admin-token"}
     )

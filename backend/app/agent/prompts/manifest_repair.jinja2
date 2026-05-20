@@ -22,6 +22,13 @@ Validation warnings:
 Original evidence:
 {{ evidence_json }}
 
+Document Layout & Text Flow:
+{% if docling_markdown %}
+{{ docling_markdown }}
+{% else %}
+{{ raw_text_summary }}
+{% endif %}
+
 Invalid manifest:
 {{ manifest_json }}
 

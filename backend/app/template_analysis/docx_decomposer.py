@@ -6,7 +6,43 @@ from .models import TemplateEvidence, PlaceholderCandidate, SectionCandidate, Ta
 
 logger = logging.getLogger(__name__)
 
-def decompose_docx(file_path: Optional[str] = None, content: Optional[bytes] = None) -> TemplateEvidence:
+def _extract_with_docling_sync(content: bytes, filename: str) -> Optional[str]:
+    """Helper to synchronously extract structural markdown using Docling."""
+    try:
+        from docling.document_converter import DocumentConverter, PdfFormatOption
+        from docling.datamodel.base_models import InputFormat
+        from docling.datamodel.pipeline_options import PdfPipelineOptions
+        import tempfile
+
+        pipeline_options = PdfPipelineOptions()
+        pipeline_options.do_ocr = False
+        pipeline_options.do_table_structure = True
+
+        converter = DocumentConverter(
+            format_options={
+                InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)
+            }
+        )
+
+        ext = os.path.splitext(filename)[1] or ".docx"
+        with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tmp:
+            tmp.write(content)
+            tmp.flush()
+            tmp_path = tmp.name
+
+        try:
+            result = converter.convert(tmp_path)
+            markdown_text = result.document.export_to_markdown()
+            logger.info(f"Docling successfully extracted template markdown ({len(markdown_text)} chars)")
+            return markdown_text
+        finally:
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
+    except Exception as e:
+        logger.warning(f"Docling template extraction failed or docling not installed: {e}")
+        return None
+
+def decompose_docx(file_path: Optional[str] = None, content: Optional[bytes] = None, docling_text: Optional[str] = None) -> TemplateEvidence:
     """
     Reads a DOCX file and decomposes it into structural evidence.
     Wraps TemplateStructureExtractor and maps it to the new TemplateEvidence model.
@@ -37,6 +73,14 @@ def decompose_docx(file_path: Optional[str] = None, content: Optional[bytes] = N
     evidence.table_loop_fields = {loop.loop_name: list(loop.item_fields) for loop in structure.table_loops}
     evidence.heading_to_loop = dict(structure.heading_to_loop)
     evidence.blank_label_slots = list(structure.blank_label_slots)
+
+    # ── Handle Docling Layout Extraction ──
+    if docling_text:
+        evidence.docling_markdown = docling_text
+    else:
+        evidence.docling_markdown = _extract_with_docling_sync(content, filename)
+
+    evidence.raw_text_summary = evidence.docling_markdown or "\n".join(structure.doc_lines)
 
     heading_context_by_marker = {}
     for heading, markers in structure.heading_to_smart_pattern.items():

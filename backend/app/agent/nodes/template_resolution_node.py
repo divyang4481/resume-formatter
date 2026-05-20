@@ -119,10 +119,15 @@ def create_template_resolve_node(llm_runtime, storage_provider, doc_parser):
             # If the manifest is wrapped in a rich dictionary (e.g. {"fields": [...], "instruction_blocks": [...]})
             # or is a legacy dumped model containing "fields", extract the list of fields.
             if isinstance(field_manifest, dict):
-                if "fields" in field_manifest:
+                if "fields" in field_manifest and field_manifest["fields"] is not None:
                     field_manifest = field_manifest["fields"]
                 else:
-                    field_manifest = list(field_manifest.values())
+                    field_manifest = [v for v in field_manifest.values() if isinstance(v, dict)]
+
+            if isinstance(field_manifest, list):
+                field_manifest = [f for f in field_manifest if isinstance(f, dict)]
+            else:
+                field_manifest = []
 
 
             if field_manifest:

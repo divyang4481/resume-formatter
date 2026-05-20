@@ -132,6 +132,9 @@ class TemplateStructure:
     heading_to_smart_pattern: Dict[str, List[str]] = field(default_factory=dict)
     """Maps a heading to a sequence of multi-line placeholders that form an object template."""
 
+    doc_lines: List[str] = field(default_factory=list)
+    """Sequential paragraph texts from the document body"""
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "detected_markers": self.detected_markers,
@@ -150,6 +153,7 @@ class TemplateStructure:
             "layout_style": self.layout_style,
             "heading_to_loop": self.heading_to_loop,
             "heading_to_smart_pattern": self.heading_to_smart_pattern,
+            "doc_lines": self.doc_lines,
         }
 
 
@@ -375,6 +379,9 @@ class TemplateStructureExtractor:
 
             if not para_text:
                 continue
+
+            if part_name == "word/document.xml":
+                struct.doc_lines.append(para_text)
 
             # Check for heading (by style or bold short line)
             style_els = para.xpath(".//w:pStyle", namespaces=NS)

@@ -5,6 +5,10 @@ from .models import TemplateEvidence, TemplateManifest
 
 
 def build_manifest_critic_prompt(evidence: TemplateEvidence, manifest: TemplateManifest) -> str:
+    evidence_dict = evidence.model_dump(mode="json")
+    evidence_dict.pop("raw_structure", None)
+    evidence_dict.pop("raw_text_summary", None)
+    evidence_dict.pop("docling_markdown", None)
     return f"""
 You are a strict QA reviewer for a DOCX Template Field Manifest.
 
@@ -34,7 +38,7 @@ Return JSON:
 }}
 
 Evidence:
-{json.dumps(evidence.model_dump(mode="json"), ensure_ascii=False, indent=2)}
+{json.dumps(evidence_dict, ensure_ascii=False, indent=2)}
 
 Manifest:
 {json.dumps(manifest.model_dump(mode="json"), ensure_ascii=False, indent=2)}
@@ -52,10 +56,17 @@ async def review_manifest_with_critic(
     if not model_config.enabled:
         return {"approved": True, "issues": []}
 
+    evidence_dict = evidence.model_dump(mode="json")
+    evidence_dict.pop("raw_structure", None)
+    evidence_dict.pop("raw_text_summary", None)
+    evidence_dict.pop("docling_markdown", None)
+
     prompt = prompt_manager.get_prompt(
         "manifest_critic.jinja2",
-        evidence_json=json.dumps(evidence.model_dump(mode="json"), ensure_ascii=False, indent=2),
-        manifest_json=json.dumps(manifest.model_dump(mode="json"), ensure_ascii=False, indent=2)
+        evidence_json=json.dumps(evidence_dict, ensure_ascii=False, indent=2),
+        manifest_json=json.dumps(manifest.model_dump(mode="json"), ensure_ascii=False, indent=2),
+        raw_text_summary=evidence.raw_text_summary or "",
+        docling_markdown=evidence.docling_markdown or ""
     )
 
     response_text = await llm_runtime.generate_text(

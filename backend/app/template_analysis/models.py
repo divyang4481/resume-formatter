@@ -39,6 +39,7 @@ class TemplateEvidence(BaseModel):
     layout_style: str = "freeflow"
     raw_structure: Dict[str, Any] = Field(default_factory=dict)
     raw_text_summary: Optional[str] = None
+    docling_markdown: Optional[str] = None
 
 
 class TemplateField(BaseModel):

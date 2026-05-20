@@ -33,11 +33,6 @@ from app.config import settings
 router = APIRouter()
 
 
-@router.post("/templates")
-async def push_template():
-    return {"message": "Template uploaded."}
-
-
 @router.post("/templates/upload", response_model=AssetUploadResponse)
 async def upload_asset(
     file: UploadFile = File(...),

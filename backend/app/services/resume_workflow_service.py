@@ -227,6 +227,14 @@ class ResumeWorkflowService:
             
             # If it's a governance audit run, update the audit record
             test_run_id = ext_meta.get("test_run_id")
+            if not test_run_id:
+                from app.db.session import SessionLocal
+                from app.db.models import TemplateTestRun as TemplateTestRunModel
+                with SessionLocal() as db_session:
+                    test_run = db_session.query(TemplateTestRunModel).filter(TemplateTestRunModel.processing_job_id == job_id).first()
+                    if test_run:
+                        test_run_id = test_run.id
+
             if test_run_id:
                 from app.db.session import SessionLocal
                 from app.adapters.repositories.template_governance_repository import SqlAlchemyTemplateGovernanceRepository
