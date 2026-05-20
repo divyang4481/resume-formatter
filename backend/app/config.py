@@ -68,7 +68,7 @@ class Settings(BaseSettings):
     bedrock_fallback_model_id: str = "meta.llama3-70b-instruct-v1:0"
 
     # Template analysis quality controls
-    bedrock_max_output_tokens_template_analysis: int = 8192
+    bedrock_max_output_tokens_template_analysis: int = 32768
     bedrock_temperature_template_analysis: float = 0.0   # Deterministic JSON
 
     # Data mapping quality controls (resume extraction/mapping)
@@ -93,13 +93,13 @@ class Settings(BaseSettings):
             "provider": "aws_bedrock",
             "model_id": "qwen.qwen3-235b-a22b-2507-v1:0",
             "temperature": 0.0,
-            "max_tokens": 12000
+            "max_tokens": 32768
         },
         "manifest_repair": {
             "provider": "aws_bedrock",
             "model_id": "qwen.qwen3-235b-a22b-2507-v1:0",
             "temperature": 0.0,
-            "max_tokens": 12000
+            "max_tokens": 32768
         },
         "manifest_critic": {
             "provider": "aws_bedrock",
