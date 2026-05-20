@@ -571,9 +571,14 @@ class ResumeGeneratorService:
                 while next_elm is not None and next_elm.tag.endswith("p"):
                     p_obj = Paragraph(next_elm, doc)
                     txt = p_obj.text.strip()
-                    if txt and not placeholder_re.match(txt) and removed > 0:
+                    p_style = (p_obj.style.name.lower() if p_obj.style and p_obj.style.name else "")
+                    is_heading = "heading" in p_style or (txt.isupper() and len(txt) < 80)
+                    is_bullet_like = txt.startswith("•") or txt.startswith("-") or placeholder_re.match(txt) or not txt
+                    if is_heading:
                         break
-                    if placeholder_re.match(txt):
+                    if txt and not is_bullet_like and removed > 0:
+                        break
+                    if placeholder_re.match(txt) or txt.startswith("• [Type text]") or txt.startswith("• «Type text»") or not txt:
                         to_remove = next_elm
                         next_elm = next_elm.getnext()
                         to_remove.getparent().remove(to_remove)

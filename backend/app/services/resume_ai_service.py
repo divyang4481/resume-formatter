@@ -236,6 +236,7 @@ class ResumeAiService:
             original_nodes=field_nodes,
             mapped_nodes=all_mapped_nodes,
         )
+        _inject_raw_resume_passthrough_fields(filled_fields, field_manifest, raw_resume_text)
 
         logger.info(f"[FieldMapping] Synthesized filled fields={len(filled_fields)}")
 
@@ -309,3 +310,64 @@ def _build_template_fill_result(filled_fields: List[Dict[str, Any]]) -> Dict[str
             "field_extraction_manifest": fem,
         }
     return result
+
+
+def _inject_raw_resume_passthrough_fields(
+    filled_fields: List[Dict[str, Any]],
+    all_manifest_fields: List[Dict[str, Any]],
+    raw_resume_text: str,
+) -> None:
+    if not raw_resume_text or not isinstance(all_manifest_fields, list):
+        return
+    passthrough_fieldnames = set()
+    for field in all_manifest_fields:
+        if (
+            isinstance(field, dict)
+            and field.get("field_type") == "paste_zone"
+            and field.get("source_kind") == "raw_resume_passthrough"
+        ):
+            fname = field.get("fieldname")
+            if fname:
+                passthrough_fieldnames.add(fname)
+
+    if not passthrough_fieldnames:
+        return
+
+    for field in filled_fields:
+        if field.get("fieldname") not in passthrough_fieldnames:
+            continue
+        field["field_extraction_manifest"] = {
+            "value_type": "rich_text",
+            "value": raw_resume_text,
+            "confidence": 1.0,
+            "status": "passthrough",
+            "reason": "Original candidate CV passthrough field populated from raw resume text.",
+            "source": {
+                "resume_section": "full_resume",
+                "evidence": "raw_resume_text",
+            },
+        }
+    existing = {f.get("fieldname") for f in filled_fields if isinstance(f, dict)}
+    for field in all_manifest_fields:
+        if not isinstance(field, dict):
+            continue
+        fname = field.get("fieldname")
+        if fname in existing:
+            continue
+        if (
+            field.get("field_type") == "paste_zone"
+            and field.get("source_kind") == "raw_resume_passthrough"
+        ):
+            new_field = dict(field)
+            new_field["field_extraction_manifest"] = {
+                "value_type": "rich_text",
+                "value": raw_resume_text,
+                "confidence": 1.0,
+                "status": "passthrough",
+                "reason": "Original candidate CV passthrough field populated from raw resume text.",
+                "source": {
+                    "resume_section": "full_resume",
+                    "evidence": "raw_resume_text",
+                },
+            }
+            filled_fields.append(new_field)

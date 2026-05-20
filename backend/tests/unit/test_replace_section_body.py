@@ -91,6 +91,36 @@ def test_resume_generator_service_replace_bullet_list_under_heading():
     assert "• PyTorch" in paragraphs
     assert "• OpenAI API" in paragraphs
 
+def test_resume_generator_service_separates_skills_and_candidate_own_cv_sections():
+    doc = Document()
+    doc.add_paragraph("Professional qualifications")
+    doc.add_paragraph("• [Type text]")
+    doc.add_paragraph("Key skills")
+    doc.add_paragraph("• [Type text]")
+    doc.add_paragraph("• «Type text»")
+    doc.add_paragraph("CANDIDATE’S OWN CV")
+    doc.add_paragraph("[Paste candidate CV here]")
+
+    field_manifest = [
+        {"fieldname": "skills", "render_locator": {"strategy": "replace_bullet_list_under_heading", "heading": "Key skills"}},
+        {"fieldname": "candidate_own_cv", "render_locator": {"strategy": "replace_section_body", "heading": "CANDIDATE’S OWN CV"}},
+    ]
+    render_context = {
+        "skills": ["Machine Learning", "AWS", "Python", "Docker"],
+        "candidate_own_cv": "Skills:\nMachine Learning\nAWS\nPython\nDocker",
+    }
+
+    service = ResumeGeneratorService()
+    service.apply_render_locators(doc, field_manifest, render_context)
+    paragraphs = [p.text for p in doc.paragraphs]
+
+    assert "• [Type text]" not in paragraphs
+    assert "• «Type text»" not in paragraphs
+    assert "• Machine Learning" in paragraphs
+    assert "• AWS" in paragraphs
+    assert "{{ _['candidate_own_cv'] }}" in paragraphs
+    assert paragraphs.count("• Machine Learning") == 1
+
 def test_prepare_document_markers_preserves_unresolved_marker_when_value_empty():
     doc = Document()
     doc.add_paragraph("Recruiting experts in «EmployeeJobTitle»")

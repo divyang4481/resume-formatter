@@ -76,3 +76,11 @@ def test_compact_node_for_llm_includes_extract_and_slots():
     compact = compact_node_for_llm(node)
     assert compact["extract"]["expected_value_shape"] == "array[string]"
     assert compact["slots"][0]["slot_id"] == "slot_skills"
+
+def test_fields_to_mapping_nodes_skips_raw_resume_passthrough_paste_zone():
+    raw_fields = [
+        {"fieldname": "skills", "field_type": "array_simple", "source_kind": "resume_fact"},
+        {"fieldname": "candidate_own_cv", "field_type": "paste_zone", "source_kind": "raw_resume_passthrough"},
+    ]
+    nodes = fields_to_mapping_nodes(raw_fields)
+    assert [n["fieldname"] for n in nodes] == ["skills"]
