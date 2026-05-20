@@ -34,6 +34,7 @@ class AgentState(TypedDict):
     # Governance Requirements
     expected_sections: Optional[str]
     expected_fields: Optional[str]
+    field_extraction_manifest: Optional[list]
 
     # LLM Transformation results
     transformed_document_json: Optional[str]

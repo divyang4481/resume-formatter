@@ -1,4 +1,5 @@
-from typing import Dict, Any, List
+def update_transformation_node():
+    content = """from typing import Dict, Any, List
 from app.agent.state import AgentState
 from app.domain.interfaces import LlmRuntimeAdapter
 from app.agent.utils.llm_sanitizer import LlmSanitizer
@@ -10,28 +11,28 @@ import asyncio
 logger = logging.getLogger(__name__)
 
 def create_context_aware_extraction_node(llm_runtime: LlmRuntimeAdapter):
-    """
+    \"\"\"
     The core extraction node that uses all available context (Raw Text + Structured Data + Schema).
     It loops over the field_extraction_manifest to extract data field by field.
-    """
+    \"\"\"
     async def context_aware_extraction_node(state: AgentState) -> dict:
         logger.info("Executing Context-Aware Extraction Node (Subgraph)...")
-        
+
         extracted_text = state.get("extracted_text", "")
         raw_parsed_data = state.get("raw_parsed_data") or {}
         template_text = state.get("template_text") or "Not provided"
         formatting_guidance = state.get("formatting_guidance") or ""
         field_manifest: List[Dict[str, Any]] = state.get("field_extraction_manifest") or []
-        
+
         # Format structured metadata (tables/sections) for the prompt
         structured_context = ""
         if raw_parsed_data:
             sections = raw_parsed_data.get("sections", [])
             tables = raw_parsed_data.get("tables", [])
             if sections:
-                structured_context += "\nDETECTED SECTIONS:\n" + "\n".join([f"- {s.get('title')}" for s in sections])
+                structured_context += "\\nDETECTED SECTIONS:\\n" + "\\n".join([f"- {s.get('title')}" for s in sections])
             if tables:
-                structured_context += f"\nDETECTED TABLES: {len(tables)} tables found. Use table content for precise facts like dates and roles."
+                structured_context += f"\\nDETECTED TABLES: {len(tables)} tables found. Use table content for precise facts like dates and roles."
 
         if not field_manifest:
             logger.warning("No field manifest found, falling back to legacy dynamic schema behavior.")
@@ -98,7 +99,7 @@ def create_context_aware_extraction_node(llm_runtime: LlmRuntimeAdapter):
 
         # Since llm_runtime.generate is likely synchronous (based on other usages like in ai_service),
         # we'll execute sequentially to avoid blocking the event loop or we can just loop.
-        
+
         for field_def in field_manifest:
             field_name = field_def.get("fieldname", "")
             field_meaning = field_def.get("meaning", "")
@@ -132,10 +133,16 @@ def create_context_aware_extraction_node(llm_runtime: LlmRuntimeAdapter):
             except Exception as e:
                 logger.error(f"Failed to extract field {field_name}: {e}")
                 transformed_data[field_name] = None
-                
+
         return {
             "transformed_document_json": json.dumps(transformed_data),
             "status": "extracted"
         }
 
     return context_aware_extraction_node
+"""
+    with open('backend/app/agent/nodes/transformation_node.py', 'w') as f:
+        f.write(content)
+    print("Updated transformation_node.py")
+
+update_transformation_node()

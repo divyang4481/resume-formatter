@@ -49,38 +49,6 @@ class ResumeAiService:
         
         return summary.strip()
 
-    async def analyze_template(self, content: bytes, filename: str) -> Dict[str, str]:
-        """Analyzes a .docx template to suggest metadata... (Uses Tags for Stability)"""
-        # (Template Analysis Logic - Simplified to Tags)
-        if not self.extraction_service: return {}
-        
-        from app.domain.interfaces import ExtractionContext
-        extracted_doc = await self.extraction_service.extract(
-            content, filename, "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-        )
-        
-        # Retrieve placeholders
-        from docxtpl import DocxTemplate
-        import io, re
-        doc = DocxTemplate(io.BytesIO(content))
-        detected_placeholders = list(set([str(p).strip() for p in doc.get_undeclared_template_variables()]))
-        
-        prompt = prompt_manager.get_prompt(
-            "template_analysis.jinja2",
-            template_text=extracted_doc.extracted_text[:8000],
-            detected_placeholders=detected_placeholders,
-        )
-
-        response = self.llm.generate(prompt)
-        blocks = LlmSanitizer.extract_tagged_blocks(response)
-        
-        # Build Suggestions from Tags
-        return {
-            "purpose": blocks.get("PURPOSE") or blocks.get("purpose") or "General Template",
-            "expected_sections": blocks.get("SECTIONS") or blocks.get("sections") or "Summary, Experience",
-            "expected_fields": blocks.get("FIELDS") or blocks.get("fields") or ",".join(detected_placeholders),
-        }
-
     async def validate_output(
         self, transformed_data: Dict[str, Any], guidance: str
     ) -> Dict[str, Any]:

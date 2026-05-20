@@ -36,6 +36,8 @@ class SqlAlchemyJobRepository(JobRepository):
             model.error_message = job.error_message
         if hasattr(job, 'selected_template_id'):
             model.template_asset_id = job.selected_template_id
+        if hasattr(job, 'transform_json'):
+            model.transform_json = job.transform_json
 
 
         self.db.commit()
