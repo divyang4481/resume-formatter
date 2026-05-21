@@ -12,20 +12,26 @@ TARGET TEMPLATE FIELDS:
 ---
 MAPPING RULES:
 1. KEY SELECTION: The keys in your response MUST exactly match the 'field_name' values from the TARGET TEMPLATE FIELDS.
-2. DATA TRANSFORMATION:
-   - For scalar fields: Map a single string (e.g. name, ID).
-   - For rich_text fields: Create a professional narrative or bullet list from relevant facts.
-   - For repeatable blocks: Map the list of objects (e.g. work experience entries).
-3. PRIORITIZATION: If a field is present in RECRUITER INPUT, use that value over the Candidate Facts.
-4. COMPLETENESS: Fill every target field. If no data is available, use "N/A" or an empty list.
+2. DATA TRANSFORMATION based on 'field_type':
+   - 'scalar': Map a single string (e.g. name, ID). If the source data is a list (e.g. skills), join them into a comma-separated string unless instructed otherwise.
+   - 'array_simple': Map a flat list of strings (e.g. ["Sprint", "DevOps", "Java"]). Do NOT output a single string of comma-separated values for this type.
+   - 'array_complex': Map a list of objects (e.g. work experience entries). Ensure sub-keys match the template requirements if provided.
+   - 'rich_text': Create a professional narrative or bullet list from relevant facts.
+   - 'table_loop': Map a list of objects intended for a table.
+3. SEMANTIC MAPPING & PRIORITIZATION: 
+   - Analyze the 'meaning' of each target field to infer what data belongs there. Do not rely solely on the field name. 
+   - Extract relevant context even if field names in facts differ from the target fields.
+   - If a field is present in RECRUITER INPUT, use that value over the Candidate Facts.
+   - For fields like CandidateID, NoticePeriod, EmployeeSpecialistArea, EmployeeTelNo, EmployeeEmail: these often refer to recruiter metadata or ATS data. Map them semantically if they are present in RECRUITER INPUT or facts. "Employee..." fields typically refer to the recruiter.
+4. COMPLETENESS: Fill every target field. If no data is available, use "" (empty string) or an empty list [] depending on the type. Do NOT use "N/A".
 5. INDUSTRY CONTEXT: Adapt the tone and content of rich_text fields to match the 'meaning' provided in the template field metadata.
 
 ---
 RESPONSE FORMAT:
 Return a single JSON object where:
 {
-  "field_name_1": "mapped value",
-  "field_name_2": ["list", "of", "bullets"],
+  "field_name_1": "mapped scalar value",
+  "field_name_2": ["list", "of", "strings", "for", "array_simple"],
   "field_name_3": [ {"sub_key": "val"}, ... ]
 }
 

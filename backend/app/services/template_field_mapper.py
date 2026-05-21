@@ -37,7 +37,8 @@ class TemplateFieldMapper:
                     "field_name": field.field_name,
                     "meaning": field.meaning,
                     "source_kind": field.source_kind,
-                    "required": field.required
+                    "required": field.required,
+                    "field_type": getattr(field, "field_type", "scalar")
                 })
         # Add legacy flat fields
         for field in analysis.fields:
@@ -45,7 +46,8 @@ class TemplateFieldMapper:
                     "field_name": field.field_name,
                     "meaning": field.meaning,
                     "source_kind": field.source_kind,
-                    "required": field.required
+                    "required": field.required,
+                    "field_type": getattr(field, "field_type", "scalar")
                 })
 
         # 2. Use Bedrock to perform the semantic mapping (CandidateFacts -> Template Fields)
