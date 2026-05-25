@@ -1,2 +1,3 @@
 backend/data/templates/*.*
-.envpatch_*.py
+.env
+patch_*.py
