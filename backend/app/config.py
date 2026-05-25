@@ -8,62 +8,120 @@ class Settings(BaseSettings):
 
     project_name: str = "Agentic Document Platform"
 
-    # Cloud and Adapter Selection
-    cloud: str = "local"  # "aws", "azure", "gcp", "ibm", "local"
+    # Architecture Config
+    cloud_provider: str = "aws"  # "aws", "local"
+    runtime_mode: str = "local"  # "local" or "aws"
+    processing_mode: str = "async"  # "sync" or "async"
+    queue_provider: str = "local"  # "local", "sqs"
+    storage_provider: str = "local"  # "local", "s3"
+    knowledge_provider: str = "local"  # "local", "bedrock_kb"
+    agent_provider: str = "python_orchestrated"  # "python_orchestrated", "bedrock_agent"
+
+    # AWS Specific Config
+    aws_region: str = "ap-south-1"
+    s3_bucket_input: str = "agentic-document-input-bucket"
+    s3_bucket_output: str = "agentic-document-output-bucket"
+    sqs_processing_queue_url: str = ""
+    bedrock_agent_id: str = ""
+    bedrock_agent_alias_id: str = ""
+    bedrock_kb_id: str = ""
+    database_url: str = "sqlite:///./.data/app.db"
+    aws_bearer_token_bedrock: str = ""
+
+    # Document Parsing Routing & Guard
+    enable_docling: bool = True
+    enable_gpu_worker: bool = False
+    parser_timeout_seconds: int = 300
+    max_file_size_mb: int = 10
 
     # Document Parsing Routing & Thresholds
     document_parser_primary_pdf: str = "docling"
-    document_parser_fallback_pdf: str = "tika"
     document_parser_primary_docx: str = "docling"
-    document_parser_fallback_docx: str = "tika"
 
     # Thresholds for parsing confidence & routing
     parser_min_text_chars: int = 300
     parser_min_section_count: int = 3
     parser_min_confidence: float = 0.65
-    parser_timeout_seconds: int = 45
 
-    # LLM Settings
-    llm_backend: str = (
-        "local_ollama"  # "aws_bedrock", "gcp_vertex", "azure_openai", "local_ollama", "gemini"
-    )
-    llm_model_name: str = (
-        "llama3:latest"  # Default Ollama model. Override with Claude/Gemini/GPT for cloud.
-    )
-    ollama_endpoint: str = (
-        "http://localhost:11434/api/generate"  # Default for local Ollama
-    )
-    gemini_api_key: str = (
-        ""  # Key for Google Gemini API
-    )
+    # LLM Settings — default / global
+    llm_backend: str = "aws_bedrock"
+    llm_model_name: str = "qwen.qwen3-235b-a22b-2507-v1:0"
+    ollama_endpoint: str = "http://localhost:11434/api/generate"
 
-    # AWS Settings
-    aws_region: str = "us-east-1"
+    # ---------------------------------------------------------------------------
+    # Bedrock per-task model routing
+    # ---------------------------------------------------------------------------
+    # Primary model for tasks requiring precise structured JSON output
+    bedrock_default_model_id: str = "qwen.qwen3-235b-a22b-2507-v1:0"
 
-    # GCP Settings
-    gcp_project_id: str = ""
-    gcp_location: str = "us-central1"
+    # Template analysis uses Claude Sonnet for superior instruction-following
+    # and deterministic JSON generation. Set to empty string to fall back to default.
+    bedrock_template_analysis_model_id: str = "qwen.qwen3-235b-a22b-2507-v1:0"
 
-    # Azure Settings
-    azure_openai_endpoint: str = ""
-    azure_openai_api_key: str = ""
-    azure_openai_deployment_name: str = ""
-    azure_openai_api_version: str = "2024-02-15-preview"
+    # Resume summary generation — Qwen is fine for narrative tasks
+    bedrock_resume_summary_model_id: str = ""  # falls back to default
+
+    # Data mapping (resume fields → template contract)
+    bedrock_data_mapping_model_id: str = ""  # falls back to default
+
+    # Fallback model if primary model fails (access error / throttle exhaust)
+    bedrock_fallback_model_id: str = "meta.llama3-70b-instruct-v1:0"
+
+    # Template analysis quality controls
+    bedrock_max_output_tokens_template_analysis: int = 32768
+    bedrock_temperature_template_analysis: float = 0.0   # Deterministic JSON
+
+    # Data mapping quality controls (resume extraction/mapping)
+    bedrock_max_output_tokens_data_mapping: int = 8192
+    bedrock_temperature_data_mapping: float = 0.0   # Deterministic JSON
+
+    # General output token limits
+    bedrock_max_output_tokens_default: int = 8192
+    bedrock_temperature_default: float = 0.1
+    # ---------------------------------------------------------------------------
+
+    # New Model-Routed Pipeline Config
+    template_analysis_model_profile: str = "balanced"
+    template_analysis_models: dict = {
+        "evidence_normalizer": {
+            "provider": "aws_bedrock",
+            "model_id": "qwen.qwen3-235b-a22b-2507-v1:0",
+            "temperature": 0.0,
+            "max_tokens": 8192
+        },
+        "manifest_generator": {
+            "provider": "aws_bedrock",
+            "model_id": "qwen.qwen3-235b-a22b-2507-v1:0",
+            "temperature": 0.0,
+            "max_tokens": 32768
+        },
+        "manifest_repair": {
+            "provider": "aws_bedrock",
+            "model_id": "qwen.qwen3-235b-a22b-2507-v1:0",
+            "temperature": 0.0,
+            "max_tokens": 32768
+        },
+        "manifest_critic": {
+            "provider": "aws_bedrock",
+            "model_id": "meta.llama3-70b-instruct-v1:0",
+            "temperature": 0.0,
+            "max_tokens": 6000,
+            "enabled": False
+        }
+    }
 
     # Storage Settings
-    storage_backend: str = "local"  # "local", "s3"
     local_storage_path: str = "./data"
-    s3_bucket: str = "agentic-document-platform-bucket"
 
     # Vector search and shadow mode feature flags
     vector_search_enabled: bool = False
-    template_selector_mode: str = "legacy"  # "legacy", "shadow", "hybrid"
+    template_selector_mode: str = "legacy"
 
     # Example standard settings
     log_level: str = "INFO"
 
-    class Config:
-        env_file = ".env"
+    model_config = {"env_file": ".env", "env_file_encoding": "utf-8", "extra": "ignore"}
 
 
 settings = Settings()
+

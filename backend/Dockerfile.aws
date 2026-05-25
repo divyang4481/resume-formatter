@@ -1,0 +1,20 @@
+FROM public.ecr.aws/lambda/python:3.11
+
+# Install required system packages
+RUN yum install -y gcc gcc-c++ mesa-libGL pango
+
+# Copy requirements and install
+COPY pyproject.toml poetry.lock ${LAMBDA_TASK_ROOT}/
+RUN pip install poetry
+RUN poetry config virtualenvs.create false
+RUN poetry install --no-interaction --no-ansi --without dev
+
+# Copy the application code
+COPY ./app ${LAMBDA_TASK_ROOT}/app
+COPY ./init_db.py ${LAMBDA_TASK_ROOT}/init_db.py
+
+# Create a local DB dir in case sqlite is initialized as fallback
+RUN mkdir -p ${LAMBDA_TASK_ROOT}/.data
+
+# This uses a shell script to determine which handler to run, or we can just specify it directly in CloudFormation's ImageConfig
+CMD [ "app.main.handler" ]

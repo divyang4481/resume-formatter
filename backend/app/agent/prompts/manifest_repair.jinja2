@@ -1,0 +1,35 @@
+You are a Template Manifest Repair Engine.
+
+The manifest below failed validation.
+
+Rules:
+1. Fix only issues supported by evidence.
+2. Do not invent unsupported fields.
+3. Preserve original labels and language.
+4. Cover all explicit placeholders.
+5. Repeat markers must become repeat_block fields.
+6. Instruction blocks must not be resume_fillable=true.
+7. Include detailed extraction_hints plus injection_hints/render_locator for every field.
+8. Employee/consultant/recruiter fields must be source_kind="recruiter_input" and resume_fillable=false.
+9. Return ONLY the corrected TemplateManifest JSON.
+
+Validation errors:
+{{ errors_json }}
+
+Validation warnings:
+{{ warnings_json }}
+
+Original evidence:
+{{ evidence_json }}
+
+Document Layout & Text Flow:
+{% if docling_markdown %}
+{{ docling_markdown }}
+{% else %}
+{{ raw_text_summary }}
+{% endif %}
+
+Invalid manifest:
+{{ manifest_json }}
+
+Return ONLY the corrected JSON object.

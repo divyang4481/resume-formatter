@@ -1,12 +1,25 @@
 import io
 import re
 import logging
-from typing import Any, Dict, List, Optional
+import traceback
+from typing import Any, Dict, List, Optional, Union
 from docxtpl import DocxTemplate, RichText
 from docx import Document
+from docx.table import _Cell, _Row
+from docx.text.paragraph import Paragraph
+import copy
+
+# 3. Apply CVML rendering actions (recursive)
+
+from app.services.template_structure_extractor import FIELD_ALIAS_MAP
+from app.services.document_marker_locator import DocumentMarkerLocator
+from app.services.resume_data_formatter import ResumeDataFormatter
+from app.services.rich_text_renderer import RichTextRenderer
 
 logger = logging.getLogger(__name__)
 
+
+TemplateManifestInput = Union[List[Dict[str, Any]], Dict[str, Any]]
 
 class ResumeGeneratorService:
     """
@@ -14,132 +27,275 @@ class ResumeGeneratorService:
     Extracts the template manipulation logic out of the agent nodes into a reusable service.
     """
 
+    def __init__(self):
+        self.marker_locator = DocumentMarkerLocator()
+        self.data_formatter = ResumeDataFormatter()
+        self.rich_text_renderer = RichTextRenderer()
+
+    def _get_manifest_fields(self, field_manifest: Any) -> List[Dict[str, Any]]:
+        if not field_manifest:
+            return []
+        if isinstance(field_manifest, dict):
+            return field_manifest.get("fields", []) or []
+        if isinstance(field_manifest, list):
+            return field_manifest
+        return []
+
     def render_formatted_document(
         self,
         template_bytes: bytes,
         resume_data: Dict[str, Any],
         expected_fields: Optional[str] = "",
-    ) -> bytes:
+        field_manifest: Optional[TemplateManifestInput] = None,
+    ) -> tuple[bytes, List[str]]:
         """
         Takes raw template bytes and AI-harmonized data, prepares the document markers,
         and renders the final DOCX file.
+        Handles scalar, array_simple, array_complex, table_loop, paste_zone,
+        and instruction_block field types.
         """
         try:
             template_stream = io.BytesIO(template_bytes)
 
-            # 1. Normalize markers across styles: Convert <<...>>, {{...}}, and [[...]] 
-            # into a unified logical mapping for the rendering engine.
             expected_fields_list = [
                 f.strip() for f in expected_fields.split(",") if f.strip()
             ]
 
-            processed_template_stream = self.prepare_document_markers(
-                template_stream, expected_fields_list
+            # 1.5. Un-nest the AI mapping results - this is our main guide, it must overwrite raw data
+            if "template_fill_result" in resume_data:
+                logger.info("Found template_fill_result in resume_data, un-nesting mappings...")
+                mapping_results = resume_data["template_fill_result"]
+                if isinstance(mapping_results, dict):
+                    for k, v in mapping_results.items():
+                        # Always prioritize AI-mapped results (they are healed/validated)
+                        if isinstance(v, dict) and "value" in v:
+                            val = v.get("value")
+                            if val is None and isinstance(v.get("field_extraction_manifest"), dict):
+                                val = v["field_extraction_manifest"].get("value")
+                            resume_data[k] = val if val is not None else ""
+                            logger.info(f"[Un-nest] Extracted '{k}': {str(resume_data[k])[:100]}")
+                        else:
+                            resume_data[k] = v if v is not None else ""
+                            logger.info(f"[Un-nest] Extracted raw '{k}': {str(resume_data[k])[:100]}")
+
+            # 1.5. Expand array/complex fields into rendering-ready form FIRST
+            expanded_data = self.data_formatter.expand_array_fields(resume_data, self._get_manifest_fields(field_manifest))
+
+            # 2. Prepare document markers (uses expanded data like _str)
+            processed_template_stream = self.marker_locator.prepare_document_markers(
+                template_stream, expected_fields_list, field_manifest, expanded_data
             )
 
-            # 2. Apply "Rendering Actions" to transform structured data into professional document prose
-            processed_resume_data = self._apply_rendering_actions(resume_data)
+            processed_resume_data = self.rich_text_renderer.apply_rendering_actions(expanded_data)
 
-            # 3. Render final content using docxtpl
+            # 4. Render final content using docxtpl
             doc = DocxTemplate(processed_template_stream)
 
-            # Prepare render context (merge nested personal_info for easier access)
-            render_context = {**processed_resume_data}
-            if "personal_info" in processed_resume_data and isinstance(
-                processed_resume_data["personal_info"], dict
-            ):
-                render_context.update(processed_resume_data["personal_info"])
+            # Flatten the context for universal access
+            def flatten_dict(d, parent_key="", sep="_"):
+                items = []
+                for k, v in d.items():
+                    new_key = f"{parent_key}{sep}{k}" if parent_key else k
+                    if isinstance(v, dict):
+                        # It's a field info object from ResumeAiService: { "value": "...", "marker_text": "..." }
+                        if "value" in v:
+                            val = v.get("value")
+                            if val is None and isinstance(v.get("field_extraction_manifest"), dict):
+                                val = v["field_extraction_manifest"].get("value")
+                            items.append((k, val))
+                            if parent_key:
+                                items.append((new_key, val))
+                        else:
+                            items.extend(flatten_dict(v, new_key, sep=sep).items())
+                    else:
+                        items.append((k, v))
+                        if parent_key:
+                            items.append((new_key, v))
+                return dict(items)
 
-            # Universal Scoped Context mapping logic:
-            render_context_with_scope = {**render_context, "_": {**render_context}}
+            flattened_context = flatten_dict(processed_resume_data)
+
+            # Prepare render context
+            render_context = {**processed_resume_data, **flattened_context}
+
+            import json
+
+            logger.info("\n" + "=" * 60 + "\n--- FINAL RENDER CONTEXT ---\n" + "=" * 60)
+            logger.info(json.dumps(render_context, indent=2, default=str))
+            logger.info("=" * 60 + "\n")
+
+            # 0. Prep Scoped Context: supports original, lowercase snake_case, and clean alphanumeric keys
+            normalized_context = {}
+            for k, v in render_context.items():
+                normalized_context[k] = v
+                std_key = "".join(filter(str.isalnum, k.lower()))
+                normalized_context[std_key] = v
+
+            # --- DYNAMIC TAXONOMY MAPPING ---
+            # Use FIELD_ALIAS_MAP to provide aliases and fallbacks dynamically
+            for canonical, info in FIELD_ALIAS_MAP.items():
+                if not isinstance(info, dict):
+                    continue
+                val = normalized_context.get(canonical)
+                if not val:
+                    # Try aliases
+                    for alias in info.get("aliases", []):
+                        val = normalized_context.get(alias) or normalized_context.get(alias.lower()) or normalized_context.get("".join(filter(str.isalnum, alias.lower())))
+                        if val:
+                            normalized_context[canonical] = val
+                            logger.info(f"[Context] Matched alias '{alias}' -> canonical '{canonical}'")
+                            break
+                
+                # If still missing, check if it's a critical field with semantic fallbacks
+                # (We can keep some hardcoded semantic fallbacks for logic that isn't just naming)
+                if not normalized_context.get(canonical):
+                    fallbacks = {
+                        "cv_comments": ["summary", "profile_summary"],
+                        "professional_qualifications": ["certifications", "education", "skills"],
+                        "skills": ["key_skills", "core_competencies"],
+                        "employee_name": ["consultant_name"]
+                    }
+                    if canonical in fallbacks:
+                        for fb in fallbacks[canonical]:
+                            if normalized_context.get(fb):
+                                normalized_context[canonical] = normalized_context[fb]
+                                logger.info(f"[Context] Using semantic fallback for '{canonical}' from '{fb}'")
+                                break
+
+            class CaseInsensitiveDict(dict):
+                def __getitem__(self, key):
+                    if key in self:
+                        val = super().__getitem__(key)
+                        return val if val is not None else ""
+
+                    std_key = "".join(filter(str.isalnum, str(key).lower()))
+                    if std_key in self:
+                        return super().__getitem__(std_key)
+
+                    snake_key = re.sub(r"(?<!^)(?=[A-Z])", "_", str(key)).lower()
+                    if snake_key in self:
+                        return super().__getitem__(snake_key)
+
+                    return ""
+
+                def get(self, key, default=None):
+                    value = self.__getitem__(key)
+                    return default if value == "" else value
+
+            smart_context = CaseInsensitiveDict(normalized_context)
+            
+            # Inject all aliases from taxonomy into smart_context for explicit marker support
+            for canonical, info in FIELD_ALIAS_MAP.items():
+                if not isinstance(info, dict):
+                    continue
+                if normalized_context.get(canonical):
+                    for alias in info.get("aliases", []):
+                        if alias not in smart_context:
+                            smart_context[alias] = normalized_context[canonical]
+
+            render_context_with_scope = {
+                **render_context,
+                **smart_context,
+                "_": smart_context,
+            }
+            logger.info(
+                f"[Context] Smart context initialized with {len(smart_context)} keys"
+            )
+
+            # --- MISSING FIELD VALIDATION (skip instruction_block fields) ---
+            skip_types = {"instruction_block"}
+            missing_fields = []
+            all_target_keys = set()
+            if field_manifest:
+                fields_list = field_manifest.get("fields", []) if isinstance(field_manifest, dict) else field_manifest
+                all_target_keys.update(
+                    [
+                        item["fieldname"]
+                        for item in fields_list
+                        if isinstance(item, dict) and "fieldname" in item and item.get("field_type") not in skip_types
+                    ]
+                )
+            if expected_fields_list:
+                all_target_keys.update(expected_fields_list)
+
+            for key in all_target_keys:
+                val = render_context_with_scope.get("_", {}).get(key)
+                if val is None or val == "" or val == []:
+                    std_key = "".join(filter(str.isalnum, key.lower()))
+                    val = render_context_with_scope.get("_", {}).get(std_key)
+
+                if (
+                    val is None
+                    or val == ""
+                    or val == []
+                    or (isinstance(val, str) and "not found" in val.lower())
+                ):
+                    missing_fields.append(key)
+
+            # Merge missing fields discovered during rendering
+            if missing_fields:
+                logger.warning(
+                    f"RENDERING WARNING: The following template fields remained empty: {missing_fields}"
+                )
 
             logger.info(
-                f"RENDERING DOCUMENT: {len(render_context_with_scope['_'])} labels available in context."
+                "\n"
+                + "#" * 60
+                + "\n--- FINAL INJECTED CONTEXT (SMART SCOPE) ---\n"
+                + "#" * 60
             )
-            
+            for k, v in render_context_with_scope.get("_", {}).items():
+                if isinstance(v, (str, list)):
+                    val_preview = str(v)[:200] + "..." if len(str(v)) > 200 else str(v)
+                    logger.info(f"Field: '{k}' -> Value: {val_preview}")
+            logger.info("#" * 60 + "\n")
+
             doc.render(render_context_with_scope)
 
-            # 4. Save to bytes (preserving original formatting)
+            # 5. Save to bytes
             out_stream = io.BytesIO()
             doc.save(out_stream)
-            return out_stream.getvalue()
+            out_stream.seek(0)
+            
+            # --- POST-RENDER VALIDATION ---
+            try:
+                final_doc = Document(out_stream)
+                out_stream.seek(0)
+                
+                unresolved = []
+                check_texts = ["«", "»", "{{", "}}", "TableStart", "TableEnd", "MACROBUTTON", "[Type text]"]
+                
+                def check_text(t):
+                    if not t: return
+                    if any(m in t for m in check_texts):
+                        unresolved.append(t)
+                    elif "paste the candidate" in t.lower() and "cv" in t.lower():
+                        unresolved.append(t)
+
+                for p in final_doc.paragraphs:
+                    check_text(p.text)
+                for tbl in final_doc.tables:
+                    for row in tbl.rows:
+                        for cell in row.cells:
+                            check_text(cell.text)
+                            
+                if unresolved:
+                    logger.warning(f"POST-RENDER WARNING: Found {len(unresolved)} unresolved markers or instruction texts in final document. Sample: {unresolved[:3]}")
+                    missing_fields.append("UNRESOLVED_MARKERS_PRESENT")
+            except Exception as v_err:
+                logger.warning(f"Failed to run post-render validation: {v_err}")
+
+            return out_stream.getvalue(), missing_fields
 
         except Exception as e:
-            logger.error(
-                f"Document rendering failed: {e}. Available keys in data: {list(render_context.keys()) if 'render_context' in locals() else 'Unknown'}"
-            )
-            raise RuntimeError(f"Failed to render document: {str(e)}")
-
-    def prepare_document_markers(
-        self, template_stream: io.BytesIO, field_list: List[str]
-    ) -> io.BytesIO:
-        """
-        Scans the document for various marker patterns (<< >>, {{ }}, [[ ]]) and 
-        normalizes them to use the scoped 'Universal Context' dictionary lookup.
-        """
-        doc = Document(template_stream)
-        counter = 0
-
-        # Regex for common placeholder patterns: << >>, {{ }}, [[ ]]
-        MARKER_PATTERN = r"(?:<<|\{\{|\[\[)\s*(.*?)\s*(?:>>|\}\}|\]\])"
-
-        def transform_paragraph_markers(text, fields, current_counter):
-            matches = re.finditer(MARKER_PATTERN, text)
-            new_text = text
-            offset = 0
-            for match in matches:
-                original = match.group(0)
-                raw_marker_text = match.group(1).strip()
-
-                # 1. Identify 'fill' placeholders (sequential mapping)
-                is_fill_section = (
-                    "fill" in raw_marker_text.lower()
-                    and "section" in raw_marker_text.lower()
-                )
-
-                if is_fill_section and current_counter < len(fields):
-                    # Map generic marker to specific AI field
-                    target_key = fields[current_counter]
-                    replacement = f"{{{{ _['{target_key}'] }}}}"
-                    current_counter += 1
-                elif is_fill_section:
-                    replacement = f"{{{{ _['missing_field_{current_counter}'] }}}}"
-                    current_counter += 1
-                else:
-                    # 2. Map visual marker to its logical value in context
-                    # Any marker text now becomes a valid dictionary key.
-                    replacement = f"{{{{ _['{raw_marker_text}'] }}}}"
-
-                start, end = match.span()
-                new_text = (
-                    new_text[: start + offset] + replacement + new_text[end + offset :]
-                )
-                offset += len(replacement) - len(original)
-            return new_text, current_counter
-
-        # Process all structural elements in the document
-        for p in doc.paragraphs:
-            if "<<" in p.text or "{{" in p.text or "[[" in p.text:
-                p.text, counter = transform_paragraph_markers(p.text, field_list, counter)
-
-        for table in doc.tables:
-            for row in table.rows:
-                for cell in row.cells:
-                    for p in cell.paragraphs:
-                        if "<<" in p.text or "{{" in p.text or "[[" in p.text:
-                            p.text, counter = transform_paragraph_markers(p.text, field_list, counter)
-
-        processed_stream = io.BytesIO()
-        doc.save(processed_stream)
-        processed_stream.seek(0)
-        return processed_stream
+            logger.exception("Document rendering failed with exception details:")
+            raise RuntimeError(f"Failed to render document: {str(e)}\n{traceback.format_exc()}")
 
     def generate_error_docx(self, template_id: str, error_message: str) -> bytes:
         """
-        Generates a valid (but minimal) DOCX file containing failure details,
-        ensuring the user doesn't get a corrupted file error from Word.
+        Generates a valid (but minimal) DOCX file containing failure details.
         """
-        from docx import Document
+        # docx is imported at the top level
         error_doc = Document()
         error_doc.add_heading("TEMPLATE RENDERING ERROR", level=1)
         error_doc.add_paragraph(f"Template Identification: {template_id}")
@@ -150,48 +306,3 @@ class ResumeGeneratorService:
         error_stream = io.BytesIO()
         error_doc.save(error_stream)
         return error_stream.getvalue()
-
-    def _apply_rendering_actions(self, content: Any) -> Any:
-        """
-        Hyper-Fidelity Composition Node: Recursively translatesproprietary
-        CVML ([:B:], [:L1:], etc.) into native DOCX RichText runs.
-        """
-        # 1. Recursive handling for nested structures (Jobs, Projects, etc)
-        if isinstance(content, dict):
-            return {k: self._apply_rendering_actions(v) for k, v in content.items()}
-        elif isinstance(content, list):
-            return [self._apply_rendering_actions(v) for v in content]
-        elif not isinstance(content, str):
-            return content
-
-        # 2. String Composition (The CVML Engine)
-        if not any(tag in content for tag in ["[:B:]", "[:PIPE:]", "[:BR:]", "[:L1:]", "[:L2:]"]):
-            return content
-
-        rt = RichText()
-        content = content.replace("\r\n", "\n")
-        
-        # Split into tokens: keep tags for processing
-        parts = re.split(r'(\[:B:\].*?\[:/B:\]|\[:PIPE:\]|\[:BR:\]|\[:L1:\]|\[:L2:\])', content, flags=re.DOTALL)
-        
-        for part in parts:
-            if not part:
-                continue
-                
-            if part.startswith("[:B:]"):
-                # [:B:]Bold Text[:/B:]
-                inner = part[5:-6]
-                rt.add(inner, bold=True)
-            elif part == "[:PIPE:]":
-                rt.add("  |  ")
-            elif part == "[:BR:]":
-                rt.add("\n")
-            elif part == "[:L1:]":
-                rt.add("\n• ")
-            elif part == "[:L2:]":
-                rt.add("\n    - ")
-            else:
-                # Standard text run
-                rt.add(part)
-                
-        return rt

@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 from datetime import datetime
 from pydantic import BaseModel, Field
 
@@ -19,8 +19,23 @@ class TemplateRule(BaseModel):
 
 class FieldExtractionManifestItem(BaseModel):
     fieldname: str
+    marker_text: str
     meaning: str
-    source_hints: str
+    source_hints: Union[str, List[str]]
+    field_type: str = "scalar"
+    canonical_fieldname: Optional[str] = None
+    original_label: Optional[str] = None
+    resume_fillable: bool = True
+    source_kind: str = "resume_fact"
+    required: bool = False
+    confidence: float = 0.0
+    occurrence_index: int = 1
+    context: Dict[str, Any] = Field(default_factory=dict)
+    extraction_hints: Dict[str, Any] = Field(default_factory=dict)
+    injection_hints: Dict[str, Any] = Field(default_factory=dict)
+    render_locator: Dict[str, Any] = Field(default_factory=dict)
+    provenance: Dict[str, Any] = Field(default_factory=dict)
+    sub_fields: List[Dict[str, Any]] = Field(default_factory=list)
 
 class TemplateAsset(BaseModel):
     id: str
@@ -45,6 +60,7 @@ class TemplateAsset(BaseModel):
     field_extraction_manifest: Optional[List[FieldExtractionManifestItem]] = None
 
     summary_guidance: Optional[str] = None
+    docling_extraction: Optional[str] = None  # Raw Docling extraction output
     formatting_guidance: Optional[str] = None
     validation_guidance: Optional[str] = None
     pii_guidance: Optional[str] = None
@@ -52,14 +68,39 @@ class TemplateAsset(BaseModel):
     is_default_for_industry: bool = False
 
     # Provenance and Storage References
-    original_file_ref: str
+    storage_uri: str
     checksum: str
-    extraction_artifact_ref: Optional[str] = None
+    extraction_uri: Optional[str] = None
     render_config_ref: Optional[str] = None
 
     created_by: str
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
+    # Full analysis payload (includes raw_structure)
+    analysis_json: Optional[str] = None
+
     # Extension for provider-specific details
     extension_metadata: Dict[str, Any] = Field(default_factory=dict)
+
+
+class TemplateTestRun(BaseModel):
+    id: str
+    template_id: str
+    sample_resume_asset_id: Optional[str] = None
+    processing_job_id: str
+    decision: Optional[str] = None
+    review_notes: Optional[str] = None
+    generated_summary: Optional[str] = None
+    output_doc_path: Optional[str] = None
+    output_pdf_path: Optional[str] = None
+    extracted_json_path: Optional[str] = None
+    validation_result_json: Optional[str] = None
+    created_by: str
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    reviewed_at: Optional[datetime] = None
+
+    model_config = {
+        "from_attributes": True
+    }
+

@@ -19,6 +19,8 @@ import { ReactiveFormsModule, FormBuilder, FormGroup } from '@angular/forms';
 import { animate, state, style, transition, trigger } from '@angular/animations';
 import { AdminTemplateApiService } from '../../../../services/admin-template-api.service';
 import { AdminTemplateTestingService } from '../../../../services/admin-template-testing.service';
+import { environment } from '../../../../../environments/environment';
+import { JsonParsePipe } from '../../../../pipes/json-parse.pipe';
 
 @Component({
   selector: 'app-template-detail',
@@ -38,7 +40,8 @@ import { AdminTemplateTestingService } from '../../../../services/admin-template
     MatChipsModule,
     MatExpansionModule,
     ReactiveFormsModule,
-    MatDialogModule
+    MatDialogModule,
+    JsonParsePipe
   ],
   templateUrl: './template-detail.component.html',
   styleUrls: ['./template-detail.component.scss'],
@@ -52,6 +55,7 @@ import { AdminTemplateTestingService } from '../../../../services/admin-template
   ]
 })
 export class TemplateDetailComponent implements OnInit, OnDestroy {
+  env = environment;
   templateId: string = '';
   template: any = null;
   publishEligibility: any = null;
@@ -60,14 +64,10 @@ export class TemplateDetailComponent implements OnInit, OnDestroy {
   expandedElement: any | null = null;
 
   pipelineStages = [
-    { id: 'ingest', name: 'Ingestion', icon: 'cloud_upload' },
-    { id: 'parse', name: 'Extraction', icon: 'document_scanner' },
-    { id: 'classify', name: 'Classification', icon: 'category' },
-    { id: 'normalize', name: 'Normalization', icon: 'schema' },
-    { id: 'privacy', name: 'PII Privacy', icon: 'security' },
-    { id: 'transform', name: 'AI Transformation', icon: 'auto_awesome' },
-    { id: 'validate', name: 'Quality Check', icon: 'fact_check' },
-    { id: 'render', name: 'Rendering', icon: 'picture_as_pdf' }
+    { id: 'LOADING_TEMPLATE', name: 'Loading Template', icon: 'cloud_download' },
+    { id: 'EXTRACTING_FACTS', name: 'Extracting Resume Facts', icon: 'psychology' },
+    { id: 'MAPPING_FIELDS', name: 'Mapping to Template', icon: 'transform' },
+    { id: 'RENDERING_DOCX', name: 'Generating Document', icon: 'description' }
   ];
 
 
@@ -82,6 +82,12 @@ export class TemplateDetailComponent implements OnInit, OnDestroy {
   jobStatus: any = null;
   jobOutputs: any = null;
   isRunningTest: boolean = false;
+  
+  // Debug JSONs
+  jobFacts: any = null;
+  jobTransformation: any = null;
+  jobTemplateJson: any = null;
+  showDeepReview: boolean = false;
 
   private pollingTimeout: any;
 
@@ -193,7 +199,13 @@ export class TemplateDetailComponent implements OnInit, OnDestroy {
   }
 
   saveRequirements() {
-    this.templateApi.updateTemplate(this.templateId, this.requirementsForm.value).subscribe(() => {
+    const payload = {
+      ...this.requirementsForm.value,
+      field_extraction_manifest: typeof this.template.field_extraction_manifest === 'string' 
+        ? this.template.field_extraction_manifest 
+        : JSON.stringify(this.template.field_extraction_manifest)
+    };
+    this.templateApi.updateTemplate(this.templateId, payload).subscribe(() => {
       this.loadTemplate();
     });
   }
@@ -227,14 +239,14 @@ export class TemplateDetailComponent implements OnInit, OnDestroy {
   getStageStatus(stageId: string): string {
     if (!this.jobStatus) return 'pending';
 
-    const status = this.jobStatus.status;
+    const status = this.jobStatus.status?.toUpperCase();
     const currentStage = this.jobStatus.stage;
 
     const stageIndex = this.pipelineStages.findIndex(s => s.id === stageId);
     const currentIndex = this.pipelineStages.findIndex(s => s.id === currentStage);
 
-    if (status === 'failed' && currentStage === stageId) return 'failed';
-    if (status === 'completed') return 'completed';
+    if (status === 'FAILED' && currentStage === stageId) return 'failed';
+    if (status === 'COMPLETED' || status === 'PARTIAL_SUCCESS') return 'completed';
 
     if (stageIndex < currentIndex) return 'completed';
     if (stageIndex === currentIndex) return 'running';
@@ -295,7 +307,7 @@ export class TemplateDetailComponent implements OnInit, OnDestroy {
     this.testApi.getJob(this.currentJobId).subscribe({
       next: (res) => {
         this.jobStatus = res;
-        if (res.status === 'completed') {
+        if (res.status === 'completed' || res.status === 'partial_success') {
           this.isRunningTest = false;
           this.loadJobOutputs();
           this.refreshTestHistory(); // Refresh the history grid immediately
@@ -315,21 +327,29 @@ export class TemplateDetailComponent implements OnInit, OnDestroy {
 
   loadJobOutputs() {
     if (!this.currentJobId) return;
+    
+    // Initialize jobOutputs if null
+    if (!this.jobOutputs) this.jobOutputs = {};
+
     this.testApi.getJobOutputs(this.currentJobId).subscribe(res => {
-      this.jobOutputs = res;
+      // Merge into existing object to avoid overwriting summary
+      this.jobOutputs = { ...this.jobOutputs, ...res };
     });
+    
     this.testApi.getJobSummary(this.currentJobId).subscribe({
       next: (res) => {
-        if(this.jobOutputs) {
-          this.jobOutputs.summary = res.summary;
-        } else {
-          this.jobOutputs = { summary: res.summary };
-        }
+        // Merge summary into existing object
+        this.jobOutputs = { ...this.jobOutputs, summary: res.summary };
       },
       error: () => {
-         if(this.jobOutputs) this.jobOutputs.summary = "Internal: Could not load generated summary string.";
+         this.jobOutputs = { ...this.jobOutputs, summary: "Internal: Could not load generated summary string." };
       }
     });
+
+    // Load Debug JSONs
+    this.testApi.getJobFacts(this.currentJobId).subscribe(res => this.jobFacts = res);
+    this.testApi.getJobTransformation(this.currentJobId).subscribe(res => this.jobTransformation = res);
+    this.testApi.getJobTemplate(this.currentJobId).subscribe(res => this.jobTemplateJson = res);
   }
 
   reviewTestRun(testRunId: string, decision: string) {
@@ -387,6 +407,29 @@ export class TemplateDetailComponent implements OnInit, OnDestroy {
       width: '600px',
       data: { run }
     });
+  }
+
+  openDeepReviewDialog(dialogRef: any, run: any) {
+    this.dialog.open(dialogRef, {
+      width: '1200px',
+      data: { 
+        run,
+        template: this.template 
+      }
+    });
+  }
+
+  openJsonInspector(dialogRef: any, title: string, json: any) {
+    this.dialog.open(dialogRef, {
+      width: '800px',
+      data: { title, json }
+    });
+  }
+
+  openManifestInspector(dialogRef: any) {
+    const pipe = new JsonParsePipe();
+    const manifest = pipe.transform(this.template?.field_extraction_manifest);
+    this.openJsonInspector(dialogRef, 'Raw Intelligence Manifest', manifest);
   }
 }
 

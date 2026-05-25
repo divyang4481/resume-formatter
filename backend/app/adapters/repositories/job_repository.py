@@ -14,9 +14,23 @@ class SqlAlchemyJobRepository(JobRepository):
     def save_job(self, job: Any) -> str:
         model = self.db.query(ProcessingJobModel).filter(ProcessingJobModel.id == job.id).first()
         if not model:
+            from app.db.models import CandidateResume
+            candidate_id = job.candidate_id if hasattr(job, 'candidate_id') and job.candidate_id else f"resume-{job.id}"
+            
+            # Check if candidate exists
+            candidate = self.db.query(CandidateResume).filter(CandidateResume.id == candidate_id).first()
+            if not candidate:
+                candidate = CandidateResume(
+                    id=candidate_id,
+                    source_file_name=job.original_file_ref.split("/")[-1] if hasattr(job, 'original_file_ref') and job.original_file_ref else "unknown",
+                    source_storage_uri=job.original_file_ref if hasattr(job, 'original_file_ref') else "unknown"
+                )
+                self.db.add(candidate)
+                self.db.flush()
+
             model = ProcessingJobModel(
                 id=job.id,
-                candidate_resume_id=job.candidate_id if hasattr(job, 'candidate_id') and job.candidate_id else f"resume-{job.id}",
+                candidate_resume_id=candidate_id,
                 original_file_ref=job.original_file_ref if hasattr(job, 'original_file_ref') else None,
                 status=job.status.value if hasattr(job.status, 'value') else job.status,
                 stage="INITIAL"
@@ -32,12 +46,36 @@ class SqlAlchemyJobRepository(JobRepository):
             model.generated_summary = job.generated_summary
         if hasattr(job, 'render_docx_uri'):
             model.render_docx_uri = job.render_docx_uri
+        if hasattr(job, 'transformed_json'):
+            model.transformed_json = job.transformed_json
+        elif hasattr(job, 'transformed_document_json'):
+            import json
+            data = job.transformed_document_json
+            if isinstance(data, dict):
+                model.transformed_json = json.dumps(data)
+            else:
+                model.transformed_json = data
+
+        if hasattr(job, 'candidate_facts_json'):
+            import json
+            data = job.candidate_facts_json
+            if isinstance(data, dict):
+                model.candidate_facts_json = json.dumps(data)
+            else:
+                model.candidate_facts_json = data
+
         if hasattr(job, 'error_message'):
             model.error_message = job.error_message
         if hasattr(job, 'selected_template_id'):
             model.template_asset_id = job.selected_template_id
+        elif hasattr(job, 'template_asset_id'):
+            model.template_asset_id = job.template_asset_id
+
         if hasattr(job, 'transform_json'):
             model.transform_json = job.transform_json
+
+        if hasattr(job, 'stage'):
+            model.stage = job.stage
 
 
         self.db.commit()

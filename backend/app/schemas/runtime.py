@@ -5,7 +5,7 @@ from app.schemas.enums import JobStatus, ExecutionMode
 class ExecutionContext(BaseModel):
     mode: ExecutionMode = ExecutionMode.RECRUITER_RUNTIME
     actor_role: str = "recruiter"
-    template_id: Optional[str] = None
+    template_asset_id: Optional[str] = Field(None, alias="template_id")
     test_run_id: Optional[str] = None
 
 class SubmitDocumentResponse(BaseModel):
@@ -14,15 +14,15 @@ class SubmitDocumentResponse(BaseModel):
     status: JobStatus
     requires_confirmation: bool
     provided_industry_id: Optional[str] = None
-    provided_template_id: Optional[str] = None
+    provided_template_id: Optional[str] = Field(None, alias="provided_template_id")
     suggested_industry_id: Optional[str] = None
-    suggested_template_id: Optional[str] = None
+    template_asset_id: Optional[str] = Field(None, alias="suggested_template_id")
     allowed_template_ids: Optional[list[str]] = None
     message: Optional[str] = None
 
 class ConfirmDocumentRequest(BaseModel):
     industry_id: str
-    template_id: str
+    template_asset_id: str = Field(..., alias="template_id")
 
 from typing import Any, Dict, List, Optional
 

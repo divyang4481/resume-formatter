@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
+import { environment } from '../../environments/environment';
 
 export interface FieldExtractionManifestItem {
   fieldname: string;
@@ -50,7 +51,7 @@ export interface TemplateListResponse {
   providedIn: 'root'
 })
 export class AdminService {
-  private apiUrl = 'http://localhost:8000/admin';
+  private apiUrl = `${environment.baseApiUrl}/api/admin`;
 
   constructor(private http: HttpClient) { }
 
@@ -64,5 +65,9 @@ export class AdminService {
     formData.append('metadata', JSON.stringify(metadata));
 
     return this.http.post(`${this.apiUrl}/templates/upload`, formData);
+  }
+
+  getTemplateDetail(templateId: string): Observable<any> {
+    return this.http.get(`${this.apiUrl}/templates/${templateId}`);
   }
 }

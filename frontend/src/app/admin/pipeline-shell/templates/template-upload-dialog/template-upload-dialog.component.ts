@@ -9,6 +9,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { AdminService } from '../../../../services/admin.service';
 
 @Component({
@@ -24,7 +25,8 @@ import { AdminService } from '../../../../services/admin.service';
     MatButtonModule,
     MatIconModule,
     MatSnackBarModule,
-    MatProgressSpinnerModule
+    MatProgressSpinnerModule,
+    MatProgressBarModule
   ],
   template: `
     <h2 mat-dialog-title>Upload Template Document</h2>
@@ -65,10 +67,18 @@ import { AdminService } from '../../../../services/admin.service';
       </form>
     </mat-dialog-content>
     <mat-dialog-actions align="end">
+      <div class="progress-container w-100" *ngIf="isUploading">
+        <div class="status-msg mb-1 d-flex align-items-center gap-8">
+           <mat-icon color="accent" class="tiny-icon">auto_awesome</mat-icon>
+           <span class="small">{{ currentStatus }}</span>
+        </div>
+        <mat-progress-bar mode="indeterminate" color="accent" class="mb-3"></mat-progress-bar>
+      </div>
+
       <button mat-button mat-dialog-close [disabled]="isUploading">Cancel</button>
       <button mat-flat-button color="primary" (click)="onSubmit()" [disabled]="uploadForm.invalid || !selectedFile || isUploading">
-        <mat-spinner diameter="20" *ngIf="isUploading" style="margin-right: 8px; display: inline-block;"></mat-spinner>
-        {{ isUploading ? 'Analyzing & Uploading...' : 'Start AI Analysis' }}
+        <mat-icon *ngIf="!isUploading">cloud_upload</mat-icon>
+        {{ isUploading ? 'AI Analyzing...' : 'Start AI Analysis' }}
       </button>
     </mat-dialog-actions>
   `,
@@ -141,6 +151,7 @@ export class TemplateUploadDialogComponent {
   uploadForm: FormGroup;
   selectedFile: File | null = null;
   isUploading = false;
+  currentStatus = 'Preparing upload...';
 
   constructor(
     private fb: FormBuilder,
@@ -170,6 +181,7 @@ export class TemplateUploadDialogComponent {
     }
 
     this.isUploading = true;
+    this.currentStatus = 'Uploading document to storage...';
 
     const formValue = this.uploadForm.value;
     const metadata = {
@@ -181,13 +193,51 @@ export class TemplateUploadDialogComponent {
 
     this.adminService.uploadTemplate(this.selectedFile, metadata).subscribe({
       next: (res) => {
-        this.snackBar.open('Template analyzed successfully', 'Close', { duration: 3000 });
-        this.dialogRef.close(res.asset_id);
+        const assetId = res.asset_id;
+        this.currentStatus = 'Document uploaded! Starting AI analysis...';
+        this.pollTemplateStatus(assetId);
       },
       error: (err) => {
         console.error('Upload failed', err);
-        this.snackBar.open('Analysis failed. Please try again.', 'Close', { duration: 5000 });
+        this.snackBar.open('Upload failed. Please try again.', 'Close', { duration: 5000 });
         this.isUploading = false;
+      }
+    });
+  }
+
+  private pollTemplateStatus(templateId: string) {
+    this.adminService.getTemplateDetail(templateId).subscribe({
+      next: (res) => {
+        const status = (res?.template?.status || 'draft').toLowerCase();
+        
+        // Update status message based on AI progress
+        if (status === 'draft') {
+          this.currentStatus = 'AI is reading document structure...';
+        } else if (status === 'analyzing') {
+          this.currentStatus = 'Identifying placeholders and data mapping rules...';
+        } else {
+          this.currentStatus = 'Finalizing extraction manifest...';
+        }
+
+        const hasManifest = res?.template?.field_extraction_manifest && 
+                          (typeof res.template.field_extraction_manifest === 'string' ? 
+                           res.template.field_extraction_manifest.length > 2 : 
+                           res.template.field_extraction_manifest.length > 0);
+
+        if (status === 'ready_for_testing' || status === 'active' || status === 'archived' || status === 'failed' || hasManifest) {
+          this.currentStatus = 'Success! Template stabilized.';
+          this.snackBar.open('Template processed successfully', 'Close', { duration: 3000 });
+          this.isUploading = false;
+          this.dialogRef.close(templateId);
+        } else {
+          setTimeout(() => this.pollTemplateStatus(templateId), 3000);
+        }
+      },
+      error: (err) => {
+        console.error('Failed to get template status', err);
+        this.snackBar.open('Processing failed. Please try again.', 'Close', { duration: 5000 });
+        this.isUploading = false;
+        this.dialogRef.close(templateId); // Return even on error so they can see the draft
       }
     });
   }

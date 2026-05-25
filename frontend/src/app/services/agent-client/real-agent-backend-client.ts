@@ -195,12 +195,15 @@ export class RealAgentBackendClient implements AgentBackendClient {
         this.currentSession.artifacts['jobId'] = sessionId;
 
             const outputRes = await firstValueFrom(this.runtimeApi.getJobOutput(sessionId));
+            // Force relative URL to work with Angular Proxy and avoid CORS/Host issues
+            const relativeUrl = `/api/v1/processing/documents/${sessionId}/download`;
+            
             this.currentSession.pendingActions = [
                {
                  id: 'a-download',
                  type: 'download_output',
                  label: 'Download Output',
-                 payload: { url: outputRes.url }
+                 payload: { url: relativeUrl }
                },
                {
                  id: 'a-start-over',
@@ -281,7 +284,7 @@ export class RealAgentBackendClient implements AgentBackendClient {
                 }
             }
 
-            if (statusRes.status === 'completed') {
+            if (statusRes.status === 'completed' || statusRes.status === 'partial_success') {
                 if (this.currentSession) {
                     this.currentSession.status = 'waiting_for_user';
                     this.currentSession.currentStep = 'review_resume';

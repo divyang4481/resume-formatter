@@ -1,0 +1,31 @@
+# backend/Dockerfile.base
+# This image contains all heavy dependencies (Torch CPU, Docling, Poetry)
+# Build this ONCE and push to ECR as the base for API and Worker
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install OS dependencies for build and runtime
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc g++ curl build-essential \
+    libgl1 libglib2.0-0 libxcb1 libxrender1 libxext6 libsm6 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Poetry via pip
+RUN pip install --no-cache-dir poetry
+
+# Copy dependency files
+COPY pyproject.toml poetry.lock ./
+
+# COMBINED STEP: Install dependencies and IMMEDIATELY replace with CPU torch to avoid layer bloat
+# This prevents the 5GB+ GPU torch from being permanently saved in a middle layer
+RUN export PIP_DEFAULT_TIMEOUT=1000 POETRY_REQUESTS_TIMEOUT=1000 \
+    && poetry config virtualenvs.create false \
+    && poetry install --no-interaction --no-ansi --no-root --all-extras \
+    && pip install --no-cache-dir --default-timeout=1000 torch torchvision --index-url https://download.pytorch.org/whl/cpu \
+    && pip cache purge \
+    && rm -rf /root/.cache/pip
+
+# Clean up any remaining junk
+RUN apt-get purge -y --auto-remove gcc g++ build-essential \
+    && rm -rf /var/lib/apt/lists/*

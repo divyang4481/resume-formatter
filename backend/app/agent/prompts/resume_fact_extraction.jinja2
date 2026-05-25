@@ -1,0 +1,56 @@
+TASK: Extract candidate facts from a resume into a canonical JSON structure.
+
+RESUME TEXT:
+{{ resume_text }}
+
+---
+EXTRACTION RULES:
+1. Extract ALL facts precisely. Do not summarize or synthesize.
+2. If a field is missing, set it to null (or an empty list for arrays).
+3. WORK EXPERIENCE: Include job_title, company, start_date, end_date, and a list of responsibilities.
+4. EDUCATION: Include degree, institution, completion_date, and details.
+5. METADATA: Capture salary_current, salary_required, and notice_period if explicitly mentioned.
+6. TEMPLATE-SPECIFIC HINTS: Look for the following specific information requested by the target template:
+   {{ template_field_hints }}
+7. EXTENSION: Put any other notable information (hobbies, languages, or specialized skills found above) into the extension_metadata dictionary.
+
+---
+OUTPUT SCHEMA (CandidateFacts):
+{
+  "full_name": "string",
+  "location": "string | null",
+  "email": "string | null",
+  "phone": "string | null",
+  "summary": "string",
+  "skills": ["string"],
+  "work_experience": [
+    {
+      "job_title": "string",
+      "company": "string",
+      "start_date": "string",
+      "end_date": "string",
+      "responsibilities": ["string"]
+    }
+  ],
+  "education": [
+    {
+      "degree": "string",
+      "institution": "string",
+      "completion_date": "string",
+      "details": "string"
+    }
+  ],
+  "certifications": ["string"],
+  "professional_qualifications": ["string"],
+  "salary_current": "string | null",
+  "salary_required": "string | null",
+  "notice_period": "string | null",
+  "extension_metadata": {
+    "key": "value"
+  }
+}
+
+SYSTEM RULES:
+- Return ONLY valid JSON.
+- No code fences.
+- No conversational text.

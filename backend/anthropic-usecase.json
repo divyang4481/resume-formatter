@@ -1,0 +1,8 @@
+{
+  "companyName": "Resume Formatter",
+  "companyWebsite": "https://github.com/divyang4481/resume-formatter/tree/AWS1",
+  "intendedUsers": "0",
+  "industryOption": "Information Technology",
+  "otherIndustryOption": "",
+  "useCases": "Proof of concept resume formatter application for internal use. The application uses Amazon Bedrock Anthropic Claude 3 Haiku for document processing, resume formatting, summarization, extraction, classification, and enterprise assistant workflows."
+}

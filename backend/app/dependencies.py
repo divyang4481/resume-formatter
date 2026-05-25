@@ -1,239 +1,110 @@
+import logging
+from fastapi import Request
 from typing import Optional
-from fastapi import Header, HTTPException, status, Depends
-from sqlalchemy.orm import Session
 
-from app.config import settings
 from app.db.session import SessionLocal
+from app.config import settings
 
-# Interface definitions
-from app.domain.interfaces import (
-    StorageProvider,
-    TemplateRepository,
-    EventBus,
-    DocumentExtractionService,
-    KnowledgeIndex,
-    JobRepository,
-    MessageQueue,
-    LlmRuntimeAdapter
-)
+logger = logging.getLogger(__name__)
 
-# Adapter Implementations
-from app.adapters.repositories.template_repository import SqlAlchemyTemplateRepository
-from app.adapters.repositories.job_repository import SqlAlchemyJobRepository
-from app.adapters.queue.local_queue import SqlAlchemyMessageQueue
-from app.adapters.events.local_bus import LocalEventBus
+# --- Mock RBAC ---
+def mock_is_admin(request: Request) -> bool:
+    """Mock dependency to ensure caller is admin."""
+    return request.headers.get("X-Admin-Token") == "secret-admin-token"
 
-
+# --- Database ---
 def get_db_session():
-    """Dependency to get SQLAlchemy DB Session."""
+    # Ensure tables exist (e.g. if they were dropped by clean_db.py while the server was running)
+    try:
+        from app.db.session import engine
+        from app.db.models import Base
+        Base.metadata.create_all(bind=engine)
+    except Exception as e:
+        logger.error(f"Error ensuring tables exist in get_db_session: {e}")
     db = SessionLocal()
     try:
         yield db
     finally:
         db.close()
 
+# --- Adapters ---
+def get_storage_provider():
+    from app.adapters.storage.s3_object_storage import S3ObjectStorage, LocalObjectStorage
+    if settings.storage_provider == "s3":
+        return S3ObjectStorage()
+    return LocalObjectStorage()
 
-def mock_is_admin(x_admin_token: Optional[str] = Header(None, description="Mock admin token for RBAC")) -> bool:
-    """
-    Mock dependency to simulate RBAC for admin endpoints.
-    Requires a valid X-Admin-Token header.
-    """
-    if x_admin_token != "admin-secret-token":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Forbidden: Admin access required"
-        )
-    return True
+def get_message_queue():
+    from app.adapters.queue.sqs_job_queue import SqsJobQueueAdapter, LocalJobQueueAdapter
+    if settings.queue_provider == "sqs":
+        return SqsJobQueueAdapter()
+    return LocalJobQueueAdapter()
 
+def get_document_extraction_service():
+    from app.adapters.extraction.parser_router import ParserRouter
+    return ParserRouter()
 
-# =====================================================================
-# Factory Methods (Resolve dependencies based on configuration)
-# =====================================================================
+def get_llm_runtime():
+    from app.adapters.llm.aws_bedrock_runtime import AwsBedrockLlmRuntime
+    from app.adapters.llm.ollama_runtime import LocalOllamaLlmRuntime
+    if settings.llm_backend == "aws_bedrock":
+        return AwsBedrockLlmRuntime()
+    return LocalOllamaLlmRuntime()
 
-def get_document_extraction_service() -> DocumentExtractionService:
-    """
-    Dependency Factory to fetch the document extraction service.
-    Now uses the multi-tier ParserRouter internally.
-    """
-    from app.adapters.extraction.router_extraction_adapter import RouterExtractionService
-    return RouterExtractionService()
+def get_agent_provider():
+    from app.adapters.agent.bedrock_agent import BedrockResumeFormattingAgent
+    from app.adapters.agent.python_agent import PythonOrchestratedResumeFormattingAgent
+    if settings.agent_provider == "bedrock_agent":
+        return BedrockResumeFormattingAgent()
+    return PythonOrchestratedResumeFormattingAgent(llm=get_llm_runtime())
 
+def get_knowledge_index():
+    from app.adapters.knowledge_base_adapter import BedrockKnowledgeBaseAdapter, LocalKnowledgeBaseAdapter
+    if settings.knowledge_provider == "bedrock_kb":
+        return BedrockKnowledgeBaseAdapter()
+    return LocalKnowledgeBaseAdapter()
 
-def get_llm_runtime() -> LlmRuntimeAdapter:
-    """
-    Dependency Factory to fetch the configured LLM runtime adapter.
-    Resolves to AWS Bedrock, Azure OpenAI, GCP Vertex AI, Local Ollama, or Gemini.
-    """
-    backend = settings.llm_backend.lower()
-    
-    # Check if local overrides
-    if backend == "local_ollama" or (settings.cloud.lower() == "local" and backend not in ["gemini"]):
-        from app.adapters.llm.ollama_runtime import LocalOllamaLlmRuntime
-        return LocalOllamaLlmRuntime(
-            model_name=settings.llm_model_name,
-            endpoint=settings.ollama_endpoint
-        )
-    elif backend == "gemini":
-        from app.adapters.llm.gemini_runtime import GeminiLlmRuntime
-        return GeminiLlmRuntime(
-            api_key=settings.gemini_api_key,
-            model_name=settings.llm_model_name if settings.llm_model_name != "llama3" else "gemini-2.0-flash"
-        )
-    elif backend == "aws_bedrock":
-        from app.adapters.llm.aws_bedrock_runtime import AwsBedrockLlmRuntime
-        return AwsBedrockLlmRuntime(
-            model_id=settings.llm_model_name,
-            region_name=settings.aws_region
-        )
-    elif backend == "gcp_vertex":
-        from app.adapters.llm.gcp_vertex_runtime import GcpVertexLlmRuntime
-        return GcpVertexLlmRuntime(
-            project_id=settings.gcp_project_id,
-            location=settings.gcp_location,
-            model_name=settings.llm_model_name
-        )
-    elif backend == "azure_openai":
-        from app.adapters.llm.azure_openai_runtime import AzureOpenAiLlmRuntime
-        return AzureOpenAiLlmRuntime(
-            endpoint=settings.azure_openai_endpoint,
-            api_key=settings.azure_openai_api_key,
-            deployment_name=settings.azure_openai_deployment_name,
-            api_version=settings.azure_openai_api_version
-        )
-    else:
-        # Fallback to local
-        from app.adapters.llm.ollama_runtime import LocalOllamaLlmRuntime
-        return LocalOllamaLlmRuntime(
-            model_name=settings.llm_model_name,
-            endpoint=settings.ollama_endpoint
-        )
+# --- Repositories ---
+from fastapi import Depends
+def get_job_repository(db_session = Depends(get_db_session)):
+    from app.adapters.repositories.job_repository import SqlAlchemyJobRepository
+    return SqlAlchemyJobRepository(db_session)
 
+def get_template_repository(db_session = Depends(get_db_session)):
+    from app.adapters.repositories.template_repository import SqlAlchemyTemplateRepository
+    return SqlAlchemyTemplateRepository(db_session)
 
-def get_storage_provider() -> StorageProvider:
-    """
-    Dependency Factory to fetch the configured storage provider adapter.
-    Resolves to Local, S3, GCP, or Azure based on configuration.
-    """
-    backend = settings.storage_backend.lower()
-
-    if backend == "s3":
-        from app.adapters.storage.s3_storage import S3StorageProvider
-        return S3StorageProvider(bucket=settings.s3_bucket, region=settings.aws_region)
-    elif backend == "gcp":
-        from app.adapters.storage.gcp_storage import GcpCloudStorageProvider
-        return GcpCloudStorageProvider(bucket=settings.s3_bucket, project_id=settings.gcp_project_id)
-    elif backend == "azure":
-        from app.adapters.storage.azure_storage import AzureBlobStorageProvider
-        return AzureBlobStorageProvider(container=settings.s3_bucket)
-    else:
-        # Fallback to local
-        from app.adapters.storage.local_storage import LocalStorageProvider
-        return LocalStorageProvider(base_path=settings.local_storage_path)
-
-
-def get_embedding_provider() -> 'EmbeddingProvider':
-    """
-    Dependency factory to resolve the EmbeddingProvider.
-    """
-    from app.domain.interfaces import EmbeddingProvider
-    from app.adapters.embedding.local_embedding import LocalEmbeddingProvider
-    return LocalEmbeddingProvider(model_name="all-MiniLM-L6-v2")
-
-
-def get_knowledge_index() -> KnowledgeIndex:
-    """
-    Dependency Factory to fetch the Knowledge Index.
-    Attempts Qdrant -> Chroma -> InMemory.
-    """
-    embedding_provider = get_embedding_provider()
-
-    try:
-        from app.adapters.vector.qdrant_index import QdrantKnowledgeIndex
-        return QdrantKnowledgeIndex(embedding_provider=embedding_provider)
-    except Exception as e:
-        print(f"Failed to load Qdrant, falling back to Chroma: {e}")
-        try:
-            from app.adapters.vector.chroma_index import ChromaKnowledgeIndex
-            return ChromaKnowledgeIndex()
-        except Exception as e2:
-            print(f"Failed to load Chroma, falling back to InMemory: {e2}")
-            from app.adapters.vector.in_memory_index import InMemoryKnowledgeIndex
-            return InMemoryKnowledgeIndex()
-
-
-def get_template_repository(db: Session = Depends(get_db_session)) -> TemplateRepository:
-    """Dependency Factory to fetch Template Repository"""
-    return SqlAlchemyTemplateRepository(db=db)
-
-
-def get_knowledge_repository(db: Session = Depends(get_db_session)):
-    """Dependency Factory to fetch Knowledge Repository (Stubbed)"""
-    pass
-
-
-def get_job_repository(db: Session = Depends(get_db_session)) -> JobRepository:
-    """Dependency Factory to fetch Job Repository"""
-    return SqlAlchemyJobRepository(db=db)
-
-
-def get_validation_repository(db: Session = Depends(get_db_session)):
-    """Dependency Factory to fetch Validation Repository (Stubbed)"""
-    pass
-
-
-def get_message_queue(db: Session = Depends(get_db_session)) -> MessageQueue:
-    return SqlAlchemyMessageQueue(db=db)
-
-
-_local_event_bus = None
-def get_event_bus() -> EventBus:
-    global _local_event_bus
-    if _local_event_bus is None:
-        _local_event_bus = LocalEventBus()
-    return _local_event_bus
-
-
-# =====================================================================
-# FastAPI Dependency Injection Wrappers (For routing)
-# =====================================================================
-
-def document_extraction_service_dependency() -> DocumentExtractionService:
-    return get_document_extraction_service()
-
-def llm_runtime_dependency() -> LlmRuntimeAdapter:
-    return get_llm_runtime()
-
-def storage_provider_dependency() -> StorageProvider:
-    return get_storage_provider()
-
-def template_repository_dependency(repo: TemplateRepository = Depends(get_template_repository)) -> TemplateRepository:
-    return repo
-
-def template_lookup_service_dependency(template_repository: TemplateRepository = Depends(template_repository_dependency)):
+def get_template_lookup_service(template_repository = Depends(get_template_repository)):
     from app.services.template_lookup_service import TemplateLookupService
     return TemplateLookupService(template_repository)
 
-def job_repository_dependency(repo: JobRepository = Depends(get_job_repository)) -> JobRepository:
-    return repo
-
-def message_queue_dependency(queue: MessageQueue = Depends(get_message_queue)) -> MessageQueue:
-    return queue
-
-def event_bus_dependency() -> EventBus:
-    return get_event_bus()
-
-def resume_workflow_service_dependency(
-    llm: LlmRuntimeAdapter = Depends(llm_runtime_dependency),
-    parser: DocumentExtractionService = Depends(document_extraction_service_dependency),
-    job_repo: JobRepository = Depends(job_repository_dependency),
-    template_repo: TemplateRepository = Depends(template_repository_dependency),
-    storage: StorageProvider = Depends(storage_provider_dependency)
-):
+# --- Services ---
+def resume_workflow_service_dependency(llm, parser, job_repo, template_repo, storage):
     from app.services.resume_workflow_service import ResumeWorkflowService
     return ResumeWorkflowService(
-        llm=llm,
-        parser_service=parser,
-        job_repo=job_repo,
-        template_repo=template_repo,
-        storage=storage
+        llm_runtime=llm,
+        doc_parser=parser,
+        job_repository=job_repo,
+        template_repository=template_repo,
+        storage_provider=storage
     )
+
+def get_bedrock_analyzer():
+    from app.adapters.llm.bedrock_template_analyzer import BedrockTemplateAnalyzer
+    return BedrockTemplateAnalyzer()
+
+def get_template_analysis_service():
+    from app.services.template_analysis_service import TemplateAnalysisService
+    return TemplateAnalysisService(analyzer=get_bedrock_analyzer())
+
+def get_resume_fact_extraction_service():
+    from app.services.resume_fact_extraction_service import ResumeFactExtractionService
+    return ResumeFactExtractionService(analyzer=get_bedrock_analyzer())
+
+def get_template_field_mapper():
+    from app.services.template_field_mapper import TemplateFieldMapper
+    return TemplateFieldMapper(analyzer=get_bedrock_analyzer())
+
+def get_docx_template_renderer():
+    from app.services.docx_template_renderer import DocxTemplateRenderer
+    return DocxTemplateRenderer()

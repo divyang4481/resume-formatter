@@ -5,6 +5,7 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatCardModule } from '@angular/material/card';
 import { HttpClient } from '@angular/common/http';
 import * as docx from 'docx-preview';
+import { environment } from '../../environments/environment';
 
 @Component({
   selector: 'app-document-viewer',
@@ -66,6 +67,7 @@ import * as docx from 'docx-preview';
   `]
 })
 export class DocumentViewerComponent implements OnInit, AfterViewInit {
+  env = environment;
   @ViewChild('documentContainer') documentContainer!: ElementRef;
   jobId: string | null = null;
   loading = true;
@@ -93,7 +95,7 @@ export class DocumentViewerComponent implements OnInit, AfterViewInit {
     this.loading = true;
     this.error = null;
 
-    const url = `/v1/processing/documents/${this.jobId}/download`;
+    const url = `${this.env.baseApiUrl}/api/v1/processing/documents/${this.jobId}/download`;
 
     this.http.get(url, { responseType: 'blob' }).subscribe({
       next: async (blob) => {

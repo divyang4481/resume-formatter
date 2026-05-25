@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Integer, Boolean, DateTime, ForeignKey, Text
+from sqlalchemy import Column, String, Integer, Boolean, DateTime, ForeignKey, Text, Float
 from sqlalchemy.orm import declarative_base, relationship
 from sqlalchemy.sql import func
 from datetime import datetime
@@ -6,18 +6,6 @@ from datetime import datetime
 Base = declarative_base()
 
 class TemplateAsset(Base):
-    notes = Column(Text, nullable=True)
-    purpose = Column(Text, nullable=True)
-    expected_sections = Column(Text, nullable=True)
-    expected_fields = Column(Text, nullable=True) # Comma-separated list of identified placeholders
-    field_extraction_manifest = Column(Text, nullable=True) # Rich JSON mapping of fieldname, meaning, source_hints
-    summary_guidance = Column(Text, nullable=True)
-
-    formatting_guidance = Column(Text, nullable=True)
-    validation_guidance = Column(Text, nullable=True)
-    pii_guidance = Column(Text, nullable=True)
-    selection_weight = Column(Integer, default=50)
-    is_default_for_industry = Column(Boolean, default=False)
 
     __tablename__ = "template_assets"
 
@@ -30,6 +18,34 @@ class TemplateAsset(Base):
     region = Column(String, nullable=True)
     language = Column(String, default="en")
     file_name = Column(String, nullable=True)
+
+    notes = Column(Text, nullable=True)
+    purpose = Column(Text, nullable=True)
+    expected_sections = Column(Text, nullable=True)
+    expected_fields = Column(Text, nullable=True) # Comma-separated list of identified placeholders
+    # Logical Relationships:
+    # - Master record for a resume template shell.
+    # - Linked to 'processing_jobs' via template_asset_id.
+    # - Defines the 'contract' (expected_fields/manifest) for data mapping.
+    # - status can be DRAFT, ACTIVE, ARCHIVED.
+    field_extraction_manifest = Column(Text, nullable=True) # Rich JSON mapping of fieldname, meaning, source_hints
+    summary_guidance = Column(Text, nullable=True)
+    docling_extraction = Column(Text, nullable=True)  # Raw Docling extraction output
+
+    formatting_guidance = Column(Text, nullable=True)
+    validation_guidance = Column(Text, nullable=True)
+    pii_guidance = Column(Text, nullable=True)
+    selection_weight = Column(Integer, default=50)
+    is_default_for_industry = Column(Boolean, default=False)
+    analysis_json = Column(Text, nullable=True) # Full TemplateAnalysis model
+    requires_human_review = Column(Boolean, default=False)
+    review_reasons = Column(Text, nullable=True) # JSON list of reasons
+    model_usage_json = Column(Text, nullable=True)
+    complexity_score = Column(Float, nullable=True)
+    llm_attempt_count = Column(Integer, default=1)
+
+
+
     storage_uri = Column(String, nullable=True)
     extraction_uri = Column(String, nullable=True)
     checksum_sha256 = Column(String, nullable=True)
@@ -56,17 +72,29 @@ class CandidateResume(Base):
     source_file_name = Column(String, nullable=False)
     source_storage_uri = Column(String, nullable=False)
     extraction_uri = Column(String, nullable=True)
+    # Logical Relationships:
+    # - Represents a single candidate's source resume data.
+    # - Linked to 'processing_jobs' via candidate_resume_id.
+    # - Stores the persistent "ground truth" facts extracted from the resume.
     normalized_resume_json = Column(Text, nullable=True)
+    resume_summary = Column(Text, nullable=True)
     industry_hint = Column(String, nullable=True)
     template_hint = Column(String, nullable=True)
+    candidate_facts_json = Column(Text, nullable=True) # Canonical CandidateFacts model
     created_at = Column(DateTime, default=datetime.utcnow)
 
 class ProcessingJob(Base):
     __tablename__ = "processing_jobs"
 
     id = Column(String, primary_key=True, index=True)
-    candidate_resume_id = Column(String, ForeignKey("candidate_resumes.id"), nullable=False)
+    candidate_resume_id = Column(String, ForeignKey("candidate_resumes.id"), nullable=True)
+    job_type = Column(String, nullable=False, default="RESUME_FORMATTING")
     original_file_ref = Column(String, nullable=True)
+    # Logical Relationships:
+    # - The orchestration record that ties a CandidateResume to a TemplateAsset.
+    # - If job_type=TEMPLATE_PROCESSING: original_file_ref is the template itself.
+    # - If job_type=RESUME_FORMATTING: original_file_ref is the resume, and template_asset_id is the target template.
+    # - Stores the output artifacts: generated_summary, summary_uri, render_docx_uri.
     template_asset_id = Column(String, ForeignKey("template_assets.id"), nullable=True)
     template_version = Column(String, nullable=True)
     status = Column(String, nullable=False)
@@ -74,8 +102,16 @@ class ProcessingJob(Base):
     summary_uri = Column(String, nullable=True)
     generated_summary = Column(Text, nullable=True)
     render_docx_uri = Column(String, nullable=True)
+    transformed_json = Column(Text, nullable=True)
+    candidate_facts_json = Column(Text, nullable=True)
     error_message = Column(Text, nullable=True)
     transform_json = Column(Text, nullable=True)
+
+    # Improved Audit Metadata for Template Analysis / LLM stages
+    model_usage_json = Column(Text, nullable=True) # Audit log of models used
+    complexity_score = Column(Float, nullable=True)
+    llm_attempt_count = Column(Integer, default=1)
+    repair_attempt_count = Column(Integer, default=0)
 
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

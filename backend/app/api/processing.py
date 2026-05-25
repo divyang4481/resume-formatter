@@ -1,24 +1,30 @@
+import logging
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, BackgroundTasks, status, Form, Header
 import uuid
 import os
+
+logger = logging.getLogger(__name__)
 from app.dependencies import (
-    storage_provider_dependency,
-    job_repository_dependency,
-    llm_runtime_dependency,
-    document_extraction_service_dependency,
-    message_queue_dependency,
-    template_repository_dependency,
-    template_lookup_service_dependency,
+    get_storage_provider,
+    get_job_repository,
+    get_llm_runtime,
+    get_document_extraction_service,
+    get_message_queue,
+    get_template_repository,
+    get_template_lookup_service,
     resume_workflow_service_dependency
 )
 from app.domain.interfaces import StorageProvider, JobRepository, DocumentExtractionService, MessageQueue, TemplateRepository
 from app.schemas.job import ProcessingJob
 from app.domain.interfaces import LlmRuntimeAdapter
 from app.agent.graph import AgentState
+from app.config import settings
 from app.schemas.enums import JobStatus
 from app.schemas.runtime import SubmitDocumentResponse, RuntimeJobStatusResponse, ConfirmDocumentRequest
 from app.services.resume_parsing_service import ResumeParsingService
 from app.services.resume_workflow_service import ResumeWorkflowService
+from app.db.session import SessionLocal
+from app.adapters.repositories.template_repository import SqlAlchemyTemplateRepository
 
 router = APIRouter()
 
@@ -31,7 +37,7 @@ from app.services.template_lookup_service import TemplateLookupService
 
 @router.get("/lookups/industries")
 async def get_industries(
-    template_lookup_service: TemplateLookupService = Depends(template_lookup_service_dependency)
+    template_lookup_service: TemplateLookupService = Depends(get_template_lookup_service)
 ):
     """
     Returns available industries for form selection from published templates.
@@ -42,7 +48,7 @@ async def get_industries(
 @router.get("/lookups/templates")
 async def get_templates(
     industry: Optional[str] = None,
-    template_lookup_service: TemplateLookupService = Depends(template_lookup_service_dependency)
+    template_lookup_service: TemplateLookupService = Depends(get_template_lookup_service)
 ):
     """
     Returns available templates from the database, optionally filtered by industry.
@@ -85,20 +91,26 @@ async def submit_document(
     template_id: Optional[str] = Form(None),
     x_execution_mode: str = Header(ExecutionMode.RECRUITER_RUNTIME.value, alias="X-Execution-Mode"),
     x_actor_role: str = Header("recruiter", alias="X-Actor-Role"),
-    storage_provider: StorageProvider = Depends(storage_provider_dependency),
-    job_repository: JobRepository = Depends(job_repository_dependency),
-    llm_runtime: LlmRuntimeAdapter = Depends(llm_runtime_dependency),
-    doc_parser_service: DocumentExtractionService = Depends(document_extraction_service_dependency),
-    message_queue: MessageQueue = Depends(message_queue_dependency),
-    template_repository: TemplateRepository = Depends(template_repository_dependency)
+    storage_provider: StorageProvider = Depends(get_storage_provider),
+    job_repository: JobRepository = Depends(get_job_repository),
+    llm_runtime: LlmRuntimeAdapter = Depends(get_llm_runtime),
+    doc_parser_service: DocumentExtractionService = Depends(get_document_extraction_service),
+    message_queue: MessageQueue = Depends(get_message_queue),
+    template_repository: TemplateRepository = Depends(get_template_repository)
 ):
     """
     Accepts multipart upload for resume processing.
     Supports execution modes (recruiter_runtime vs admin_template_test).
     """
+    logger.info(f"--- INCOMING SUBMIT REQUEST ---")
+    logger.info(f"File: {file.filename}, Industry: {industry_id}, Template: {template_id}")
+    logger.info(f"Execution Mode: {x_execution_mode}, Actor Role: {x_actor_role}")
+    
     try:
         execution_mode = ExecutionMode(x_execution_mode)
+        logger.info(f"Validated Execution Mode: {execution_mode}")
     except ValueError:
+        logger.error(f"Invalid execution mode received: {x_execution_mode}")
         raise HTTPException(status_code=400, detail=f"Invalid execution mode: {x_execution_mode}")
 
     if execution_mode == ExecutionMode.ADMIN_TEMPLATE_TEST and template_id is None:
@@ -147,17 +159,22 @@ async def submit_document(
         storage_key = f"jobs/{job_id}/input/{filename}"
 
     # Store file via storage provider
-    storage_ref = storage_provider.put_bytes(storage_key, file_bytes)
+    storage_ref = storage_provider.put_bytes(file_bytes, storage_key)
 
     requires_confirmation = True
     suggested_industry_id = None
-    suggested_template_id = None
+    template_asset_id_val = None
     allowed_template_ids = None
     job_status = JobStatus.WAITING_FOR_CONFIRMATION
 
-    if industry_id and template_id:
+    if template_id:
+        # If template is explicitly provided (common for Test Runs), skip AI suggestion
         requires_confirmation = False
         job_status = JobStatus.CONFIRMED
+        template_asset_id_val = template_id
+        # Ensure we have an industry if possible, or default to 'it'
+        if not industry_id:
+            industry_id = "it" 
     else:
         # Suggest if not provided using shared service
         try:
@@ -178,7 +195,7 @@ async def submit_document(
             )
 
             suggested_industry_id = rec_result.suggested_industry_id
-            suggested_template_id = rec_result.suggested_template_id
+            template_asset_id_val = rec_result.template_asset_id
             allowed_template_ids = rec_result.allowed_template_ids
 
             # Phase 3: Shadow mode execution
@@ -201,7 +218,7 @@ async def submit_document(
                     logger.info(
                         "template_selection_comparison",
                         extra={
-                            "old_template_id": suggested_template_id,
+                            "old_template_id": template_asset_id_val,
                             "new_template_id": hybrid_suggested_id,
                             "mode": settings.template_selector_mode,
                             "vector_enabled": settings.vector_search_enabled,
@@ -215,23 +232,39 @@ async def submit_document(
         except Exception as e:
             print(f"Failed to get LLM template recommendation: {e}")
             # Fallback
-            suggested_industry_id = "it"
-            suggested_template_id = "general_cv_v1"
-            allowed_template_ids = ["general_cv_v1"]
+            # Fallback to first available template in RDS
+            db = SessionLocal()
+            try:
+                repo = SqlAlchemyTemplateRepository(db)
+                first_tpl = repo.list_active_templates()
+                if not first_tpl:
+                    logger.error("CRITICAL: No active templates found in RDS. Processing cannot continue.")
+                    raise HTTPException(
+                        status_code=status.HTTP_404_NOT_FOUND,
+                        detail="No active resume templates found in the system. Please upload a template in the Admin UI first."
+                    )
+                
+                template_asset_id_val = first_tpl[0].id
+                suggested_industry_id = getattr(first_tpl[0], 'industry', "it")
+                allowed_template_ids = [template_asset_id_val]
+            finally:
+                db.close()
         
-        # FORCET: Automatically accept suggestions and move to processing
+        # FORCE AUTO-CONFIRM: Skip human review and move straight to processing
+        logger.info(f"Auto-confirming job {job_id} with template {template_asset_id_val}")
         requires_confirmation = False
         job_status = JobStatus.CONFIRMED
-        template_id = suggested_template_id
+        template_id = template_asset_id_val
         industry_id = suggested_industry_id
 
     # Create job record
+    logger.info(f"Creating job {job_id} with status {job_status} (Requires Confirmation: {requires_confirmation})")
     job = ProcessingJob(
         id=job_id,
         status=job_status,
         original_file_ref=storage_ref,
         created_by=x_actor_role,
-        selected_template_id=template_id if not requires_confirmation else None,
+        template_asset_id=template_id if not requires_confirmation else None,
         extension_metadata={
             "industry_id": industry_id if not requires_confirmation else None,
             "intent": execution_mode.value,
@@ -262,7 +295,15 @@ async def submit_document(
 
     if not requires_confirmation:
         # Enqueue job to the message queue instead of using BackgroundTasks in-memory
-        message_queue.enqueue("document_processing", {"job_id": job_id})
+        message_body = {"job_id": job_id, "job_type": "RESUME_FORMATTING"}
+        logger.info(f"--- PUBLISHING TO SQS ---")
+        logger.info(f"Queue: {settings.sqs_processing_queue_url}")
+        logger.info(f"Message Body: {message_body}")
+        
+        message_queue.publish(message_body)
+        logger.info(f"Successfully enqueued job {job_id} for Worker processing.")
+    else:
+        logger.info(f"Job {job_id} is in {job_status} state. Waiting for manual confirmation before enqueuing.")
 
     return SubmitDocumentResponse(
         document_id=job_id,
@@ -272,7 +313,7 @@ async def submit_document(
         provided_industry_id=industry_id,
         provided_template_id=template_id,
         suggested_industry_id=suggested_industry_id,
-        suggested_template_id=suggested_template_id,
+        template_asset_id=template_asset_id_val,
         allowed_template_ids=allowed_template_ids,
         message="Document submitted successfully."
     )
@@ -280,7 +321,7 @@ async def submit_document(
 @router.get("/jobs/{id}", response_model=RuntimeJobStatusResponse)
 async def get_job_status(
     id: str,
-    job_repository: JobRepository = Depends(job_repository_dependency)
+    job_repository: JobRepository = Depends(get_job_repository)
 ):
     """
     Returns processing job status.
@@ -301,8 +342,8 @@ async def get_job_status(
 async def confirm_document(
     id: str,
     request: ConfirmDocumentRequest,
-    job_repository: JobRepository = Depends(job_repository_dependency),
-    message_queue: MessageQueue = Depends(message_queue_dependency)
+    job_repository: JobRepository = Depends(get_job_repository),
+    message_queue: MessageQueue = Depends(get_message_queue)
 ):
     """
     Used to resume a paused human review step.
@@ -314,8 +355,8 @@ async def confirm_document(
     if job.status not in (JobStatus.WAITING_FOR_CONFIRMATION, JobStatus.WAITING_FOR_CONFIRMATION.value):
         raise HTTPException(status_code=400, detail="Job is not waiting for confirmation")
 
-    if hasattr(job, 'selected_template_id'):
-        job.selected_template_id = request.template_id
+    if hasattr(job, 'template_asset_id'):
+        job.template_asset_id = request.template_asset_id
     if hasattr(job, 'extension_metadata'):
         job.extension_metadata["industry_id"] = request.industry_id
     job.status = JobStatus.CONFIRMED
@@ -323,7 +364,7 @@ async def confirm_document(
     job_repository.save_job(job)
 
     # Enqueue job to the message queue to resume processing
-    message_queue.enqueue("document_processing", {"job_id": id})
+    message_queue.publish({"job_id": id, "job_type": "RESUME_FORMATTING"})
 
     return {"message": "Document confirmed", "job_id": id, "status": job.status}
 
@@ -339,8 +380,8 @@ from fastapi.responses import Response
 @router.get("/documents/{id}/download")
 async def download_output(
     id: str,
-    job_repository: JobRepository = Depends(job_repository_dependency),
-    storage_provider: StorageProvider = Depends(storage_provider_dependency)
+    job_repository: JobRepository = Depends(get_job_repository),
+    storage_provider: StorageProvider = Depends(get_storage_provider)
 ):
     """
     Download final output.
@@ -369,8 +410,8 @@ from fastapi import Request
 async def get_job_output(
     id: str,
     request: Request,
-    job_repository: JobRepository = Depends(job_repository_dependency),
-    storage_provider: StorageProvider = Depends(storage_provider_dependency)
+    job_repository: JobRepository = Depends(get_job_repository),
+    storage_provider: StorageProvider = Depends(get_storage_provider)
 ):
     job = job_repository.get_job(id)
     if not job:
@@ -380,16 +421,16 @@ async def get_job_output(
     if not render_docx_uri:
         return {"message": "Output not available", "url": ""}
 
-    # We return the URL that points back to our own download endpoint
-    # In a real system with S3, this might be a pre-signed URL generated by storage_provider
-    url = str(request.url_for('download_output', id=id))
+    # We return an absolute URL to avoid cross-origin and proxy issues in different deployment modes
+    base_url = str(request.base_url).rstrip('/')
+    url = f"{base_url}/api/v1/processing/documents/{id}/download"
     return {"message": "Success", "url": url}
 
 @router.get("/jobs/{id}/summary")
 async def get_job_summary(
     id: str,
-    job_repository: JobRepository = Depends(job_repository_dependency),
-    storage_provider: StorageProvider = Depends(storage_provider_dependency)
+    job_repository: JobRepository = Depends(get_job_repository),
+    storage_provider: StorageProvider = Depends(get_storage_provider)
 ):
     """
     Returns summary of the processed CV.
@@ -418,6 +459,67 @@ async def get_job_summary(
         return {"summary": "Summary missing from completed job."}
 
     return {"summary": "Summary not available yet."}
+
+@router.get("/jobs/{id}/facts")
+async def get_job_facts(
+    id: str,
+    job_repository: JobRepository = Depends(get_job_repository)
+):
+    """Returns the extracted candidate facts JSON."""
+    job = job_repository.get_job(id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    
+    # We return the raw JSON string if it exists
+    facts = getattr(job, "candidate_facts_json", None)
+    import json
+    try:
+        return json.loads(facts) if facts else {}
+    except:
+        return {"error": "Invalid facts JSON"}
+
+@router.get("/jobs/{id}/transformation")
+async def get_job_transformation(
+    id: str,
+    job_repository: JobRepository = Depends(get_job_repository)
+):
+    """Returns the LLM-generated transformation/mapping plan JSON."""
+    job = job_repository.get_job(id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    
+    transformed = getattr(job, "transformed_json", None)
+    import json
+    try:
+        return json.loads(transformed) if transformed else {}
+    except:
+        return {"error": "Invalid transformation JSON"}
+
+@router.get("/jobs/{id}/template")
+async def get_job_template(
+    id: str,
+    job_repository: JobRepository = Depends(get_job_repository),
+    template_repository: TemplateRepository = Depends(get_template_repository)
+):
+    """Returns the template manifest used for this job."""
+    job = job_repository.get_job(id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    
+    tpl_id = getattr(job, "template_asset_id", None) or getattr(job, "selected_template_id", None)
+    if not tpl_id:
+        raise HTTPException(status_code=404, detail="Template not associated with this job")
+    
+    template = template_repository.get_template(tpl_id)
+    if not template:
+        raise HTTPException(status_code=404, detail="Template not found")
+    
+    return {
+        "template_id": template.id,
+        "name": template.name,
+        "manifest": template.field_extraction_manifest,
+        "expected_fields": template.expected_fields.split(",") if template.expected_fields else []
+    }
 
 @router.post("/documents/{id}/feedback")
 async def submit_feedback(id: str):

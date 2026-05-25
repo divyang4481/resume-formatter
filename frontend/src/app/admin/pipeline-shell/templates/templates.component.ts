@@ -185,6 +185,10 @@ import { TemplateUploadDialogComponent } from './template-upload-dialog/template
       background-color: #e1bee7 !important;
       color: #4a148c !important;
     }
+    ::ng-deep .status-failed {
+      background-color: #ffcdd2 !important;
+      color: #c62828 !important;
+    }
   `]
 })
 export class TemplatesComponent implements OnInit {
@@ -224,6 +228,7 @@ export class TemplatesComponent implements OnInit {
     if (s.includes('pending')) return 'status-pending';
     if (s === 'approved' || s === 'active') return 'status-approved';
     if (s === 'published') return 'status-published';
+    if (s === 'failed') return 'status-failed';
     return 'status-draft';
   }
 

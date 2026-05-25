@@ -1,5 +1,6 @@
 import { Injectable, signal } from '@angular/core';
 import { ProcessingApiService, Industry, Template } from '../api/processing-api.service';
+import { environment } from '../../../environments/environment';
 
 export type ProcessingStatus = 'idle' | 'uploading' | 'waiting_for_confirmation' | 'processing' | 'completed' | 'error';
 
@@ -7,6 +8,7 @@ export type ProcessingStatus = 'idle' | 'uploading' | 'waiting_for_confirmation'
   providedIn: 'root'
 })
 export class DocumentProcessingService {
+  private env = environment;
   public industries = signal<Industry[]>([]);
   public templates = signal<Template[]>([]);
   public noTemplatesAvailable = signal<boolean>(false);
@@ -21,6 +23,11 @@ export class DocumentProcessingService {
 
   public summary = signal<string | null>(null);
   public outputUrl = signal<string | null>(null);
+
+  // JSON debugging data
+  public jobFacts = signal<any | null>(null);
+  public jobTransformation = signal<any | null>(null);
+  public jobTemplate = signal<any | null>(null);
 
   constructor(private api: ProcessingApiService) {}
 
@@ -98,7 +105,7 @@ export class DocumentProcessingService {
   private pollJobStatus(jobId: string) {
     this.api.getJobStatus(jobId).subscribe({
       next: (res) => {
-        if (res.status === 'completed') {
+        if (res.status === 'completed' || res.status === 'partial_success') {
           this.status.set('completed');
           this.fetchResults(jobId);
         } else if (res.status === 'failed') {
@@ -126,6 +133,11 @@ export class DocumentProcessingService {
       next: (res) => this.outputUrl.set(res.url),
       error: (err) => console.error('Failed to get output', err)
     });
+
+    // Also fetch JSON metadata for the deep review view
+    this.api.getJobFacts(jobId).subscribe(res => this.jobFacts.set(res));
+    this.api.getJobTransformation(jobId).subscribe(res => this.jobTransformation.set(res));
+    this.api.getJobTemplate(jobId).subscribe(res => this.jobTemplate.set(res));
   }
 
   submitFeedback(feedback: string) {

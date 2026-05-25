@@ -1,10 +1,18 @@
 import uvicorn
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi_mcp import FastApiMCP
+from sqlalchemy.exc import ProgrammingError
+
+from app.api.runtime import router as runtime_router
+from app.api.admin_endpoints import router as admin_endpoints_router
+from app.api.admin import router as admin_folder_router
 from app.api.processing import router as processing_router
-from app.api.admin import router as admin_router
 from app.api.a2a import router as a2a_router
 from app.config import settings
+from app.db.session import engine
+from app.db.models import Base
 
 
 def create_app() -> FastAPI:
@@ -12,20 +20,16 @@ def create_app() -> FastAPI:
     Bootstraps the FastAPI application.
     Integrates all API routes and core configurations.
     """
-    from contextlib import asynccontextmanager
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
-        if settings.cloud == "local":
-            from app.db.session import engine
-            from app.db.models import Base
-
-            # Initialize DB tables locally
+        # Initialize database tables (using RDS/PostgreSQL in AWS)
+        try:
             Base.metadata.create_all(bind=engine)
-            print("Local database initialized")
+            print("Database initialized")
+        except Exception as e:
+            print(f"Lifespan database initialization warning: {e}. Another worker might have completed this.")
         yield
-
-    from fastapi.middleware.cors import CORSMiddleware
 
     app = FastAPI(
         lifespan=lifespan,
@@ -35,6 +39,12 @@ def create_app() -> FastAPI:
         docs_url="/docs",
         redoc_url="/redoc",
     )
+
+    # Force DB init during module load for TestClient compat if lifespan isn't awaited natively by the test runner
+    try:
+        Base.metadata.create_all(bind=engine)
+    except Exception as e:
+        print(f"Module-level database initialization warning: {e}. Another worker might have completed this.")
 
     # Initialize Model Context Protocol (MCP) support
     # This automatically turns FastAPI endpoints into discoverable AI tools
@@ -49,22 +59,24 @@ def create_app() -> FastAPI:
     )
 
     app.include_router(
-        processing_router,
-        prefix="/v1/processing",
+        runtime_router,
+        prefix="/api/runtime",
         tags=["Candidate Processing", "MCP Tool"],
     )
-    app.include_router(admin_router, prefix="/admin", tags=["Admin"])
+    app.include_router(admin_endpoints_router, prefix="/api/admin", tags=["Admin"])
+    app.include_router(admin_folder_router, prefix="/api/admin", tags=["Admin"])
+    app.include_router(processing_router, prefix="/api/v1/processing", tags=["Processing"])
     # Expose at root to match `.well-known` discovery path correctly
     app.include_router(a2a_router, tags=["A2A Discoverability"])
 
     # This automatically turns FastAPI endpoints into discoverable AI tools
     mcp.mount_http()
 
-    @app.get("/health")
+    @app.get("/api/health")
     async def health_check():
-        return {"status": "healthy", "cloud_mode": settings.cloud}
+        return {"status": "healthy", "runtime_mode": settings.runtime_mode}
 
-    @app.get("/")
+    @app.get("/api")
     async def root():
         return {
             "message": "Welcome to Resume Formatter API. Visit /docs for the API documentation.",
@@ -75,6 +87,12 @@ def create_app() -> FastAPI:
 
 
 app = create_app()
+
+try:
+    from mangum import Mangum
+    handler = Mangum(app)
+except ImportError:
+    pass
 
 if __name__ == "__main__":
     uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)

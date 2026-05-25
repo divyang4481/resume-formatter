@@ -1,0 +1,230 @@
+{
+    "fields": [
+        {
+            "fieldname": "candidate_id",
+            "field_type": "scalar",
+            "meaning": "Unique identifier assigned to the candidate within the Hays system",
+            "source_hints": "Table label: Candidate, Appears in top-left of document",
+            "marker_text": "\u00abCandidateID\u00bb",
+            "render_locator": {
+                "strategy": "fill_blank_cell_after_label",
+                "marker_text": "\u00abCandidateID\u00bb",
+                "label": "Candidate",
+                "heading": ""
+            }
+        },
+        {
+            "fieldname": "position_required",
+            "field_type": "scalar",
+            "meaning": "Target job title or role the candidate is seeking",
+            "source_hints": "Table label: Position Required, Blank value cell indicates user input",
+            "marker_text": "[Type text]",
+            "render_locator": {
+                "strategy": "fill_blank_cell_after_label",
+                "marker_text": "[Type text]",
+                "label": "Position Required",
+                "heading": "Position Required"
+            }
+        },
+        {
+            "fieldname": "cv_comments",
+            "field_type": "rich_text",
+            "meaning": "Recruiter's expert assessment and commentary on the candidate's suitability, strengths, and context",
+            "source_hints": "Under heading: Our expert opinion, Appears as bulleted or paragraph text",
+            "marker_text": "\u00abCVcomments\u00bb",
+            "render_locator": {
+                "strategy": "replace_marker",
+                "marker_text": "\u00abCVcomments\u00bb",
+                "label": "",
+                "heading": "Our expert opinion"
+            }
+        },
+        {
+            "fieldname": "professional_qualifications",
+            "field_type": "repeat_block",
+            "meaning": "List of professional certifications, checks, or qualifications held by the candidate",
+            "source_hints": "Under heading: Professional qualifications, Bounded by \u00abTableStart:bCheckType\u00bb and \u00abTableEnd:bCheckType\u00bb, Repeating row with field \u00abCheckType\u00bb",
+            "marker_text": "\u00abTableStart:bCheckType\u00bb",
+            "render_locator": {
+                "strategy": "replace_table_loop",
+                "marker_text": "\u00abTableStart:bCheckType\u00bb",
+                "label": "",
+                "heading": "Professional qualifications"
+            }
+        },
+        {
+            "fieldname": "notice_period",
+            "field_type": "scalar",
+            "meaning": "Candidate's current notice period required to leave their job",
+            "source_hints": "Table label: Notice period, Appears in both top and middle sections",
+            "marker_text": "\u00abNoticePeriod\u00bb",
+            "render_locator": {
+                "strategy": "fill_blank_cell_after_label",
+                "marker_text": "\u00abNoticePeriod\u00bb",
+                "label": "Notice period",
+                "heading": "Key skills"
+            }
+        },
+        {
+            "fieldname": "candidate_town",
+            "field_type": "scalar",
+            "meaning": "Candidate's current town or location of residence",
+            "source_hints": "Table label: Living in, Appears in both top and middle sections",
+            "marker_text": "\u00abCandidateTown\u00bb",
+            "render_locator": {
+                "strategy": "fill_blank_cell_after_label",
+                "marker_text": "\u00abCandidateTown\u00bb",
+                "label": "Living in",
+                "heading": "Key skills"
+            }
+        },
+        {
+            "fieldname": "expected_salary",
+            "field_type": "scalar",
+            "meaning": "Candidate's desired or expected salary range or figure",
+            "source_hints": "Table label: Salary required, Preceded by \u00a3 symbol in layout",
+            "marker_text": "\u00abExpectedSalary\u00bb",
+            "render_locator": {
+                "strategy": "fill_blank_cell_after_label",
+                "marker_text": "\u00abExpectedSalary\u00bb",
+                "label": "Salary required",
+                "heading": "Key skills"
+            }
+        },
+        {
+            "fieldname": "recruiter_name",
+            "field_type": "scalar",
+            "meaning": "Name of the Hays recruitment consultant presenting the candidate profile",
+            "source_hints": "Under heading: Key skills, Marker: \u00abEmployeeName\u00bb",
+            "marker_text": "\u00abEmployeeName\u00bb",
+            "render_locator": {
+                "strategy": "replace_marker",
+                "marker_text": "\u00abEmployeeName\u00bb",
+                "label": "",
+                "heading": "Key skills"
+            }
+        },
+        {
+            "fieldname": "recruiter_job_title",
+            "field_type": "scalar",
+            "meaning": "Job title of the Hays recruitment consultant (e.g., Recruitment Consultant, Talent Partner)",
+            "source_hints": "Under heading: Key skills, Marker: \u00abEmployeeJobTitle\u00bb",
+            "marker_text": "\u00abEmployeeJobTitle\u00bb",
+            "render_locator": {
+                "strategy": "replace_marker",
+                "marker_text": "\u00abEmployeeJobTitle\u00bb",
+                "label": "",
+                "heading": "Key skills"
+            }
+        },
+        {
+            "fieldname": "recruiter_specialist_area",
+            "field_type": "scalar",
+            "meaning": "Area of recruitment specialization for the Hays consultant (e.g., IT, Finance, Engineering)",
+            "source_hints": "Marker: \u00abEmployeeSpecialistArea\u00bb, No context snippet, likely in footer or branding area",
+            "marker_text": "\u00abEmployeeSpecialistArea\u00bb",
+            "render_locator": {
+                "strategy": "replace_marker",
+                "marker_text": "\u00abEmployeeSpecialistArea\u00bb",
+                "label": "",
+                "heading": ""
+            }
+        },
+        {
+            "fieldname": "recruiter_tel_no",
+            "field_type": "scalar",
+            "meaning": "Telephone number of the Hays recruitment consultant",
+            "source_hints": "Marker: \u00abEmployeeTelNo\u00bb, Likely in contact block",
+            "marker_text": "\u00abEmployeeTelNo\u00bb",
+            "render_locator": {
+                "strategy": "replace_marker",
+                "marker_text": "\u00abEmployeeTelNo\u00bb",
+                "label": "",
+                "heading": ""
+            }
+        },
+        {
+            "fieldname": "recruiter_email",
+            "field_type": "scalar",
+            "meaning": "Email address of the Hays recruitment consultant",
+            "source_hints": "Marker: \u00abEmployeeEmail\u00bb, Appears in contact block with 'E:' prefix",
+            "marker_text": "\u00abEmployeeEmail\u00bb",
+            "render_locator": {
+                "strategy": "replace_marker",
+                "marker_text": "\u00abEmployeeEmail\u00bb",
+                "label": "",
+                "heading": ""
+            }
+        },
+        {
+            "fieldname": "candidate_full_name",
+            "field_type": "scalar",
+            "meaning": "Candidate resume value for 'Candidate Full Name'.",
+            "source_hints": "Extract resume facts matching label or marker 'Candidate Full Name'., Render by replacing exact marker '\u00abCandidateFullName\u00bb'.",
+            "marker_text": "\u00abCandidateFullName\u00bb",
+            "render_locator": {
+                "strategy": "replace_marker",
+                "marker_text": "\u00abCandidateFullName\u00bb",
+                "label": "",
+                "heading": ""
+            }
+        },
+        {
+            "fieldname": "professional_qualifications_2",
+            "field_type": "array_simple",
+            "meaning": "Candidate resume value for 'Check Type'.",
+            "source_hints": "Extract resume facts matching label or marker 'Check Type'., Render by replacing exact marker '\u00abCheckType\u00bb'.",
+            "marker_text": "\u00abCheckType\u00bb",
+            "render_locator": {
+                "strategy": "replace_marker",
+                "marker_text": "\u00abCheckType\u00bb",
+                "label": "",
+                "heading": ""
+            }
+        },
+        {
+            "fieldname": "position_required_2",
+            "field_type": "scalar",
+            "meaning": "Value for the template label 'Position Required'.",
+            "source_hints": "Fill from resume data matching the adjacent table label 'Position Required'., Injection target is the blank value cell immediately after this label.",
+            "marker_text": "[Type text]",
+            "render_locator": {
+                "strategy": "fill_blank_cell_after_label",
+                "marker_text": "[Type text]",
+                "label": "Position Required",
+                "heading": ""
+            }
+        },
+        {
+            "fieldname": "skills",
+            "field_type": "paste_zone",
+            "meaning": "Rich resume content intended for the 'Key skills' section.",
+            "source_hints": "Extract relevant resume paragraphs for section 'Key skills'., Injection target is the body of the section under this heading.",
+            "marker_text": "Key skills",
+            "render_locator": {
+                "strategy": "replace_section_body",
+                "marker_text": "Key skills",
+                "label": "",
+                "heading": "Key skills"
+            }
+        },
+        {
+            "fieldname": "position_required_3",
+            "field_type": "scalar",
+            "meaning": "Value for the template label 'Position Required'.",
+            "source_hints": "Fill from resume data matching the adjacent table label 'Position Required'., Injection target is the blank value cell immediately after this label.",
+            "marker_text": "[Type text]",
+            "render_locator": {
+                "strategy": "fill_blank_cell_after_label",
+                "marker_text": "[Type text]",
+                "label": "Position Required",
+                "heading": ""
+            }
+        }
+    ],
+    "instruction_blocks": [
+        "See manifest for details",
+        "Paste the candidate\u2019s own CV\u00a0in this space\u00a0and please delete these instructions before finalising the document.",
+        "Alternatively, if you want to create a new CV for the candidate in a fully Hays branded\u00a0format, then locate the Candidate CV template held here\u00a0http://haysnet.hays.loc/uk/Pages/Default.aspx. Highlight all of the content in that template and copy it. Then highlight all of this red text and the heading of this page \u2018Candidate\u2019s own CV\u2019 and press delete. Then paste the content from the other template"
+    ]
+}

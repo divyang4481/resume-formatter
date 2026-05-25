@@ -1,60 +1,276 @@
-from typing import Dict, Any
-from app.agent.utils.llm_sanitizer import LlmSanitizer
-from app.domain.interfaces import LlmRuntimeAdapter, DocumentExtractionService
-import json
 import logging
+import re
+from typing import Dict, Any, List
+
+from app.services.template_structure_extractor import TemplateStructureExtractor, FIELD_ALIAS_MAP
+from app.adapters.llm.bedrock_template_analyzer import BedrockTemplateAnalyzer
+from app.schemas.template_analysis import (
+    TemplateAnalysis, 
+    TemplateField, 
+    RenderLocator, 
+    InstructionBlock, 
+    StaticBlock,
+    TemplateSection
+)
 
 logger = logging.getLogger(__name__)
 
 class TemplateAnalysisService:
-    def __init__(self, llm: LlmRuntimeAdapter, extraction_service: DocumentExtractionService):
-        self.llm = llm
-        self.extraction_service = extraction_service
+    """
+    Production-ready service for template discovery and semantic mapping.
+    Separates deterministic Python extraction from LLM structural reasoning.
+    """
 
-    async def analyze_template(self, content: bytes, filename: str) -> Dict[str, Any]:
-        """Analyzes a .docx template to suggest metadata and generate a field manifest."""
-        if not self.extraction_service: return {}
+    def __init__(self, analyzer: BedrockTemplateAnalyzer = None):
+        self.analyzer = analyzer or BedrockTemplateAnalyzer()
+        self.extractor = TemplateStructureExtractor()
 
-        from app.domain.interfaces import ExtractionContext
-        extracted_doc = await self.extraction_service.extract(
-            content, filename, "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    async def analyze_template(self, docx_content: bytes, filename: str) -> TemplateAnalysis:
+        """Wrapper for backward compatibility with older service interfaces."""
+        template_id = filename.replace(".docx", "")
+        return await self.analyze_template_asset(docx_content, template_id)
+
+    async def analyze_template_asset(self, docx_content: bytes, template_id: str) -> TemplateAnalysis:
+        """
+        Performs end-to-end template analysis using the new multi-stage pipeline.
+        """
+        logger.info(f"[TemplateAnalysis] Starting multi-stage analysis for {template_id}")
+
+        from app.template_analysis.service import analyze_template_docx
+        from app.template_analysis.model_router import TemplateAnalysisModelRouter
+        from app.config import settings
+        
+        model_router = TemplateAnalysisModelRouter(settings)
+        
+        # Extract structure to get deterministic evidence (e.g. instruction blocks, blank label value pairs)
+        structure = self.extractor.extract(docx_content, template_id + ".docx")
+
+        # 1. Run the new pipeline
+        manifest = await analyze_template_docx(
+            content=docx_content,
+            llm_runtime=self.analyzer.runtime if hasattr(self.analyzer, 'runtime') else self.analyzer,
+            model_router=model_router,
+            template_id=template_id
         )
 
-        # Retrieve placeholders
-        from docxtpl import DocxTemplate
-        import io, re
-        doc = DocxTemplate(io.BytesIO(content))
-        detected_placeholders = list(set([str(p).strip() for p in doc.get_undeclared_template_variables()]))
+        # 2. Map the new TemplateManifest model back to the legacy TemplateAnalysis model for backward compatibility
+        # This allows existing callers to continue working without breaking changes.
+        def map_field(f):
+            if isinstance(f, dict):
+                fieldname = f.get("fieldname") or f.get("field_name") or ""
+                marker_text = f.get("marker_text") or ""
+                field_type = f.get("field_type") or "scalar"
+                source_kind = f.get("source_kind") or "resume_fact"
+                meaning = f.get("meaning") or ""
+                source_hints = f.get("source_hints") or ""
+                required = f.get("required") or False
+                confidence = f.get("confidence") or 0.0
+                occurrence_index = f.get("occurrence_index") or 1
+                canonical_fieldname = f.get("canonical_fieldname")
+                original_label = f.get("original_label")
+                context = f.get("context") or {}
+                extraction_hints = f.get("extraction_hints") or {}
+                injection_hints = f.get("injection_hints") or {}
+                provenance = f.get("provenance") or {}
+                locator_data = f.get("render_locator") or f.get("injection_hints") or {
+                    "strategy": "replace_marker",
+                    "marker_text": marker_text,
+                }
+                sub_fields = f.get("sub_fields") or []
+            else:
+                fieldname = getattr(f, "fieldname", getattr(f, "field_name", ""))
+                marker_text = getattr(f, "marker_text", "")
+                field_type = getattr(f, "field_type", "scalar")
+                source_kind = getattr(f, "source_kind", "resume_fact")
+                meaning = getattr(f, "meaning", "")
+                source_hints = getattr(f, "source_hints", "") or ""
+                required = getattr(f, "required", False)
+                confidence = getattr(f, "confidence", 0.0)
+                occurrence_index = getattr(f, "occurrence_index", 1)
+                canonical_fieldname = getattr(f, "canonical_fieldname", None)
+                original_label = getattr(f, "original_label", None)
+                context = getattr(f, "context", {}) or {}
+                extraction_hints = getattr(f, "extraction_hints", {}) or {}
+                injection_hints = getattr(f, "injection_hints", {}) or {}
+                provenance = getattr(f, "provenance", {}) or {}
+                locator_data = getattr(f, "render_locator", None) or getattr(f, "injection_hints", None) or {
+                    "strategy": "replace_marker",
+                    "marker_text": marker_text,
+                }
+                sub_fields = getattr(f, "sub_fields", []) or []
 
-        from app.agent.prompt_manager import prompt_manager
-        prompt = prompt_manager.get_prompt(
-            "template_analysis.jinja2",
-            template_text=extracted_doc.extracted_text[:8000],
-            detected_placeholders=detected_placeholders,
+            # Ensure locator_data is dict
+            if not isinstance(locator_data, dict):
+                if hasattr(locator_data, "model_dump"):
+                    locator_data = locator_data.model_dump()
+                elif hasattr(locator_data, "__dict__"):
+                    locator_data = dict(locator_data)
+                else:
+                    locator_data = {}
+
+            # Sanitize None/null values in locator_data to empty string to prevent validation errors
+            locator_data = {k: (v if v is not None else "") for k, v in locator_data.items()}
+            if not locator_data.get("strategy"):
+                locator_data["strategy"] = "replace_marker"
+
+            # Ensure source_hints is string or list of strings as expected by legacy schema
+            if isinstance(source_hints, list):
+                source_hints = ", ".join(source_hints) if source_hints else ""
+
+            return TemplateField(
+                fieldname=fieldname,
+                marker_text=marker_text,
+                field_type=field_type,
+                source_kind=source_kind,
+                meaning=meaning,
+                source_hints=source_hints,
+                required=required,
+                confidence=confidence,
+                occurrence_index=occurrence_index,
+                canonical_fieldname=canonical_fieldname,
+                original_label=original_label,
+                context=context,
+                extraction_hints=extraction_hints,
+                injection_hints=injection_hints,
+                provenance=provenance,
+                render_locator=RenderLocator(**locator_data),
+                sub_fields=[map_field(sf) for sf in sub_fields]
+            )
+
+        fields = [map_field(f) for f in manifest.fields]
+
+        analysis = TemplateAnalysis(
+            template_id=template_id,
+            fields=fields,
+            sections=[], # New pipeline handles sections differently
+            instruction_blocks=[InstructionBlock(text="See manifest for details", action="remove", meaning="Instruction")],
+            analysis_status=manifest.analysis_status,
+            validation_errors=manifest.validation_errors,
+            validation_warnings=manifest.validation_warnings,
+            complexity_score=manifest.complexity_score,
+            model_usage_json=manifest.model_usage,
+            evidence_summary=manifest.evidence_summary,
+            extraction_contract=manifest.extraction_contract,
+            injection_contract=manifest.injection_contract,
+            llm_attempt_count=manifest.llm_attempt_count,
+            human_review_required=manifest.requires_human_review,
+            raw_structure=structure.to_dict(),
+            docling_markdown=manifest.docling_markdown
         )
+        
+        # Store metadata in raw_structure for audit
+        analysis.raw_structure = {
+            "structure": structure.to_dict(),
+            "analysis_status": manifest.analysis_status,
+            "validation_errors": manifest.validation_errors,
+            "validation_warnings": manifest.validation_warnings,
+            "complexity_score": manifest.complexity_score,
+            "model_usage": manifest.model_usage,
+            "llm_attempt_count": manifest.llm_attempt_count,
+            "human_review_required": manifest.requires_human_review,
+            "evidence_summary": manifest.evidence_summary,
+            "extraction_contract": manifest.extraction_contract,
+            "injection_contract": manifest.injection_contract,
+        }
 
-        response = self.llm.generate(prompt)
-        print(f"\n--- [LLM RAW RESPONSE: TEMPLATE ANALYSIS] ---\n{response[:1000]}...\n")
+        # Run reconciliation to enrich the legacy model with deterministic grounding (e.g. instruction blocks)
+        self._reconcile_and_enrich(analysis, structure)
 
-        # Use clean_json to robustly parse the JSON since the prompt asks for a JSON object
-        cleaned_json_str = LlmSanitizer.clean_json(response)
+        return analysis
 
-        try:
-            parsed = json.loads(cleaned_json_str)
-            return {
-                "purpose": parsed.get("purpose", "General Template"),
-                "expected_sections": parsed.get("expected_sections", "Summary, Experience"),
-                "expected_fields": parsed.get("expected_fields") or ",".join(detected_placeholders),
-                "summary_guidance": parsed.get("summary_guidance", ""),
-                "formatting_guidance": parsed.get("formatting_guidance", ""),
-                "field_extraction_manifest": parsed.get("field_extraction_manifest", [])
-            }
-        except Exception as e:
-            logger.error(f"Failed to parse template analysis JSON: {e}")
-            # Fallback
-            return {
-                "purpose": "General Template",
-                "expected_sections": "Summary, Experience",
-                "expected_fields": ",".join(detected_placeholders),
-                "field_extraction_manifest": []
-            }
+    def _assemble_context(self, structure) -> str:
+        """Flattens the detected structure into a readable block for the LLM."""
+        blocks = []
+        
+        blocks.append(f"LAYOUT_STYLE: {structure.layout_style}")
+        blocks.append(f"DETECTED_MARKERS: {structure.detected_markers}")
+        
+        if structure.table_label_value_pairs:
+            blocks.append("\n[TABLE LABEL-VALUE PAIRS]")
+            for slot in structure.table_label_value_pairs:
+                blocks.append(f"  Label: '{slot.label}' | Marker/Value: '{slot.marker_text}' | IsBlank: {slot.is_blank}")
+        
+        if hasattr(structure, 'table_loops') and structure.table_loops:
+            blocks.append("\n[DYNAMIC TABLE LOOPS]")
+            for loop in structure.table_loops:
+                blocks.append(f"  LoopName: '{loop.loop_name}' | Fields: {loop.item_fields}")
+
+        if hasattr(structure, 'heading_to_loop') and structure.heading_to_loop:
+            blocks.append("\n[HEADING -> LOOP MAPPINGS]")
+            for h, l in structure.heading_to_loop.items():
+                blocks.append(f"  Heading: '{h}' -> Loop: '{l}'")
+
+        if hasattr(structure, 'heading_to_smart_pattern') and structure.heading_to_smart_pattern:
+            blocks.append("\n[SMART OBJECT BLUEPRINTS (Visual Patterns)]")
+            for h, patterns in structure.heading_to_smart_pattern.items():
+                blocks.append(f"  Heading: '{h}' | Patterns: {patterns}")
+
+        if structure.instruction_blocks:
+            blocks.append("\n[INSTRUCTION BLOCKS (Red/Italic/Quoted)]")
+            for inst in structure.instruction_blocks:
+                blocks.append(f"  - '{inst[:300]}'")
+                
+        if structure.all_headings:
+            blocks.append(f"\n[DOCUMENT HEADINGS]\n{structure.all_headings}")
+            
+        return "\n".join(blocks)
+
+    def _reconcile_and_enrich(self, analysis: TemplateAnalysis, structure):
+        """
+        Hardens the LLM output against hallucinations and normalization issues.
+        Ensures markers in the manifest exactly match markers found in XML.
+        """
+        detected_norm = {self._norm(m): m for m in structure.detected_markers}
+        
+        # Flattened list for convenience
+        all_fields = []
+        for section in analysis.sections:
+            all_fields.extend(section.fields)
+        
+        # If LLM returned a flat 'fields' list, use that too
+        all_fields.extend(analysis.fields)
+
+        used_markers = set()
+
+        for field in all_fields:
+            m_text = field.marker_text.strip()
+            if not m_text:
+                continue
+                
+            # 1. Typos/Wrapping Healing
+            norm_m = self._norm(m_text)
+            if m_text not in structure.detected_markers and norm_m in detected_norm:
+                actual = detected_norm[norm_m]
+                logger.info(f"[Reconcile] Healed marker typo: '{m_text}' -> '{actual}'")
+                field.marker_text = actual
+                field.render_locator.marker_text = actual
+            
+            # 2. Fieldname Normalization (Consistency)
+            # If the LLM returned a fieldname that matches an alias, force it to canonical
+            current_fn = field.field_name
+            norm_fn = current_fn.lower().replace("_", "")
+            
+            from app.services.template_structure_extractor import FIELD_ALIAS_MAP
+            for canonical, info in FIELD_ALIAS_MAP.items():
+                if not isinstance(info, dict):
+                    continue
+                aliases = [a.lower().replace("_", "").replace(" ", "") for a in info.get("aliases", [])]
+                if norm_fn in aliases or norm_fn == canonical.lower().replace("_", ""):
+                    if field.field_name != canonical:
+                        logger.info(f"[Reconcile] Normalizing fieldname: '{field.field_name}' -> '{canonical}'")
+                        field.field_name = canonical
+                    break
+                
+            used_markers.add(field.marker_text)
+
+        # Ensure instructions from structure are present
+        for inst in structure.instruction_blocks:
+            if not any(i.text in inst for i in analysis.instruction_blocks):
+                analysis.instruction_blocks.append(InstructionBlock(
+                    text=inst,
+                    action="remove_or_replace",
+                    meaning="Detected structural instruction"
+                ))
+
+    def _norm(self, text: str) -> str:
+        return re.sub(r"[^a-z0-9]+", "", text.lower())

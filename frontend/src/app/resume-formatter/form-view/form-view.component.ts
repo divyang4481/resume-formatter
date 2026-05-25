@@ -33,6 +33,7 @@ export class FormViewComponent implements OnInit {
   form: FormGroup;
   selectedFile: File | null = null;
   feedbackText: string = '';
+  showDeepReview: boolean = false;
 
   @ViewChild('fileInput') fileInput!: ElementRef;
 

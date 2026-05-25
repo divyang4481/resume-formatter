@@ -22,13 +22,14 @@ class AgentState(TypedDict):
     privacy_transformed_model: Optional[Dict[str, Any]]
 
     # Template and Formatting rules
-    selected_template_id: Optional[str]
+    template_asset_id: Optional[str]
     template_storage_uri: Optional[str]
     template_text: Optional[str]
     formatting_rules: Optional[str]
     summary_guidance: Optional[str]
     formatting_guidance: Optional[str]
     validation_guidance: Optional[str]
+    analysis_json: Optional[str]
     pii_guidance: Optional[str]
     
     # Governance Requirements
@@ -37,7 +38,8 @@ class AgentState(TypedDict):
     field_extraction_manifest: Optional[list]
 
     # LLM Transformation results
-    transformed_document_json: Optional[str]
+    transformed_document_json: Optional[Any]
+    field_extraction_manifest: Optional[Any]
     
     # Validation
     validation_passed: bool
@@ -61,6 +63,7 @@ class AgentState(TypedDict):
     actor_role: Optional[str]
     filename: Optional[str]
     content_type: Optional[str]
+    missing_fields: Optional[list]
 
     # Additional contextual metadata
     runtime_metadata: Optional[Dict[str, Any]]

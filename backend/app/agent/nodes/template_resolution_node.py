@@ -1,9 +1,17 @@
 import asyncio
+import os
+import json
+import logging
+import re
 from app.agent.state import AgentState
 from app.domain.interfaces import LlmRuntimeAdapter
 from app.db.session import SessionLocal
 from app.adapters.repositories.template_repository import SqlAlchemyTemplateRepository
 from app.services.template_resolution_service import TemplateResolutionService
+from app.services.resume_ai_service import ResumeAiService
+from app.domain.interfaces import LlmRuntimeAdapter
+
+logger = logging.getLogger(__name__)
 
 def create_template_resolve_node(llm_runtime, storage_provider, doc_parser):
     """
@@ -11,66 +19,145 @@ def create_template_resolve_node(llm_runtime, storage_provider, doc_parser):
     document content or user request.
     """
     async def template_resolve_node(state: AgentState) -> dict:
-        print("Executing Template Resolution Node...")
+        logger.info(f"Executing Template Resolution Node (Job ID: {state.get('session_id')})...")
         
         from app.domain.interfaces import ExtractionContext
         
         extracted_text = state.get("extracted_text", "")
-        mode = state.get("intent", "recruiter_runtime")
+        requested_template_id = state.get("template_asset_id")
+        
+        template_asset_id = requested_template_id
+        storage_uri = None
+        summary_guidance = None
+        formatting_guidance = None
+        validation_guidance = None
+        pii_guidance = None
+        expected_sections = state.get("expected_sections")
+        expected_fields = state.get("expected_fields")
+        field_manifest = state.get("field_extraction_manifest")
+        
+        # Ensure field_manifest is a list if it came in as a JSON string
+        if isinstance(field_manifest, str):
+            try:
+                field_manifest = json.loads(field_manifest)
+            except Exception:
+                field_manifest = []
+        template_text = ""
 
-        # Try to resolve or validate the template selection
         db = SessionLocal()
         try:
             repo = SqlAlchemyTemplateRepository(db)
-            service = TemplateResolutionService(llm_runtime, repo)
-
-            chosen_template_id = state.get("selected_template_id")
             
-            if not chosen_template_id:
-                # Use the shared TemplateResolutionService for classification-based recommendation
-                result = await service.recommend_template(
+            # Phase 1: Validate or Identify Template
+            template_meta = None
+            if template_asset_id:
+                # User requested a specific template, verify it exists
+                template_meta = repo.get_template(template_asset_id)
+                if not template_meta:
+                    logger.warning(f"Requested template ID '{template_asset_id}' NOT FOUND in database. Falling back to recommendation.")
+                    template_asset_id = None
+
+            if not template_asset_id:
+                # Dynamic recommendation
+                resolution_service = TemplateResolutionService(llm_runtime, repo)
+                result = await resolution_service.recommend_template(
                     extracted_text=extracted_text,
-                    mode=mode
+                    mode=state.get("intent", "recruiter_runtime")
                 )
-
-                chosen_template_id = result.suggested_template_id or "general_cv_v1"
-                print(f"Resolved Template ID: {chosen_template_id}")
-
-            # Fetch the actual storage URI and guidance from the repository
-            template_meta = repo.get_template(chosen_template_id)
-            storage_uri = None
-            summary_guidance = None
-            formatting_guidance = None
-            validation_guidance = None
-            pii_guidance = None
-            template_text = None
-
-            if template_meta:
-                import json
-                storage_uri = template_meta.original_file_ref
-                summary_guidance = template_meta.summary_guidance
-                formatting_guidance = template_meta.formatting_guidance
-                validation_guidance = template_meta.validation_guidance
-                pii_guidance = template_meta.pii_guidance
-                expected_sections = template_meta.expected_sections
-                expected_fields = template_meta.expected_fields
-
-                field_extraction_manifest = []
-                if hasattr(template_meta, 'field_extraction_manifest') and template_meta.field_extraction_manifest:
-                    try:
-                        if isinstance(template_meta.field_extraction_manifest, str):
-                            field_extraction_manifest = json.loads(template_meta.field_extraction_manifest)
-                        else:
-                            field_extraction_manifest = template_meta.field_extraction_manifest
-                    except Exception as e:
-                        print(f"Warning: Could not parse field_extraction_manifest: {e}")
-
-                print(f"Found template storage URI: {storage_uri}")
+                template_asset_id = result.template_asset_id
                 
-                # Fetch and extract raw text from template for smarter extraction context
+                if template_asset_id:
+                    template_meta = repo.get_template(template_asset_id)
+                    logger.info(f"Recommended Template ID: {template_asset_id}")
+                
+            # Final Fallback: First active template
+            if not template_meta:
+                active_templates = repo.list_active_templates()
+                if active_templates:
+                    template_meta = active_templates[0]
+                    template_asset_id = template_meta.id
+                    logger.info(f"Using Default Fallback Template: {template_asset_id}")
+                else:
+                    # Critical failure: no templates at all
+                    logger.error("DATABASE ERROR: No active templates found in the system.")
+                    raise ValueError("DATABASE ERROR: No active templates found in the system. Please upload a template via the Admin UI.")
+
+            # Phase 2: Populate Metadata from verified record
+            storage_uri = template_meta.storage_uri
+            summary_guidance = template_meta.summary_guidance
+            formatting_guidance = template_meta.formatting_guidance
+            validation_guidance = template_meta.validation_guidance
+            pii_guidance = template_meta.pii_guidance
+            expected_sections = template_meta.expected_sections
+            expected_fields = template_meta.expected_fields
+            
+            # Fetch the manifest (JSON) - Prefer field_extraction_manifest as it contains high-quality reconciled data
+            if template_meta.field_extraction_manifest:
                 try:
-                    if storage_uri:
+                    if isinstance(template_meta.field_extraction_manifest, str):
+                        field_manifest = json.loads(template_meta.field_extraction_manifest)
+                    elif isinstance(template_meta.field_extraction_manifest, dict):
+                        field_manifest = template_meta.field_extraction_manifest
+                    else:
+                        # Ensure it's a list of dicts even if it's a list of Pydantic models
+                        field_manifest = [
+                            m.dict() if hasattr(m, "dict") else m 
+                            for m in template_meta.field_extraction_manifest
+                        ]
+                except Exception as e:
+                    logger.error(f"Failed to parse field_extraction_manifest for {template_asset_id}: {e}")
+                    field_manifest = []
+            elif getattr(template_meta, "analysis_json", None):
+                try:
+                    field_manifest = json.loads(template_meta.analysis_json)
+                except Exception as e:
+                    logger.error(f"Failed to parse analysis_json for {template_asset_id}: {e}")
+                    field_manifest = []
+            else:
+                field_manifest = []
+
+            # If the manifest is wrapped in a rich dictionary (e.g. {"fields": [...], "instruction_blocks": [...]})
+            # or is a legacy dumped model containing "fields", extract the list of fields.
+            if isinstance(field_manifest, dict):
+                if "fields" in field_manifest and field_manifest["fields"] is not None:
+                    field_manifest = field_manifest["fields"]
+                else:
+                    field_manifest = [v for v in field_manifest.values() if isinstance(v, dict)]
+
+            if isinstance(field_manifest, list):
+                field_manifest = [f for f in field_manifest if isinstance(f, dict)]
+            else:
+                field_manifest = []
+
+
+            if field_manifest:
+                logger.info(f"Successfully resolved manifest with {len(field_manifest)} fields for template {template_asset_id}")
+            else:
+                logger.warning(f"No manifest found in DB for template {template_asset_id}")
+
+            # Phase 3: Extract Text & Analyze On-the-fly if needed
+            content = None
+            cached_markdown = None
+            if template_meta and getattr(template_meta, "analysis_json", None):
+                try:
+                    analysis_data = json.loads(template_meta.analysis_json)
+                    if isinstance(analysis_data, dict) and analysis_data.get("docling_markdown"):
+                        cached_markdown = analysis_data["docling_markdown"]
+                        logger.info(f"Found cached docling_markdown in template analysis_json for {template_asset_id}. Bypassing Docling parser extraction.")
+                except Exception as parse_err:
+                    logger.warning(f"Could not load analysis_json for checking docling_markdown: {parse_err}")
+
+            if storage_uri:
+                try:
+                    if cached_markdown:
+                        template_text = cached_markdown
+                    else:
                         storage_key = storage_uri.replace("local://", "")
+                        # Strip s3:// prefix if present
+                        if storage_key.startswith("s3://"):
+                            from app.config import settings
+                            storage_key = storage_key.replace(f"s3://{settings.s3_bucket_output}/", "")
+
                         content = storage_provider.get_bytes(storage_key)
                         
                         context = ExtractionContext(intent="template_context_extraction", actor_role="system")
@@ -81,18 +168,47 @@ def create_template_resolve_node(llm_runtime, storage_provider, doc_parser):
                             context=context
                         )
                         template_text = extracted_doc.extracted_text
-                        print(f"Template text extracted successfully (length: {len(template_text)})")
-                except Exception as ex:
-                    print(f"Failed to extract raw text from template: {ex}")
-            else:
-                print(f"Warning: Template ID {chosen_template_id} not found in database.")
-                expected_sections = None
-                expected_fields = None
-                field_extraction_manifest = []
+                    
+                    # --- AUTO-DISCOVERY: If DB is missing fields, find them in the docx text ---
+                    if not expected_fields and template_text:
+                        placeholders = re.findall(r'«([^»]+)»|\[([^\]]+)\]', template_text)
+                        # Flatten matches from groups
+                        flat_placeholders = []
+                        for m in placeholders:
+                            flat_placeholders.extend([i for i in m if i])
+                        if flat_placeholders:
+                            expected_fields = ",".join(list(set(flat_placeholders)))
 
+                    # --- ON-THE-FLY ANALYSIS: If manifest is missing, generate it now ---
+                    if not field_manifest and (content or cached_markdown):
+                        if not content:
+                            storage_key = storage_uri.replace("local://", "")
+                            if storage_key.startswith("s3://"):
+                                from app.config import settings
+                                storage_key = storage_key.replace(f"s3://{settings.s3_bucket_output}/", "")
+                            content = storage_provider.get_bytes(storage_key)
+
+                        logger.info(f"Manifest missing for template {template_asset_id}. Triggering on-the-fly analysis...")
+                        try:
+                            ai_service = ResumeAiService(llm_runtime, doc_parser)
+                            analysis = await ai_service.analyze_template(content=content, filename="template.docx")
+                            if analysis and "field_extraction_manifest" in analysis:
+                                field_manifest = analysis["field_extraction_manifest"]
+                                # Save back to DB to persist this analysis
+                                try:
+                                    template_meta.field_extraction_manifest = json.dumps(field_manifest)
+                                    repo.save_template(template_meta)
+                                    db.commit()
+                                except Exception as db_err:
+                                    logger.warning(f"Non-critical: Failed to save on-the-fly manifest: {db_err}")
+                        except Exception as ai_err:
+                            logger.error(f"Failed on-the-fly template analysis: {ai_err}")
+
+                except Exception as ex:
+                    logger.error(f"Failed to extract raw text from template {template_asset_id}: {ex}")
 
             return {
-                "selected_template_id": chosen_template_id,
+                "template_asset_id": template_asset_id,
                 "template_storage_uri": storage_uri,
                 "template_text": template_text,
                 "summary_guidance": summary_guidance,
@@ -101,16 +217,16 @@ def create_template_resolve_node(llm_runtime, storage_provider, doc_parser):
                 "pii_guidance": pii_guidance,
                 "expected_sections": expected_sections,
                 "expected_fields": expected_fields,
-                "field_extraction_manifest": field_extraction_manifest,
+                "field_extraction_manifest": field_manifest,
                 "status": "template_resolved"
             }
 
-
         except Exception as e:
-            print(f"Error during template resolution: {e}")
+            logger.error(f"CRITICAL ERROR during template resolution: {e}")
+            # Even in fallback, we must return a state that allows downstream nodes to function or fail gracefully
             return {
-                "selected_template_id": state.get("selected_template_id") or "general_cv_v1",
-                "status": "template_resolved_fallback"
+                "status": "template_resolution_failed",
+                "error_message": str(e)
             }
         finally:
             db.close()

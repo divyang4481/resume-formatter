@@ -1,12 +1,18 @@
+import logging
+import json
+import uuid
 from typing import Any, Dict, Optional
 from app.domain.interfaces import LlmRuntimeAdapter
 from app.domain.interfaces import DocumentExtractionService, StorageProvider
 from app.adapters.repositories.job_repository import JobRepository
 from app.adapters.repositories.template_repository import TemplateRepository
 from app.schemas.enums import JobStatus
-from app.agent.graph import build_workflow_graph, AgentState
+from app.agent.graph import build_resume_processing_graph, AgentState
 from app.agent.state import AgentState as TypedAgentState
 from app.dependencies import get_storage_provider
+from app.services.template_manifest_utils import normalize_template_manifest
+
+logger = logging.getLogger(__name__)
 
 class ResumeWorkflowService:
     def __init__(
@@ -24,7 +30,7 @@ class ResumeWorkflowService:
         self.storage = storage or get_storage_provider()
         
         # Build the graph once for this service instance
-        self.graph = build_workflow_graph(
+        self.graph = build_resume_processing_graph(
             llm_runtime=self.llm, 
             doc_parser=self.parser_service, 
             storage=self.storage,
@@ -53,28 +59,44 @@ class ResumeWorkflowService:
         actor_role = ext_meta.get("actor_role", "system")
         filename = ext_meta.get("filename", "document.pdf")
         content_type = ext_meta.get("content_type", "application/pdf")
-        selected_template_id = getattr(job, 'selected_template_id', None)
+        template_asset_id = getattr(job, 'template_asset_id', None)
 
         # Fetch template-specific AI steering guidance
         summary_guidance = ""
         formatting_guidance = ""
         validation_guidance = ""
         pii_guidance = ""
+        analysis_json = ""
         industry = ext_meta.get("industry_id", "General")
         language = "en"
 
-        if selected_template_id and self.template_repo:
+        field_extraction_manifest = None
+        expected_fields = ""
+        template_storage_uri = None
+
+        if template_asset_id and self.template_repo:
             try:
-                template = self.template_repo.get_template(selected_template_id)
+                template = self.template_repo.get_template(template_asset_id)
                 if template:
                     summary_guidance = template.summary_guidance or ""
                     formatting_guidance = template.formatting_guidance or ""
                     validation_guidance = template.validation_guidance or ""
                     pii_guidance = template.pii_guidance or ""
+                    analysis_json = template.analysis_json or ""
                     industry = template.industry or industry
                     language = template.language or "en"
+                    
+                    # --- FIX: Populate extraction contract fields ---
+                    manifest_obj = normalize_template_manifest(template.field_extraction_manifest)
+                    field_extraction_manifest = manifest_obj
+                    expected_fields = template.expected_fields or ",".join(
+                        f.get("fieldname", "")
+                        for f in manifest_obj.get("fields", [])
+                        if isinstance(f, dict) and f.get("fieldname")
+                    )
+                    template_storage_uri = template.storage_uri
             except Exception as te:
-                print(f"Warning: Failed to fetch template guidance for {selected_template_id}: {te}")
+                print(f"Warning: Failed to fetch template guidance for {template_asset_id}: {te}")
 
         # Initial state for the LangGraph execution
         initial_state: TypedAgentState = {
@@ -84,13 +106,16 @@ class ResumeWorkflowService:
             "extracted_text": None,
             "extraction_confidence": None,
             "canonical_model": None,
+            "field_extraction_manifest": field_extraction_manifest,
+            "expected_fields": expected_fields,
             "privacy_transformed_model": None,
-            "selected_template_id": selected_template_id,
-            "template_storage_uri": None,
+            "template_asset_id": template_asset_id,
+            "template_storage_uri": template_storage_uri,
             "formatting_guidance": formatting_guidance,
             "summary_guidance": summary_guidance,
             "validation_guidance": validation_guidance,
             "pii_guidance": pii_guidance,
+            "analysis_json": analysis_json,
             "industry": industry,
             "language": language,
             "transformed_document_json": None,
@@ -112,21 +137,108 @@ class ResumeWorkflowService:
             final_state = await self.graph.ainvoke(initial_state)
 
             # Persist final state back to job
-            job.status = JobStatus.COMPLETED
+            if final_state.get("template_asset_id"):
+                job.template_asset_id = final_state["template_asset_id"]
+            
             if final_state.get("summary_uri"):
                 job.summary_uri = final_state["summary_uri"]
             if final_state.get("summary_text"):
                 job.generated_summary = final_state["summary_text"]
+                # Explicitly store summary in CandidateResume if linked
+                if job.candidate_resume_id:
+                    from app.db.session import SessionLocal
+                    from app.db.models import CandidateResume
+                    with SessionLocal() as session:
+                        candidate = session.query(CandidateResume).filter(CandidateResume.id == job.candidate_resume_id).first()
+                        if candidate:
+                            candidate.resume_summary = final_state["summary_text"]
+                            # Also store the extracted structured data
+                            raw_facts = final_state.get("raw_parsed_data")
+                            if raw_facts:
+                                candidate.candidate_facts_json = json.dumps(raw_facts) if isinstance(raw_facts, dict) else str(raw_facts)
+
+                            extracted_json = final_state.get("transformed_document_json")
+                            if extracted_json:
+                                if isinstance(extracted_json, dict) and "filled_template_manifest" in extracted_json:
+                                    candidate.normalized_resume_json = json.dumps(extracted_json["filled_template_manifest"])
+                                else:
+                                    candidate.normalized_resume_json = json.dumps(extracted_json) if isinstance(extracted_json, dict) else str(extracted_json)
+                            session.commit()
             if final_state.get("render_docx_uri"):
                 job.render_docx_uri = final_state["render_docx_uri"]
+            
+            if final_state.get("summary_uri"):
+                job.summary_uri = final_state["summary_uri"]
+            
+            if final_state.get("summary_text"):
+                job.generated_summary = final_state["summary_text"]
+
+            # Persist intermediate JSONs for "Deep Review" UI
+            if final_state.get("raw_parsed_data"):
+                job.candidate_facts_json = json.dumps(final_state["raw_parsed_data"])
+            if final_state.get("transformed_document_json"):
+                transformed_data = final_state["transformed_document_json"]
+                if isinstance(transformed_data, dict):
+                    if "filled_template_manifest" in transformed_data:
+                        job.transformed_json = json.dumps(transformed_data["filled_template_manifest"])
+                    else:
+                        job.transformed_json = json.dumps(transformed_data)
+                else:
+                    job.transformed_json = str(transformed_data)
+
+            # Determine final status: If it passed quality reasoning node with 'needs_review', use partial success
+            if final_state.get("status") == "needs_review" or final_state.get("missing_fields"):
+                job.status = JobStatus.PARTIAL_SUCCESS
+                logger.info(f"Job {job_id} marked as PARTIAL_SUCCESS due to missing fields or quality reasoning.")
+            else:
+                job.status = JobStatus.COMPLETED
+            missing_fields = final_state.get("missing_fields", [])
+            validation_warnings = final_state.get("validation_warnings", [])
+            
+            if missing_fields or validation_warnings:
+                from app.db.session import SessionLocal
+                from app.db.models import ValidationResult
+                with SessionLocal() as session:
+                    # Clean up old results for this job if any
+                    session.query(ValidationResult).filter(ValidationResult.job_id == job_id).delete()
+                    
+                    if missing_fields:
+                        session.add(ValidationResult(
+                            id=str(uuid.uuid4()),
+                            job_id=job_id,
+                            validation_type="COMPLETENESS",
+                            severity="WARNING",
+                            passed=False,
+                            message=f"Missing template fields: {', '.join(missing_fields)}",
+                            details_json=json.dumps({"missing_fields": missing_fields})
+                        ))
+                    
+                    for warning in validation_warnings:
+                        session.add(ValidationResult(
+                            id=str(uuid.uuid4()),
+                            job_id=job_id,
+                            validation_type="QUALITY",
+                            severity="INFO",
+                            passed=True,
+                            message=warning
+                        ))
+                    session.commit()
 
             
             # If it's a governance audit run, update the audit record
             test_run_id = ext_meta.get("test_run_id")
+            if not test_run_id:
+                from app.db.session import SessionLocal
+                from app.db.models import TemplateTestRun as TemplateTestRunModel
+                with SessionLocal() as db_session:
+                    test_run = db_session.query(TemplateTestRunModel).filter(TemplateTestRunModel.processing_job_id == job_id).first()
+                    if test_run:
+                        test_run_id = test_run.id
+
             if test_run_id:
                 from app.db.session import SessionLocal
                 from app.adapters.repositories.template_governance_repository import SqlAlchemyTemplateGovernanceRepository
-                import json
+
                 db = SessionLocal()
                 try:
                     repo = SqlAlchemyTemplateGovernanceRepository(db)

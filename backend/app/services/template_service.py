@@ -1,7 +1,10 @@
 import hashlib
 import uuid
+import logging
 from datetime import datetime
 from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 from app.domain.interfaces import StorageProvider, TemplateRepository, EventBus, DocumentExtractionService, KnowledgeIndex, ExtractionContext
 from app.schemas.template import TemplateAsset
@@ -43,7 +46,7 @@ class TemplateService:
 
         # 3. Store asset
         storage_key = f"templates/{asset_id}/{filename}"
-        storage_uri = self.storage_provider.put_bytes(storage_key, content)
+        storage_uri = self.storage_provider.put_bytes(content, storage_key)
 
         # 4. Extract and Index if Knowledge-bearing
         # Only extract if it is a knowledge asset, not a structured template shell/rule
@@ -61,6 +64,11 @@ class TemplateService:
                 content_type=content_type,
                 context=context
             )
+            
+            logger.info("\n" + "=" * 60 + "\n--- DOCLING EXTRACTION RESULT (Knowledge Asset) ---\n" + "=" * 60)
+            logger.info(extracted_doc.extracted_text or "No text extracted")
+            logger.info("=" * 60 + "\n")
+            
             extracted_text = extracted_doc.extracted_text
             backend_used = extracted_doc.backend_used
 
@@ -90,24 +98,49 @@ class TemplateService:
         suggestions = {}
         if metadata.asset_type == "template_docx" and self.template_analysis_service:
             try:
-                print(f"Triggering automatic AI analysis for template: {filename}")
-                suggestions = await self.template_analysis_service.analyze_template(content, filename)
+                # --- CACHE CHECK: SHA-256 ---
+                existing_asset = self.template_repository.get_by_checksum(checksum)
+                if existing_asset and existing_asset.field_extraction_manifest:
+                    logger.info(f"[Cache Hit] Reusing manifest for template with checksum: {checksum}")
+                    # We create a dummy object that mimics the TemplateAnalysis result structure
+                    from types import SimpleNamespace
+                    suggestions = SimpleNamespace(
+                        purpose=existing_asset.purpose,
+                        expected_sections=existing_asset.expected_sections,
+                        expected_fields=existing_asset.expected_fields,
+                        fields=existing_asset.field_extraction_manifest,
+                        summary_guidance=existing_asset.summary_guidance,
+                        formatting_guidance=existing_asset.formatting_guidance,
+                        validation_guidance=existing_asset.validation_guidance,
+                        pii_guidance=existing_asset.pii_guidance,
+                        model_dump_json=lambda: existing_asset.analysis_json if hasattr(existing_asset, 'analysis_json') else "{}"
+                    )
+                else:
+                    logger.info(f"Triggering automatic AI analysis for template: {filename}")
+                    suggestions = await self.template_analysis_service.analyze_template(content, filename)
                 
                 if suggestions:
-                    print(f"--- [AI TEMPLATE INSIGHTS: {filename}] ---")
-                    print(f"EXPECTED SECTIONS: {suggestions.get('expected_sections')}")
-                    manifest = suggestions.get("field_extraction_manifest", [])
+                    logger.info(f"--- [AI TEMPLATE INSIGHTS: {filename}] ---")
+                    # Use getattr as suggestions might be a SimpleNamespace (cache hit) or a Pydantic model (fresh analysis)
+                    purpose = getattr(suggestions, "purpose", "Unknown")
+                    print(f"EXPECTED SECTIONS: {getattr(suggestions, 'expected_sections', 'None')}")
+                    manifest = getattr(suggestions, "fields", [])
                     print(f"IDENTIFIED MANIFEST FIELDS: {len(manifest)}")
                     
                     # BACKWARD COMPATIBILITY: Sync expected_fields from manifest if missing
-                    if manifest and not suggestions.get("expected_fields"):
-                        suggestions["expected_fields"] = ", ".join([f.get("fieldname") for f in manifest if f.get("fieldname")])
+                    if manifest and not getattr(suggestions, "expected_fields", None):
+                        # suggestions might be SimpleNamespace so we might need to set it
+                        if isinstance(suggestions, SimpleNamespace):
+                            suggestions.expected_fields = ", ".join([f.get("fieldname") for f in manifest if f.get("fieldname")])
+                        else:
+                            # If it's a model, it might be immutable or have different setter
+                            pass 
                     
-                    print(f"EXPECTED FIELDS SUMMARY: {suggestions.get('expected_fields')}")
+                    print(f"EXPECTED FIELDS SUMMARY: {getattr(suggestions, 'expected_fields', 'None')}")
                     print(f"-------------------------------------------")
 
             except Exception as analysis_err:
-                print(f"Auto-analysis failed during upload, but continuing with default draft: {analysis_err}")
+                logger.error(f"Auto-analysis failed during upload, but continuing with default draft: {analysis_err}")
 
         def ensure_str(val):
             if val is None:
@@ -121,7 +154,7 @@ class TemplateService:
         template_asset = TemplateAsset(
             id=asset_id,
             asset_type=metadata.asset_type,
-            name=suggestions.get("purpose", metadata.name or filename),
+            name=getattr(suggestions, "purpose", metadata.name or filename),
             description=metadata.description,
             industry=metadata.industry,
             role_family=metadata.role_family,
@@ -130,17 +163,23 @@ class TemplateService:
             tags=metadata.tags,
             version=metadata.version,
             status=AssetStatus.DRAFT,
-            purpose=ensure_str(suggestions.get("purpose")),
-            expected_sections=ensure_str(suggestions.get("expected_sections")),
-            expected_fields=ensure_str(suggestions.get("expected_fields")),
-            field_extraction_manifest=suggestions.get("field_extraction_manifest"), # Passes List[Dict] to Pydantic
-            summary_guidance=ensure_str(suggestions.get("summary_guidance")),
-            formatting_guidance=ensure_str(suggestions.get("formatting_guidance")),
-            validation_guidance=ensure_str(suggestions.get("validation_guidance")),
-            pii_guidance=ensure_str(suggestions.get("pii_guidance")),
-            original_file_ref=storage_uri,
+            purpose=ensure_str(getattr(suggestions, "purpose", None)),
+            expected_sections=ensure_str(getattr(suggestions, "expected_sections", None)),
+            expected_fields=ensure_str(getattr(suggestions, "expected_fields", None)),
+            field_extraction_manifest=getattr(suggestions, "fields", []), # Use .fields from TemplateAnalysis
+            summary_guidance=ensure_str(getattr(suggestions, "summary_guidance", None)),
+            formatting_guidance=ensure_str(getattr(suggestions, "formatting_guidance", None)),
+            validation_guidance=ensure_str(getattr(suggestions, "validation_guidance", None)),
+            pii_guidance=ensure_str(getattr(suggestions, "pii_guidance", None)),
+            docling_extraction=ensure_str(extracted_text) if extracted_text else None,
+            complexity_score=getattr(suggestions, "complexity_score", 0.0),
+            model_usage_json=getattr(suggestions, "model_usage_json", {}),
+            llm_attempt_count=getattr(suggestions, "llm_attempt_count", 0),
+            requires_human_review=getattr(suggestions, "human_review_required", False),
+            storage_uri=storage_uri,
             checksum=checksum,
             created_by=uploaded_by,
+            analysis_json=suggestions.model_dump_json() if hasattr(suggestions, 'model_dump_json') else ensure_str(suggestions),
             extension_metadata={"document_extractor_backend": backend_used} if backend_used else {}
         )
 

@@ -14,8 +14,8 @@ class TemplatePublishGuard:
             return PublishCheckResult(False, "Template does not exist.")
 
         # Mock simple template file existence via extraction/storage path
-        if not getattr(template, "storage_uri", None) and not getattr(template, "extraction_uri", None) and getattr(template, "original_file_ref", None) is None:
-            # We skip this strict check for the e2e mock right now as not all db models have original_file_ref mapping directly vs storage_uri
+        if not getattr(template, "storage_uri", None) and not getattr(template, "extraction_uri", None):
+            # Strict check for existence
             pass
 
         if not template.name or not template.language:

@@ -44,7 +44,7 @@ class ProcessingJob(BaseModel):
     transform_json: Optional[str] = None
 
     # Template and Context selection
-    selected_template_id: Optional[str] = None
+    template_asset_id: Optional[str] = None
     template_version: Optional[str] = None
     selection_rationale: Optional[str] = None
 

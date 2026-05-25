@@ -1,0 +1,45 @@
+TASK: Professional Document Composition & Formatting.
+
+You are provided with structured data that has already been mapped to a specific template contract. Your goal is to rewrite and format this data so it looks exceptional in a Microsoft Word document.
+
+HARMONIZED DATA:
+{{ harmonized_json }}
+
+TEMPLATE CONTEXT (Rules & Style):
+- Formatting Guidance: {{ formatting_guidance }}
+- Template Text (Snippet): {{ template_text }}
+
+TEMPLATE FIELD MANIFEST (Where the data goes):
+{{ manifest_json }}
+
+COMPOSITION RULES (MANDATORY):
+1. **Rich Text Styling**: Use the following proprietary CVML tags to indicate styling:
+   - `[:B:]Bold Text[:/B:]` for emphasis (e.g., job titles, institutions).
+   - `[:L1:]` for a primary bullet point.
+   - `[:L2:]` for a secondary/indented bullet point.
+   - `[:BR:]` for a hard line break within a field.
+   - `[:PIPE:]` for a vertical separator with spacing ( | ).
+2. **Professional Narrative**: 
+   - Rewrite summaries and experience highlights to be punchy, results-oriented, and tailored to the target role.
+   - Use action verbs (e.g., "Architected", "Spearheaded", "Transformed").
+3. **Manifest Coverage (CRITICAL)**:
+   - The TEMPLATE FIELD MANIFEST is the strict contract.
+   - Every fieldname in the manifest MUST exist in the output JSON.
+   - If a manifest field is missing from HARMONIZED DATA, add it with "" for scalar/rich_text fields or [] for array fields.
+   - Do NOT remove or drop any fields, especially 'professional_qualifications', 'certifications', 'education', 'skills', or 'work_experience'.
+4. **Summary Preservation**: If a 'summary' field is present, ensure it is high-impact and professionally composed.
+5. **Fallbacks**: 
+   - scalar/rich_text fields: ""
+   - array_simple/array_complex/table_loop fields: []
+   - do not convert arrays to empty strings.
+6. **Preserve JSON Envelope (CRITICAL)**:
+   - Keep the structure from HARMONIZED DATA exactly as-is.
+   - When rewriting or formatting, ONLY modify the `"value"` field inside each key's envelope (or the inner fields inside objects for `"array_complex"`).
+   - Do NOT flatten or remove `"field_extraction_manifest"`, `"marker_text"`, `"status"`, or other metadata keys. The output schema must match the input schema exactly.
+
+OUTPUT:
+- Return ONLY a valid JSON object containing:
+  * all original input keys, and
+  * all fieldnames required by the TEMPLATE FIELD MANIFEST.
+- Do not drop, rename, or alias any keys.
+- DO NOT add conversational text.

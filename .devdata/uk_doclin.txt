@@ -1,0 +1,82 @@
+2026-05-20 19:28:41
+
+
+2026-05-20 13:58:41,729 - app.template_analysis.service - INFO - [TemplateAnalysis] Docling Markdown Clues:
+2026-05-20 19:28:41
+
+
+| CANDIDATE PROFILE     | CANDIDATE PROFILE   |
+2026-05-20 19:28:41
+
+
+|-----------------------|---------------------|
+2026-05-20 19:28:41
+
+
+| Candidate             |                     |
+2026-05-20 19:28:41
+
+
+| **Position Required** | [Type text]         |
+2026-05-20 19:28:41
+
+
+2026-05-20 19:28:41
+
+
+## Our expert opinion
+2026-05-20 19:28:41
+
+
+2026-05-20 19:28:41
+
+
+**Professional qualifications**
+2026-05-20 19:28:41
+
+
+2026-05-20 19:28:41
+
+
+| «TableStart:bCheckType»   | «CheckType»   | «TableEnd:bCheckType»   |
+2026-05-20 19:28:41
+
+
+|---------------------------|---------------|-------------------------|
+2026-05-20 19:28:41
+
+
+2026-05-20 19:28:41
+
+
+## Key skills
+2026-05-20 19:28:41
+
+
+2026-05-20 19:28:41
+
+
+| Notice period   |    |
+2026-05-20 19:28:41
+
+
+|-----------------|----|
+2026-05-20 19:28:41
+
+
+| Living in       |    |
+2026-05-20 19:28:41
+
+
+| Salary required | £  |
+2026-05-20 19:28:41
+
+
+2026-05-20 19:28:41
+
+
+| This profile is presented by  Recruiting experts in  T:  E: «EmployeeEmail»   | This profile has been carefully prepared, in good faith, from details provided by the candidate and is supplied in the strictest confidence. All introductions of candidates are subject to our Terms of Business, for further information please contact us using the details to the left. References on permanent candidates have not necessarily been established and we recommend that clients take up their own references upon appointment.   |
+2026-05-20 19:28:41
+
+
+|-------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|

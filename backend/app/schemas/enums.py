@@ -3,8 +3,10 @@ from enum import Enum
 
 class AssetStatus(str, Enum):
     DRAFT = "draft"
+    READY_FOR_TESTING = "ready_for_testing"
     ACTIVE = "active"
     ARCHIVED = "archived"
+    FAILED = "failed"
 
 
 class ExecutionMode(str, Enum):
@@ -19,6 +21,8 @@ class JobStatus(str, Enum):
     CONFIRMED = "confirmed"
     PENDING = "pending"
     PROCESSING = "processing"
+    SUMMARIZING = "summarizing"
+    MAPPING = "mapping"
     COMPLETED = "completed"
     FAILED = "failed"
     PARTIAL_SUCCESS = "partial_success"
