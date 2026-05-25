@@ -105,6 +105,7 @@ class ProcessingJob(Base):
     transformed_json = Column(Text, nullable=True)
     candidate_facts_json = Column(Text, nullable=True)
     error_message = Column(Text, nullable=True)
+    transform_json = Column(Text, nullable=True)
 
     # Improved Audit Metadata for Template Analysis / LLM stages
     model_usage_json = Column(Text, nullable=True) # Audit log of models used

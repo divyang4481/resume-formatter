@@ -71,6 +71,9 @@ class SqlAlchemyJobRepository(JobRepository):
         elif hasattr(job, 'template_asset_id'):
             model.template_asset_id = job.template_asset_id
 
+        if hasattr(job, 'transform_json'):
+            model.transform_json = job.transform_json
+
         if hasattr(job, 'stage'):
             model.stage = job.stage
 

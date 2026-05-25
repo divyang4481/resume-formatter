@@ -1,4 +1,4 @@
-from typing import Dict, Any
+from typing import Dict, Any, List
 from app.agent.state import AgentState
 from app.domain.interfaces import LlmRuntimeAdapter
 from app.agent.utils.llm_sanitizer import LlmSanitizer
@@ -129,6 +129,7 @@ def create_document_composition_reasoning_node(ai_service):
                 manifest = []
         manifest = manifest or []
         formatting_guidance = state.get("formatting_guidance") or ""
+        field_manifest: List[Dict[str, Any]] = state.get("field_extraction_manifest") or []
         
         composed_data = await ai_service.apply_composition_logic(
             harmonized_data=harmonized_data,

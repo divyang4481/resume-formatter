@@ -185,7 +185,10 @@ async def update_template(
 
         update_data = payload.model_dump(exclude_unset=True)
         for key, value in update_data.items():
-            setattr(template, key, value)
+            if key == "field_extraction_manifest" and value is not None:
+                setattr(template, key, json.dumps(value))
+            else:
+                setattr(template, key, value)
 
         db.commit()
         return {"message": "Template updated successfully"}
@@ -266,6 +269,7 @@ async def get_template_detail(id: str, is_admin: bool = Depends(mock_is_admin)):
                 "purpose": template.purpose,
                 "expected_sections": template.expected_sections,
                 "expected_fields": template.expected_fields,
+                "field_extraction_manifest": json.loads(template.field_extraction_manifest) if template.field_extraction_manifest else [],
                 "summary_guidance": template.summary_guidance,
                 "formatting_guidance": template.formatting_guidance,
                 "validation_guidance": template.validation_guidance,
